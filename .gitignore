@@ -1,0 +1,9 @@
+node_modules/
+.next/
+dist/
+build/
+.env*.local
+.DS_Store
+*.log
+publisher.lock
+dashboard/images/*.png
