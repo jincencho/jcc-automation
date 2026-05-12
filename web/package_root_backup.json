@@ -1,0 +1,23 @@
+{
+  "name": "scratch",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "sync": "node marketing_vault/scripts/sync_targets.js",
+    "generate": "node engine/generate_full_package.js",
+    "publish:naver": "node scripts/publish_today_naver.js",
+    "publish:sns": "node scripts/publish_today_sns.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "docx": "^9.6.1",
+    "node-telegram-bot-api": "^0.67.0",
+    "playwright": "^1.59.1",
+    "tesseract.js": "^7.0.0"
+  }
+}

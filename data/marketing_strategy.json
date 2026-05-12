@@ -1,0 +1,172 @@
+{
+  "target_segments": {
+    "wedding": {
+      "name": "혼수 (Wedding)",
+      "primary_sns": ["naver_blog", "youtube_shorts"],
+      "hook_message": "가장 완벽한 시작을 위한, 19년 경력의 가전 졸업 설계",
+      "focus": "전국 최초 백화점+로드샵 하이브리드 견적, 가격 혜택, 패키지 구성, 전문가 큐레이션",
+      "usp": "실속형부터 프리미엄까지, 백화점 제품과 로드샵 제품을 한 번에 비교하고 혼합 구매할 수 있는 전국 유일의 통합 매장"
+    },
+    "moving": {
+      "name": "이사 (Relocation)",
+      "primary_sns": ["naver_blog", "local_cafe"],
+      "hook_message": "이사 날짜만 알려주세요. 나머지는 진센조가 설계합니다.",
+      "focus": "이사 일정 맞춤 설치, 비용 효율, 신뢰성"
+    },
+    "move_in": {
+      "id": "move_in",
+      "name": "신규입주",
+      "target_regions": ["부산", "울산", "경남", "경북", "대구"],
+      "target_timing": "입주 6개월 전",
+      "hook_message": "입주 6개월 전, 가장 설레는 가전 졸업의 시작",
+      "visit_strategy": "진주 통합매장 방문 + 진주 명소/맛집(하연옥 등) 힐링 투어 결합",
+      "online_strategy": "공식 홈페이지를 통한 비대면 정밀 상담 유도",
+      "checklist": [
+        "사전점검 필수 준비물 (수평계, 줄자, 충전기 등)",
+        "공간별 하자 점검 포인트 (도배, 바닥, 수압, 결로)",
+        "가구/가전 배치를 위한 평면도 치수 확인",
+        "입주 청소 및 새집증후군 제거 일정 조율",
+        "잔금 대출 및 취득세 등 행정 절차 체크"
+      ],
+      "hashtags": [
+        "입주전체크리스트", "사전점검준비물", "입주가전성지", "새집증후군제거", 
+        "평면도가구배치", "신축아파트입주"
+      ]
+    },
+    "subscription": {
+      "name": "삼성 AI 가전 구독 클럽",
+      "primary_sns": ["instagram_reels", "threads", "naver_blog"],
+      "hook_message": "가전을 사는 가장 똑똑한 방법, 삼성 AI 가전 구독 클럽",
+      "focus": "비대면 컨설팅, 블루패스 케어, AI 사전진단, 라이프스타일 혜택, 단 1개만 구독해도 추가 혜택",
+      "benefits": [
+        "초기 구매 비용 부담 0원 (소유권 이전형)",
+        "블루패스 무상 수리 및 A/S 패스트트랙 (우선 방문)",
+        "AI 사전케어: 이상 징후 발생 전 AI가 미리 진단 및 알림",
+        "전문가 방문 케어: 필터 교체부터 분해 세척까지 포함",
+        "라이프스타일 바우처: CGV, 외식, 면세점 등 20여개 제휴사 혜택",
+        "월간 케어 리포트: 에너지 사용량 및 최적 사용 패턴 리서치"
+      ]
+    }
+  },
+  "brand_name": "JCC 진센조",
+  "homepage_url": "https://jcc-band.vercel.app/",
+  "hashtag_strategy": {
+    "core": ["#진센조", "#가전졸업", "#삼성가전구독", "#삼성AI가전"],
+    "experience": ["#시성비", "#가사노동해방", "#제로레이버", "#AI사전케어", "#블루패스"],
+    "lifestyle": ["#오늘의집", "#가전스타그램", "#미니멀라이프", "#스마트홈"]
+  },
+  "expert_name": "조준석 매니저",
+  "expert_career": {
+    "total_years": 19,
+    "milestones": [
+      {"year": "2007.03", "event": "삼성전자 서비스 입사 (기술 기반의 시작)"},
+      {"year": "2008.06", "event": "삼성전자 기술경진대회 입상 (전문성 검증)"},
+      {"year": "2014-2017", "event": "삼성전자 물류 연계 전문가 (설치 및 배송 프로세스 마스터)"},
+      {"year": "2018-2019", "event": "삼성전자 CS 마스터 / CS 리더 (고객 만족의 정점)"},
+      {"year": "2020", "event": "삼성전자 CS 금상 수상 (전국 단위 최우수 서비스)"},
+      {"year": "2021", "event": "삼성전자 가전 마스터 인증 (Total Home Solution)"},
+      {"year": "2022-현재", "event": "JCC 진센조 | 삼성스토어 갤러리아 진주점 매니저"}
+    ],
+    "specialty": "단순 판매가 아닌 서비스(수리)-물류(배송)-영업(설계)을 모두 거친 국내 유일의 19년 통합 가전 마스터"
+  },
+  "philosophy": "가족의 공간을 지키는 진심 어린 설계, 가전 그 이상의 가치",
+  "slogan": "가전 잘 사고 잘 쓰는 법",
+  "core_message": "판매는 끝이 아니라 인연의 시작입니다.",
+  "platform_strategy": {
+    "naver_blog": {
+      "id": "naver_blog",
+      "targets": ["new_apartment", "relocation"],
+      "content_style": "Long-form Diary (1500+ chars)",
+      "focus": "Search SEO & Expert Trust",
+      "must_include": ["지역맛집", "상담사례", "진센조졸업장", "가전잘쓰는법_섹션"]
+    },
+    "instagram": {
+      "id": "instagram",
+      "targets": ["wedding", "subscription"],
+      "content_style": "Visual Reels & Trendy Hooks",
+      "focus": "Lifestyle Discovery & Emotional Appeal",
+      "must_include": ["비스포크AI디자인", "0원라이프스타일", "슬로건"]
+    },
+    "threads": {
+      "id": "threads",
+      "targets": ["subscription"],
+      "content_style": "Short Informative Text",
+      "focus": "Authentic Communication & Expert Insight",
+      "must_include": ["가전업계진실", "전문가팁"]
+    },
+    "facebook": {
+      "id": "facebook",
+      "targets": ["new_apartment"],
+      "content_style": "Local Community Style",
+      "focus": "Regional Targeting & Group Engagement",
+      "must_include": ["입주민동질감", "공동구매정보"]
+    },
+    "youtube": {
+      "id": "youtube",
+      "targets": ["all"],
+      "content_style": "Educational Shorts Script",
+      "focus": "Visual Proof & Benefit Explanation",
+      "must_include": ["구독금융설계설명", "졸업인증", "전문가팁"]
+    }
+  },
+  "expert_tips": [
+    {
+      "topic": "필터 관리",
+      "tip": "공기청정기나 에어컨 필터를 씻은 후에는 절대 햇빛에 말리지 마세요. 소재의 변형이 일어날 수 있으니 꼭 통풍이 잘되는 그늘에서 말려주시는 것이 핵심입니다."
+    },
+    {
+      "topic": "세탁기 관리",
+      "tip": "드럼세탁기 사용 후 문을 열어두는 것만큼 중요한 게 고무 패킹 사이의 물기를 마른 수건으로 닦아주는 것입니다. 이것만으로도 곰팡이와 냄새를 90% 이상 예방할 수 있습니다."
+    },
+    {
+      "topic": "냉장고 효율",
+      "tip": "냉장고 뒷면의 먼지를 1년에 한 번만 청소기로 흡입해 주세요. 컴프레서의 과열을 막아 에너지 효율이 좋아지고 가전의 수명이 비약적으로 늘어납니다."
+    }
+  ],
+  "core_targets": {
+    "subscription": {
+      "id": "subscription",
+      "title": "삼성 AI 가전 전국 구독 (비대면)",
+      "hook": "매장 방문 없이 전국 어디서나 카톡 하나로 끝내는 스마트 가전 구독 설계"
+    },
+    "wedding": {
+      "id": "wedding",
+      "title": "혼수 / 웨딩",
+      "hook": "가격 비교 그 이상의 가치, 예비 부부의 라이프스타일을 설계하는 프리미엄 큐레이션"
+    },
+    "new_apartment": {
+      "id": "new_apartment",
+      "title": "신규 입주 아파트",
+      "hook": "입주 지정 매장보다 앞서가는 혜택, 진센조만의 통합 정책이 만드는 압도적 차이"
+    },
+    "relocation": {
+      "id": "relocation",
+      "title": "이사 고객",
+      "hook": "이사를 기회로 누리는 가전의 가치, 공간 최적화 배치부터 사후 케어까지 한 번에"
+    }
+  },
+  "regions": {
+    "busan": ["부산 남구", "부산 수영구", "부산 해운대구", "부산 강서구"],
+    "ulsan": ["울산 남구", "울산 북구", "울산 중구", "울산 울주군"],
+    "gyeongnam": ["진주", "창원", "거제", "밀양", "양산"],
+    "jeonnam": ["광주 첨단", "전남 장성", "전남 여수", "전남 순천"]
+  },
+  "regional_insights": {
+    "진주": {
+      "store_advantage": "백화점(갤러리아 진주)과 로드샵의 강점을 결합한 통합 솔루션 매장",
+      "premium_benefit": "백화점 전용 프리미엄 AI 가전 선택 시, 최고 15% 에누리 혜택 적용 (금액/조건별 상이)",
+      "flexible_solution": "프리미엄부터 실속형까지 혼합 구성 시, 로드샵 정책을 통합하여 한 곳에서 최적의 견적 산출",
+      "customer_value": "매장별 정책 고민으로 인한 아쉬움 해소, 진센조가 한 번에 해결하는 원스톱 가전 졸업",
+      "tour_spots": ["진주성 (촉석루)", "진양호 노을 공원", "금호지 수변 공원"],
+      "gourmet_spots": ["진주 냉장고(냉면+육전)", "진주 비빔밥", "수복빵집"],
+      "travel_concept": "가전 졸업하고 즐기는 진주 힐링 투어"
+    }
+  },
+  "regional_cafes": {
+    "부산": ["아이러브부산맘", "부경맘", "부산부동산커뮤니티", "부산맘"],
+    "울산": ["울산인", "울산맘모여라", "울산부동산카페", "울산새댁이"],
+    "대구": ["대구맘365", "대구맘텐인텐", "대구부동산커뮤니티"],
+    "경남": ["창원맘", "진주맘", "줌마렐라", "진주아지매", "김해맘"],
+    "경북": ["포항맘", "구미맘", "경산맘", "경북부동산"]
+  }
+}

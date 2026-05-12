@@ -1,0 +1,119 @@
+[
+  {
+    "id": "gimhae_thesharp_greenity",
+    "region": "경남 김해",
+    "name": "더샵 신문그리니티",
+    "move_in_date": "2026-02",
+    "months_left": -3,
+    "scheduled_date": "2026-05-11",
+    "status": "completed"
+  },
+  {
+    "id": "busan_ecodelta_daeseong",
+    "region": "부산 강서구",
+    "name": "에코델타시티 대성베르힐",
+    "move_in_date": "2026-03",
+    "months_left": -2,
+    "scheduled_date": "2026-05-12",
+    "status": "completed"
+  },
+  {
+    "id": "changwon_lotte_forest",
+    "region": "경남 창원",
+    "name": "창원 롯데캐슬 포레스트 1BL",
+    "move_in_date": "2026-05",
+    "months_left": 0,
+    "scheduled_date": "2026-05-13",
+    "status": "active"
+  },
+  {
+    "id": "ulsan_munsu_prugio",
+    "region": "울산 남구",
+    "name": "문수로 푸르지오 어반피스",
+    "move_in_date": "2026-06",
+    "months_left": 1,
+    "scheduled_date": "2026-05-14",
+    "status": "active"
+  },
+  {
+    "id": "busan_lotte_infiniel",
+    "region": "부산 남구",
+    "name": "롯데캐슬 인피니엘",
+    "move_in_date": "2026-06",
+    "months_left": 1,
+    "scheduled_date": "2026-05-15",
+    "status": "active"
+  },
+  {
+    "id": "busan_define_gwangan",
+    "region": "부산 수영구",
+    "name": "드파인 광안",
+    "move_in_date": "2026-06",
+    "months_left": 1,
+    "scheduled_date": "2026-05-16",
+    "status": "active"
+  },
+  {
+    "id": "ulsan_okdong_honors",
+    "region": "울산 남구",
+    "name": "옥동 경남아너스빌 ubc",
+    "move_in_date": "2026-08",
+    "months_left": 3,
+    "scheduled_date": "2026-05-17",
+    "status": "active"
+  },
+  {
+    "id": "ulsan_munsu_lotte",
+    "region": "울산 남구",
+    "name": "문수로 롯데캐슬 그랑파르크",
+    "move_in_date": "2026-08",
+    "months_left": 3,
+    "scheduled_date": "2026-05-18",
+    "status": "active"
+  },
+  {
+    "id": "geoje_ocean_meridien",
+    "region": "경남 거제",
+    "name": "오션 월드메르디앙 더리치먼드",
+    "move_in_date": "2026-08",
+    "months_left": 3,
+    "scheduled_date": "2026-05-19",
+    "status": "active"
+  },
+  {
+    "id": "miryang_sammun_welga",
+    "region": "경남 밀양",
+    "name": "삼문 시그니처 웰가",
+    "move_in_date": "2026-10",
+    "months_left": 5,
+    "scheduled_date": "2026-05-20",
+    "status": "active"
+  },
+  {
+    "id": "ulsan_shinjung_sky",
+    "region": "울산 남구",
+    "name": "e편한세상 신정 스카이하임",
+    "move_in_date": "2026-10",
+    "months_left": 5,
+    "scheduled_date": "2026-05-21",
+    "status": "active"
+  },
+  {
+    "id": "jeonnam_cheomdan_jeil",
+    "region": "전남 장성",
+    "name": "첨단 제일풍경채 A2",
+    "move_in_date": "2026-10",
+    "months_left": 5,
+    "scheduled_date": "2026-05-22",
+    "status": "active"
+  },
+  {
+    "id": "jeonnam_cheomdan_hillstate",
+    "region": "전남 장성",
+    "name": "힐스테이트 첨단센트럴",
+    "move_in_date": "2026-10",
+    "months_left": 5,
+    "scheduled_date": "2026-05-23",
+    "status": "active"
+  }
+]

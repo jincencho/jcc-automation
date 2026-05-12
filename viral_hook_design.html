@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viral Hook Design</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            --accent-color: #fbbf24;
+            --text-white: #ffffff;
+            --glass-bg: rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+        }
+
+        body, html {
+            width: 1080px;
+            height: 1080px;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            background: url('file:///C:/Users/진센조/.gemini/antigravity/brain/5ddd10c5-d736-483f-8ed1-a14a23c5f17a/viral_hook_background_1778407292195.png');
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.6));
+        }
+
+        .content {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            width: 90%;
+            padding: 60px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .tag {
+            display: inline-block;
+            background: var(--accent-color);
+            color: #000;
+            font-weight: 800;
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-size: 28px;
+            margin-bottom: 30px;
+            letter-spacing: -1px;
+        }
+
+        h1 {
+            color: var(--text-white);
+            font-size: 72px;
+            font-weight: 900;
+            line-height: 1.2;
+            margin-bottom: 40px;
+            word-break: keep-all;
+            letter-spacing: -2px;
+        }
+
+        .highlight {
+            color: var(--accent-color);
+            position: relative;
+        }
+
+        .highlight::after {
+            content: '';
+            position: absolute;
+            bottom: 5px;
+            left: 0;
+            width: 100%;
+            height: 15px;
+            background: rgba(251, 191, 36, 0.3);
+            z-index: -1;
+        }
+
+        .description {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 36px;
+            font-weight: 500;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .footer {
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 24px;
+            font-weight: 400;
+        }
+
+        .badge-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 40px;
+        }
+
+        .badge {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 10px 20px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="overlay"></div>
+        <div class="content">
+            <div class="tag">울산 문수로 푸르지오 필독</div>
+            <h1>왜 입주민들은 삼성 가전을<br><span class="highlight">'0원'</span>에 가져갈까요?</h1>
+            <p class="description">목돈 부담 제로! 19년차 가전 전문가 진센조의<br>삼성 AI 가전 구독 특별 솔루션</p>
+            
+            <div class="badge-container">
+                <div class="badge">초기비용 0원</div>
+                <div class="badge">무상 AS 보장</div>
+                <div class="badge">Bespoke AI</div>
+            </div>
+            
+            <div class="footer">JCC 진센조 | 조준석 매니저</div>
+        </div>
+    </div>
+</body>
+</html>
