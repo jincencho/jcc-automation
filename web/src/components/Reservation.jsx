@@ -206,7 +206,7 @@ export default function Reservation({ onBack }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          message: `🚀 *[JCC 잠재고객 유입]*\n\n한 명의 고객이 *조준석 매니저* 네이버 예약 페이지로 이동했습니다.\n(실제 예약 완료 여부는 네이버에서 확인 필요)\n\n_경로: 홈페이지 -> 매장방문 클릭_`,
+          message: `🚀 *[JCC 잠재고객 유입]*\n\n한 명의 고객이 *조준석 매니저* 네이버 예약 페이지로 이동했습니다.\n(실제 예약 완료 여부는 네이버에서 확인 필요)\n\n_경로: 홈페이지 -> 매장방문 예약 클릭_`,
           formData: { utm }
         })
       });
@@ -234,7 +234,7 @@ export default function Reservation({ onBack }) {
       >
         <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🏆</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', margin: 0 }}>매장방문 상담</h3>
+          <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'white', margin: 0 }}>매장방문 예약</h3>
           <span style={{ fontSize: '0.7rem', background: '#03C75A', color: 'white', padding: '4px 8px', borderRadius: '4px' }}>네이버 예약</span>
         </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.6, fontWeight: 400, wordBreak: 'keep-all' }}>
@@ -444,7 +444,7 @@ export default function Reservation({ onBack }) {
       <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', margin: '0 auto', borderTop: '4px solid var(--accent-gold)' }}>
       <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
         <h2 style={{ fontSize: '1.8rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-          {view === 'selection' ? '상담 방식 선택' : view === 'premium' ? '프리미엄 상담 예약' : '비대면 견적 요청'}
+          {view === 'selection' ? '상담 방식 선택' : view === 'premium' ? '매장방문 예약' : '비대면 견적 요청'}
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
           {view === 'selection' ? '원하시는 상담 방식을 선택해 주세요.' : '조준석 매니저가 직접 솔루션을 제안해 드립니다.'}
