@@ -33,8 +33,9 @@ class ContentGenerator {
                 if (targetType === 'subscription' && this.strategy.hashtag_strategy) {
                     tags = [...this.strategy.hashtag_strategy.core, ...this.strategy.hashtag_strategy.experience, ...this.strategy.hashtag_strategy.lifestyle];
                 } else if (targetType === 'move_in') {
+                    const broadRegion = region.split(' ')[0]; // '울산 남구' -> '울산'
                     tags = [
-                        ...(this.strategy.regional_cafes[region] || this.strategy.regional_cafes['경남']),
+                        ...(this.strategy.regional_cafes[broadRegion] || this.strategy.regional_cafes[region] || this.strategy.regional_cafes['경남']),
                         ...(displayApartment ? [displayApartment.replace(/ /g, ''), `${displayApartment.replace(/ /g, '')}입주`] : []),
                         ...this.strategy.target_segments.move_in.hashtags,
                         '진센조', '가전졸업'
@@ -60,11 +61,23 @@ class ContentGenerator {
 
         // [INSTAGRAM] - 감성적 태그 & 짧고 강렬한 훅
         results.instagram = {
-            caption: `[INSTAGRAM]\n✨ ${target.hook_message}\n\n${(isSubscription || targetType === 'move_in') ? "🏠 집 안에서 편안하게 받는 전국 비대면 가전 컨설팅! 💎" : `${displayRegion} ${displayApartment || ''} 고객님들 주목! 💎`}\n\n왜 다들 '진센조'에서 가전졸업 할까요? 19년 마스터의 1:1 비대면 맞춤 큐레이션으로 전국 어디서나 가장 합리적인 가전 졸업을 시작하세요.\n\n#진센조 #가전구독 #비대면상담 #전국구 #가전졸업성지 #삼성가전`,
-            image_hook: (isSubscription || targetType === 'move_in') ? `${displayApartment || target.name} 입주민만을 위한 공간 맞춤형 AI 가전 솔루션` : target.hook_message,
-            carousel_hints: (isSubscription || targetType === 'move_in')
-                ? ["비대면으로 완성하는 가전졸업", "입주 평면도 기반 공간 설계", "19년 마스터의 전담 케어", "카톡으로 5분 만에 견적 완료"]
-                : [target.hook_message, "19년 경력 마스터의 정밀 설계", "오직 당신만을 위한 맞춤형 혜택", "가전 졸업의 성지, 진센조를 만나보세요"]
+            caption: isSubscription
+                ? `[INSTAGRAM]\n✨ 단 1개라도 상담 가능! 삼성 AI 가전 구독으로 시작하는 0원 라이프\n\n매장 갈 시간 없는 바쁜 현대인을 위해 진센조가 준비했습니다. 전국 어디서나 비대면 1:1 상담으로 끝내는 스마트한 가전 구독! 💎\n\n왜 '삼성 AI 구독클럽'일까요?\n✅ 초기 비용 0원, 부담 없는 시작\n✅ 19년 마스터의 1:1 맞춤 설계\n✅ 매달 자동 케어 & 사후 관리까지\n\n지금 바로 프로필 링크 클릭하고 1:1 비대면 상담을 신청하세요.\n\n#진센조 #가전구독 #삼성AI구독클럽 #비대면상담 #가전졸업 #전국구 #삼성가전`
+                : `[INSTAGRAM]\n✨ ${target.hook_message}\n\n${targetType === 'move_in' ? "🏠 집 안에서 편안하게 받는 전국 비대면 가전 컨설팅! 💎" : `${displayRegion} ${displayApartment || ''} 고객님들 주목! 💎`}\n\n왜 다들 '진센조'에서 가전졸업 할까요? 19년 마스터의 1:1 비대면 맞춤 큐레이션으로 전국 어디서나 가장 합리적인 가전 졸업을 시작하세요.\n\n#진센조 #가전졸업 #비대면상담 #전국구 #가전졸업성지 #삼성가전`,
+            image_hook: isSubscription 
+                ? `단 1개라도 상담 가능! 삼성 AI 가전 구독으로 시작하는 0원 라이프`
+                : (targetType === 'move_in' ? `${displayApartment || target.name} 입주민만을 위한 공간 맞춤형 AI 가전 솔루션` : target.hook_message),
+            carousel_hints: isSubscription
+                ? [
+                    "단 1개의 품목도 친절 상담 가능",
+                    "삼성 AI 구독클럽만의 압도적 혜택",
+                    "19년 마스터 진센조의 맞춤 추천",
+                    "전국 어디서나 비대면 1:1 상담",
+                    "초기비용 0원 + 매달 자동 케어"
+                  ]
+                : (targetType === 'move_in'
+                    ? ["비대면으로 완성하는 가전졸업", "입주 평면도 기반 공간 설계", "19년 마스터의 전담 케어", "카톡으로 5분 만에 견적 완료"]
+                    : [target.hook_message, "19년 경력 마스터의 정밀 설계", "오직 당신만을 위한 맞춤형 혜택", "가전 졸업의 성지, 진센조를 만나보세요"])
         };
 
         // [FACEBOOK] - 지역/전국 정보성 톤
@@ -126,9 +139,12 @@ class ContentGenerator {
             content += `새 집으로의 설레는 이동, 가전 설치와 세팅만큼은 걱정 없으시도록 진센조가 끝까지 책임지고 설계해 드립니다.\n\n`;
         }
 
-        // Add Regional Nuance (Jinju Integrated Store)
+        // Add Regional Nuance (Jinju/Ulsan)
         if (region.includes("진주")) {
             content += `특히 진주 지역 고객님들께는 **백화점 에누리 최고 15%**와 로드샵의 유연한 정책을 결합한 통합 솔루션을 추천드립니다. 매장을 옮겨 다닐 필요 없이 한 곳에서 모든 고민을 끝내세요.\n\n`;
+        } else if (region.includes("울산")) {
+            content += `사실 저도 **울산 토박이**입니다. 고향 분들을 만나면 더 반갑고 하나라도 더 챙겨드리고 싶은 마음이 굴뚝같습니다.\n\n`;
+            content += `많은 분들이 "왜 울산을 두고 멀리 진주까지 왔느냐"고 물으시는데, 답은 명확합니다. **진주 매장이 전국적으로 보아도 혜택과 정책이 가장 좋기 때문입니다.** 울산 고향 분들께 가장 유리한 조건을 만들어 드리기 위해 제가 직접 이곳 진주에서 자리를 잡고 매일 공들여 설계하고 있습니다. 울산에서 오시는 수고가 아깝지 않도록 전국 최고 수준의 혜택으로 보답하겠습니다.\n\n`;
         }
 
         // Add Local Tour Table for specific targets

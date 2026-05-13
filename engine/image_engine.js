@@ -52,11 +52,18 @@ class ImageEngine {
     async generateFoodImage(target, customFileName = null) {
         console.log(`🚀 [ImageEngine] Generating realistic food image for: ${target.name}`);
         const browser = await chromium.launch({ headless: true });
-        const page = await browser.newPage();
+        const context = await browser.newContext();
+        const page = await context.newPage();
         await page.setViewportSize({ width: 1200, height: 630 });
 
-        const html = this._getFoodTemplate(target);
-        await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        // Serve local asset via intercept
+        const assetPath = path.resolve(__dirname, '..', 'marketing_vault', 'Assets', 'jinju_food_real.png');
+        await page.route('http://local/food.png', route => {
+            route.fulfill({ path: assetPath });
+        });
+
+        const html = this._getFoodTemplate(target, 'http://local/food.png');
+        await page.setContent(html, { waitUntil: 'networkidle', timeout: 60000 });
         await page.waitForTimeout(2000); 
 
         const fileName = customFileName || `food_${target.id || 'temp'}.png`;
@@ -88,7 +95,7 @@ class ImageEngine {
         return [hookPath, jinjuPath, foodPath];
     }
 
-    async generateCarouselImages(target, slidesData) {
+    async generateCarouselImages(target, slidesData, categoryKey = null) {
         console.log(`🚀 [ImageEngine] Generating and verifying ${slidesData.length} carousel slides for: ${target.name}`);
         const browser = await chromium.launch({ headless: true });
         const context = await browser.newContext({
@@ -99,7 +106,7 @@ class ImageEngine {
         const generatedFiles = [];
         for (let i = 0; i < slidesData.length; i++) {
             const page = await context.newPage();
-            const html = this._getCarouselTemplate(target, slidesData[i]);
+            const html = this._getCarouselTemplate(target, slidesData[i], categoryKey);
             
             await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 60000 });
             await page.waitForTimeout(2000); // Wait for fonts
@@ -159,15 +166,26 @@ class ImageEngine {
         `;
     }
 
-    _getCarouselTemplate(target, slide) {
-        // Target-specific background images (High-quality Unsplash)
-        const bgImages = {
-            'move_in': 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=1080',
-            'moving': 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&q=80&w=1080',
-            'wedding': 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&q=80&w=1080',
-            'subscription': 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=1080'
-        };
-        const bgUrl = bgImages[target.id?.split('_')[0]] || bgImages['subscription'];
+    _getCarouselTemplate(target, slide, categoryKey = null) {
+        // 1. Determine Category Key
+        const catKey = categoryKey || (target.id?.includes('move_in') ? 'move_in' : (target.id?.split('_').pop() || 'subscription'));
+        
+        // 2. Load Local Premium Asset as Base64 (Reliable & High Quality)
+        let bgBase64 = '';
+        try {
+            const assetPath = path.join(__dirname, '../marketing_vault/Assets/bgs', `${catKey}.png`);
+            if (fs.existsSync(assetPath)) {
+                const bitmap = fs.readFileSync(assetPath);
+                bgBase64 = `data:image/png;base64,${Buffer.from(bitmap).toString('base64')}`;
+            }
+        } catch (e) {
+            console.error(`Failed to load local asset for ${catKey}:`, e);
+        }
+
+        // Fallback to a solid dark gradient if image fails
+        const bgStyle = bgBase64 
+            ? `background: url('${bgBase64}') no-repeat center center; background-size: cover;`
+            : `background: linear-gradient(135deg, #0A0E1A 0%, #1a1a1a 100%);`;
 
         return `
             <html>
@@ -183,8 +201,8 @@ class ImageEngine {
                     }
                     .bg-image {
                         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-                        background: url('${bgUrl}') no-repeat center center;
-                        background-size: cover; filter: brightness(0.3) saturate(0.8);
+                        ${bgStyle}
+                        filter: brightness(0.4) saturate(0.9);
                         z-index: 1;
                     }
                     .overlay {
@@ -307,13 +325,10 @@ class ImageEngine {
         `;
     }
 
-    _getFoodTemplate(target) {
-        // High-end Korean food photography (Authentic Naengmyeon/Yukjeon style)
-        const foodImages = [
-            'https://images.unsplash.com/photo-1598511726623-d3062f682662?auto=format&fit=crop&q=80&w=1200', // Meat/Korean style
-            'https://images.unsplash.com/photo-1490818387583-1baba5e638af?auto=format&fit=crop&q=80&w=1200'  // Clean Gourmet style
-        ];
-        const bgUrl = foodImages[0]; 
+    _getFoodTemplate(target, bgUrl = null) {
+        if (!bgUrl) {
+            bgUrl = 'https://images.unsplash.com/photo-1598511726623-d3062f682662?auto=format&fit=crop&q=80&w=1200';
+        }
 
         return `
             <html>
@@ -322,15 +337,20 @@ class ImageEngine {
                 <style>
                     body { 
                         width: 1200px; height: 630px; margin: 0; 
-                        background: url('${bgUrl}') no-repeat center center;
-                        background-size: cover;
-                        display: flex; justify-content: flex-end; align-items: center;
+                        background-color: #000;
                         color: white; font-family: 'Noto Sans KR', sans-serif;
-                        overflow: hidden; padding-right: 80px;
+                        overflow: hidden; position: relative;
+                        display: flex; justify-content: flex-end; align-items: center;
+                    }
+                    .bg-image {
+                        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                        object-fit: cover;
+                        z-index: 1;
                     }
                     .overlay {
                         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
                         background: linear-gradient(to left, rgba(10, 14, 26, 0.95) 0%, rgba(10, 14, 26, 0.4) 100%);
+                        z-index: 2;
                     }
                     .food-card {
                         position: relative; z-index: 10;
@@ -339,6 +359,7 @@ class ImageEngine {
                         backdrop-filter: blur(10px);
                         padding: 40px;
                         border-right: 5px solid #D4AF37;
+                        margin-right: 80px;
                     }
                     .badge { 
                         font-family: 'Nanum Myeongjo', serif; font-size: 26px; color: #D4AF37; margin-bottom: 20px;
@@ -357,6 +378,7 @@ class ImageEngine {
                 </style>
             </head>
             <body>
+                <img class="bg-image" src="${bgUrl}">
                 <div class="overlay"></div>
                 <div class="food-card">
                     <div class="badge">JINJU GOURMET TOUR</div>

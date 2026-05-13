@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const TARGETS_FILE = path.join(__dirname, '../../viral_targets.json');
+const TARGETS_FILE = path.join(__dirname, '../../data/viral_targets.json');
 const VAULT_TARGETS_DIR = path.join(__dirname, '../Targets');
 
 if (!fs.existsSync(VAULT_TARGETS_DIR)) fs.mkdirSync(VAULT_TARGETS_DIR, { recursive: true });

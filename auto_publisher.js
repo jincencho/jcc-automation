@@ -25,16 +25,18 @@ async function runAutoViral() {
 
         console.log(`🎯 선택된 타겟: ${target.name} (전략: ${target.strategyKey})`);
 
-        // 2. 통합 원고 생성
-        const manuscript = await contentGenerator.generateManuscript(
+        // 2. 통합 콘텐츠 생성
+        const contents = await contentGenerator.generateMultiChannelContent(
             target.strategyKey, 
             target.region, 
             target.name
         );
+        const manuscript = contents.naver_blog;
+        target.hook_message = contents.instagram.image_hook;
 
         // 3. 맞춤형 이미지 생성
-        const hookImagePath = path.join(__dirname, `./generated_hooks/hook_${target.id}.png`);
-        await imageEngine.generateHookImage(target, hookImagePath);
+        const hookImageName = `hook_${target.id}.png`;
+        const hookImagePath = await imageEngine.generateHookImage(target, hookImageName);
         console.log(`📸 이미지 생성 완료: ${hookImagePath}`);
 
         // 4. 네이버 블로그 발행 (이미지 포함)
@@ -52,6 +54,10 @@ async function runAutoViral() {
         if (result.success) {
             console.log(`✨ 발행 성공! URL: ${result.url}`);
             targetManager.markCompleted(target.id);
+            
+            // Final Notification
+            const { sendReport } = require('./scripts/telegram_report_util');
+            await sendReport(new Date().toISOString().split('T')[0], [target.name + " (발행 완료)"]);
         } else {
             console.error(`❌ 발행 실패: ${result.error}`);
         }

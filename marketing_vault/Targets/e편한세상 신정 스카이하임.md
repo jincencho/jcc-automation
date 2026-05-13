@@ -3,7 +3,7 @@ id: ulsan_shinjung_sky
 region: 울산 남구
 name: e편한세상 신정 스카이하임
 move_in_date: 2026-10
-scheduled_date: 2026-05-18
+scheduled_date: 2026-05-21
 status: active
 tags:
   - target
@@ -17,7 +17,7 @@ tags:
 - **입주 예정일**: 2026-10
 
 ## 📅 마케팅 일정
-- **발행 예정일**: 2026-05-18
+- **발행 예정일**: 2026-05-21
 - **현재 상태**: 🟢 진행 중
 
 ## 📝 마케팅 히스토리

@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 
 const token = '8722162859:AAFXVsi2rRNaqybfb4h5CeD9eFme-APzlFQ';
-const chatId = '6245381861'; // Based on previous context, usually the main user chat id
+const chatId = '1294140235'; // Updated to main user chat ID
 
 async function sendReport(date, targetNames) {
     const bot = new TelegramBot(token);
