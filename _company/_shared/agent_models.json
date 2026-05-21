@@ -1,0 +1,11 @@
+{
+  "ceo": "mistral:latest",
+  "secretary": "mistral:latest",
+  "youtube": "mistral:latest",
+  "researcher": "mistral:latest",
+  "business": "mistral:latest",
+  "writer": "mistral:latest",
+  "editor": "mistral:latest",
+  "designer": "gemma4:latest",
+  "instagram": "mistral:latest"
+}

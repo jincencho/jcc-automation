@@ -254,5 +254,53 @@
     "move_in_date": "2027-03",
     "scheduled_date": "2026-06-13",
     "status": "active"
+  },
+  {
+    "id": "gwangju_unam_xi",
+    "region": "광주 북구",
+    "name": "운암자이포레나 퍼스티체",
+    "move_in_date": "2026-04",
+    "scheduled_date": "2026-06-14",
+    "status": "active"
+  },
+  {
+    "id": "gwangju_wipark_ilgok",
+    "region": "광주 북구",
+    "name": "위파크 일곡공원",
+    "move_in_date": "2026-03",
+    "scheduled_date": "2026-06-15",
+    "status": "active"
+  },
+  {
+    "id": "daejeon_seodaejeon_centro",
+    "region": "대전 중구",
+    "name": "e편한세상 서대전역 센트로",
+    "move_in_date": "2026-12",
+    "scheduled_date": "2026-06-16",
+    "status": "active"
+  },
+  {
+    "id": "daejeon_forena_wolpyeong_1",
+    "region": "대전 서구",
+    "name": "한화포레나 대전월평공원 1단지",
+    "move_in_date": "2026-05",
+    "scheduled_date": "2026-06-17",
+    "status": "active"
+  },
+  {
+    "id": "gwangju_gyodaeyeok_moaelga",
+    "region": "광주 동구",
+    "name": "교대역 모아엘가 그랑데",
+    "move_in_date": "2026-05",
+    "scheduled_date": "2026-06-18",
+    "status": "active"
+  },
+  {
+    "id": "gwangju_wipark_mareuk",
+    "region": "광주 서구",
+    "name": "위파크 마륵공원",
+    "move_in_date": "2026-03",
+    "scheduled_date": "2026-06-19",
+    "status": "active"
   }
 ]

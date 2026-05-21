@@ -1,9 +1,10 @@
+require('./engine/env_loader');
 const { chromium } = require('playwright');
 const path = require('path');
 
 // Telegram settings
-const TELEGRAM_TOKEN = '8722162859:AAFXVsi2rRNaqybfb4h5CeD9eFme-APzlFQ';
-const TELEGRAM_CHAT_ID = '1294140235';
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 async function sendTelegramMessage(message) {
     try {
@@ -15,6 +16,58 @@ async function sendTelegramMessage(message) {
     } catch (e) {
         console.error('텔레그램 전송 실패:', e);
     }
+}
+
+/**
+ * 텍스트를 100자 이하의 블록들로 쪼개는 헬퍼 함수
+ */
+function splitTextIntoSub100Blocks(text) {
+    if (text.length <= 100) {
+        return [text];
+    }
+
+    const sentences = text.match(/[^.!?]+[.!?]+(\s+|$)|[^.!?]+$/g) || [text];
+    const result = [];
+    let currentBlock = "";
+
+    for (let sentence of sentences) {
+        sentence = sentence.trim();
+        if (!sentence) continue;
+
+        if (sentence.length > 100) {
+            if (currentBlock) {
+                result.push(currentBlock.trim());
+                currentBlock = "";
+            }
+
+            const words = sentence.split(/\s+/);
+            let tempBlock = "";
+            for (let word of words) {
+                if ((tempBlock + " " + word).trim().length > 100) {
+                    if (tempBlock) result.push(tempBlock.trim());
+                    tempBlock = word;
+                } else {
+                    tempBlock = (tempBlock + " " + word).trim();
+                }
+            }
+            if (tempBlock) {
+                result.push(tempBlock.trim());
+            }
+        } else {
+            if ((currentBlock + " " + sentence).trim().length > 100) {
+                if (currentBlock) result.push(currentBlock.trim());
+                currentBlock = sentence;
+            } else {
+                currentBlock = (currentBlock + " " + sentence).trim();
+            }
+        }
+    }
+
+    if (currentBlock) {
+        result.push(currentBlock.trim());
+    }
+
+    return result;
 }
 
 /**
@@ -117,9 +170,14 @@ async function uploadNaverBlog(title, bodyBlocks, images, slotName = "네이버 
             const cleanText = block.replace(/\*\*/g, '').replace(/\*/g, '').replace(/^-\s+/, '').trim();
             if (cleanText.length === 0) continue;
 
-            await page.keyboard.type(cleanText, { delay: 10 });
-            await page.keyboard.press('Enter');
-            await page.waitForTimeout(200);
+            // 100자 이하 절대 로직화 적용
+            const subBlocks = splitTextIntoSub100Blocks(cleanText);
+            for (let subBlock of subBlocks) {
+                console.log(`[${slotName}] 타이핑 (글자수: ${subBlock.length}자): ${subBlock.substring(0, 20)}...`);
+                await page.keyboard.type(subBlock, { delay: 10 });
+                await page.keyboard.press('Enter');
+                await page.waitForTimeout(200);
+            }
         }
 
         // 6. 이미지 추가

@@ -1,4 +1,4 @@
-const { uploadNaverBlog } = require('../publishers/naver_publisher');
+const { uploadNaverBlog } = require('../naver_blog_upload');
 const path = require('path');
 
 const title = "[진센조 일기] 세상에서 가장 아름다운 졸업, 가전 졸업을 축하드립니다";

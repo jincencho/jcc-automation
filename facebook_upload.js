@@ -1,9 +1,10 @@
+require('./engine/env_loader');
 const { chromium } = require('playwright');
 const path = require('path');
 
 // Telegram settings
-const TELEGRAM_TOKEN = '8722162859:AAFXVsi2rRNaqybfb4h5CeD9eFme-APzlFQ';
-const TELEGRAM_CHAT_ID = '1294140235';
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 async function sendTelegramMessage(message) {
     try {

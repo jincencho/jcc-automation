@@ -1,8 +1,9 @@
+require('../engine/env_loader');
 const { chromium } = require('playwright');
 const path = require('path');
 
-const TELEGRAM_TOKEN = '8722162859:AAFXVsi2rRNaqybfb4h5CeD9eFme-APzlFQ';
-const TELEGRAM_CHAT_ID = '1294140235';
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 /**
  * 네이버 블로그 업로드 및 실제 발행 자동화 클래스

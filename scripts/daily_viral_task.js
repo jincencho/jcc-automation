@@ -35,12 +35,12 @@ async function runDailyViral() {
     // ✅ 네이버 블로그: 매일 2개 (입주 + 혼수)
     // ✅ 인스타그램: 매일 3개 (입주 + 혼수 + 구독)
     const allCategories = [
-        { key: 'move_in', folder: '입주', name: '신규입주', region: mainTarget.region, apartment: mainTarget.name, channels: ['blog', 'instagram'] },
-        { key: 'wedding', folder: '혼수', name: '혼수웨딩', region: mainTarget.region, apartment: '', channels: ['blog', 'instagram'] },
-        { key: 'subscription', folder: '구독', name: '삼성 AI 가전 구독 클럽', region: '전국', apartment: '', channels: ['instagram'] }
+        { key: 'move_in',      folder: '입주', name: '신규입주',              region: mainTarget.region, apartment: mainTarget.name, channels: ['blog', 'instagram'] },
+        { key: 'wedding',      folder: '혼수', name: '혼수웨딩',              region: mainTarget.region, apartment: '',              channels: ['blog', 'instagram'] },
+        { key: 'subscription', folder: '구독', name: '삼성 AI 가전 구독 클럽', region: '전국',           apartment: '',              channels: ['blog', 'instagram'] }
     ];
 
-    console.log(`📅 [DailyTask] Generating ALL targets: 블로그 2개(입주+혼수) + 인스타 3개(입주+혼수+구독)`);
+    console.log(`📅 [DailyTask] Generating ALL targets: 블로그 3개(입주+혼수+구독) + 인스타 3개(입주+혼수+구독)`);
 
     const generator = new ContentGenerator();
 
@@ -63,8 +63,8 @@ async function runDailyViral() {
             `---`
         ];
 
-        // --- NAVER BLOG (입주 + 혼수만) ---
-        if (cat.channels.includes('blog')) {
+        // --- NAVER BLOG (전 타겟 모두 생성) ---
+        if (content.naver_blog) {
             outputLines.push(
                 `## 📝 [NAVER BLOG] 원고`,
                 `**제목: ${content.naver_blog.title.replace('[NAVER BLOG] ', '')}**`,
@@ -78,7 +78,7 @@ async function runDailyViral() {
         }
 
         // --- INSTAGRAM (전 타겟) ---
-        if (cat.channels.includes('instagram')) {
+        if (content.instagram && content.instagram.caption) {
             outputLines.push(
                 `## 📸 [INSTAGRAM] 캡션`,
                 content.instagram.caption.replace('[INSTAGRAM]\n', ''),
@@ -109,7 +109,7 @@ async function runDailyViral() {
 
         // 5. Generate and Save ChatGPT Prompt Pack (with actual hooking messages from content)
         console.log(`🤖 [DailyTask] Generating ChatGPT Prompts for: ${cat.folder}`);
-        const promptText = generatePromptPack(cat.key, content, target.name);
+        const promptText = generatePromptPack(cat.key, content, cat.apartment);
         fs.writeFileSync(path.join(subDir, `[진센조_이미지프롬프트].md`), promptText);
     }
 

@@ -3,7 +3,7 @@ id: ulsan_okdong_honors
 region: 울산 남구
 name: 옥동 경남아너스빌 ubc
 move_in_date: 2026-08
-scheduled_date: 2026-05-17
+scheduled_date: 2026-05-24
 status: active
 tags:
   - target
@@ -17,7 +17,7 @@ tags:
 - **입주 예정일**: 2026-08
 
 ## 📅 마케팅 일정
-- **발행 예정일**: 2026-05-17
+- **발행 예정일**: 2026-05-24
 - **현재 상태**: 🟢 진행 중
 
 ## 📝 마케팅 히스토리

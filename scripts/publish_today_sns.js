@@ -1,6 +1,6 @@
 const path = require('path');
 const uploadInstagram = require('../publishers/insta_publisher');
-const { uploadNaverBlog } = require('../publishers/naver_publisher');
+const { uploadNaverBlog } = require('../naver_blog_upload');
 
 async function run() {
     console.log('🚀 [Jincencho System] 22시간 전 성공 로직으로 오늘 바이럴 업로드를 시작합니다...');

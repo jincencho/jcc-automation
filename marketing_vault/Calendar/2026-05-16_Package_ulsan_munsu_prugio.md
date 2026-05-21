@@ -14,44 +14,42 @@
 
 ## 💡 [신규입주] 전용 콘텐츠
 
+### 📱 [SELECTED_LOCAL_INFO] 채널
+---
+
 ### 📱 [NAVER_BLOG] 채널
-**제목**: [NAVER BLOG] 아무도 알려주지 않는 문수로 푸르지오 어반피스 입주 가전 잘 사고 잘 쓰는 법
+**제목**: [NAVER BLOG] 왜 울산 남구 문수로 푸르지오 어반피스 고객님들은 굳이 진주 통합매장을 찾으실까?
 
 **본문**:
-안녕하세요. 가전 그 이상의 가치를 설계하는 JCC 진센조입니다.
+울산 남구 지역에서 가장 핫한 입주 소식, 문수로 푸르지오 어반피스 가전 졸업의 해답을 들고 왔습니다.
 
-요즘 가장 핫한 검색어인 **[아파트 사전점검 체크리스트]**, 혹시 찾아보셨나요?
-특히 최근 입주민들 사이에서는 **'소프트 미니멀리즘 가구 배치'**가 큰 화두가 되고 있습니다. 많은 분들이 단순히 카탈로그 스펙이나 인터넷 최저가만 보고 가전을 결정합니다. 하지만 아파트의 평면도, 가족의 라이프스타일, 그리고 숨겨진 통합 할인 정책을 모르면 결국 10년 내내 후회하게 됩니다. 진짜 중요한 건 제품이 아니라 **'공간에 맞는 정확한 설계'**입니다.
+요즘 인스타그램과 블로그에서 **[아파트 사전점검 알바 후기]** 키워드가 정말 많이 언급되고 있습니다. 특히 입주민들 사이에서 **'클라우드 댄서 뉴트럴 톤 인테리어'**가 뜨거운 화두죠. 많은 분들이 단순히 스펙이나 가격만 보고 결정하시지만, 진짜 중요한 건 **'내 공간과 라이프스타일에 맞는 정확한 설계'**입니다. 19년 마스터로서 단언컨대, 잘못된 선택은 결국 10년의 후회를 낳습니다.
 
-이미 울산 남구 문수로 푸르지오 어반피스 입주민 및 수많은 고객의 30% 이상이 진센조의 맞춤 설계를 선택하신 진짜 이유가 있습니다.
-사실 저도 **울산 토박이**입니다. 고향 분들이 왜 굳이 진주 매장까지 찾아오실까요? 바로 진주 매장이 전국적으로 보아도 **할인 혜택과 정책이 가장 압도적**이기 때문입니다. 고향 분들께 가장 유리한 조건을 만들어 드리기 위해 제가 직접 설계합니다.
+이미 울산 남구을 비롯한 부산, 창원, 김해 등 인근 지역의 고객님들이 굳이 진주 통합매장을 찾으시는 데에는 명확한 이유가 있습니다. 입주 가전은 '언제, 누구에게' 설계받느냐가 평면도 속 인테리어의 완성도를 결정하기 때문이죠. 
 
-**너무 많은 옵션에 지치셨죠?** 인터넷의 수많은 가전 리스트와 복잡한 견적서에 피로감을 느끼셨다면 이제 멈추셔도 됩니다.
-19년 마스터의 노하우로 고객님 댁에 최적화된 **딱 2가지 솔루션**만 깔끔하게 제안해 드립니다. 백화점의 프리미엄 모델과 로드샵의 실속형 모델을 결합한 하이브리드 설계로 비용은 낮추고 만족도는 극대화합니다.
+**"거리가 멀어서 망설여지시나요?"**
+고속도로를 이용하면 부산, 울산, 창원 어디서든 1시간 내외면 도착할 수 있는 거리입니다. 10년을 사용하는 가전, 단 1시간의 투자로 수백만 원의 가치와 19년 마스터의 평생 케어를 얻으실 수 있다면 결코 먼 거리가 아닙니다.
 
-**"혹시 설치하다 문제가 생기면 어떡하지?"** 이런 불안감도 완벽히 지워드립니다.
-2007년 삼성전자 서비스 입사 후 수리, 배송, 설치, 영업까지 모두 직접 경험한 마스터로서, 현장에서 발생할 수 있는 단 1mm의 단차나 변수조차 사전에 원천 차단합니다. 10년을 쓰는 고관여 제품, 대충 고르고 후회하는 비용이 지금 아끼는 몇십만 원보다 훨씬 큽니다.
+특히 제가 울산 토박이로서 고향 분들께는 전국 최고 수준의 할인 정책을 적용해 드리기 위해 더 꼼꼼히 설계하고 있습니다. 혜택이 압도적이면 거리는 숫자에 불과하니까요.
 
-### 📝 진센조가 알려드리는 '입주 전 필수 체크리스트'
-- ✅ 사전점검 필수 준비물 (수평계, 줄자, 충전기 등)
-- ✅ 공간별 하자 점검 포인트 (도배, 바닥, 수압, 결로)
-- ✅ 가구/가전 배치를 위한 평면도 치수 확인
-- ✅ 입주 청소 및 새집증후군 제거 일정 조율
-- ✅ 잔금 대출 및 취득세 등 행정 절차 체크
+**"복잡한 견적서, 이제 그만 보셔도 됩니다."**
+19년 마스터의 노하우로 고객님 상황에 최적화된 **딱 2가지 솔루션**만 제안해 드립니다. 비용은 낮추고, 가전의 격은 높이는 설계를 직접 경험해 보세요.
 
-입주를 준비하며 놓치기 쉬운 이 항목들을 미리 챙기시면 훨씬 수월한 시작이 되실 겁니다.
+### 🏯 왜 가전 졸업은 '진주'여야 할까요?
+진주 통합매장은 단순히 제품을 사는 곳이 아니라, 진주의 넉넉한 인심과 마스터의 정밀 설계가 만나는 공간입니다. 진주는 천년의 역사를 품은 남강의 도시로, 방문하시는 것만으로도 힐링이 되는 곳이죠.
 
+**역사와 미식의 도시**: 상담 후에는 진주대첩의 현장인 **진주성**과 남강의 절경을 품은 **촉석루**를 꼭 둘러보세요. 금강산도 식후경이라죠? 진주의 자랑 **제일식당**에서 중앙시장 노포, 고소한 참기름 향 가득한 육회비빔밥을 즐기시는 코스를 강력 추천합니다.
 
-### 🗺️ 진센조 추천: 가전 졸업 후 즐기는 '진주 힐링 투어' 코스
-가전 졸업의 성지 진주 통합매장까지 오신 김에, 진센조가 추천하는 힐링 투어로 스트레스까지 모두 날려버리세요!
+**감성 충전 코스**: 요즘 SNS에서 핫한 **로터스**에서 강주연못 물멍과 맛있는 베이커리가 있는 힐링 카페을 즐기며 여유를 만끽해 보세요. 경상남도수목원(메타세콰이어길과 넓은 잔디밭이 있는 피크닉 성지)까지 방문하신다면 완벽한 가전 졸업 여행이 완성됩니다.
 
-| 구분 | 장소/명칭 | 특징 |
+### 🗺️ 진센조가 선별한 '진주 힐링 투어' 리스트
+가전 졸업의 성지 진주까지 오신 김에 스트레스까지 날려버릴 수 있는 선별 코스입니다.
+
+| 구분 | 명칭 | 마스터의 추천 이유 |
 | :--- | :--- | :--- |
-| **맛집** | 하연옥 본점 | 진주냉면과 육전의 환상적인 조화 |
-| **맛집** | 제일식당 | 중앙시장 내 전통 있는 육회비빔밥 |
-| **명소** | 진주성 촉석루 | 역사와 남강의 운치를 동시에 느끼는 산책로 |
-| **명소** | 진양호 노을공원 | 가전 상담 후 노을과 함께하는 힐링 타임 |
-
+| **맛집** | 제일식당 | 중앙시장 노포, 고소한 참기름 향 가득한 육회비빔밥 |
+| **카페** | 로터스 | 강주연못 물멍과 맛있는 베이커리가 있는 힐링 카페 |
+| **명소** | 경상남도수목원 | 메타세콰이어길과 넓은 잔디밭이 있는 피크닉 성지 |
 
 --- 
 
@@ -80,7 +78,7 @@
 ✅ 입주 공동구매 이상의 개별 혜택
 ✅ 19년 마스터의 프리미엄 현장 정밀 검수
 
-공식 홈페이지를 통해 비대면으로도 완벽한 입주 큐레이션을 받아보실 수 있습니다.
+전용 홈페이지를 통해 비대면으로도 완벽한 입주 큐레이션을 받아보실 수 있습니다.
 
 #입주가전 #진센조 #가전성지 #신규입주 #랜선집들이 #인테리어완성
 
@@ -100,7 +98,7 @@
 **내용**: [THREADS]
 가전, 굳이 멀리까지 가실 필요 없습니다. 🛋️
 
-굳이 안 찾아봐도 19년 마스터가 다 알아서 최적 견적 꽂아줌. 진센조는 완전 제로클릭 그 자체 👆 입주 6개월 전 1:1 평면도 맞춤 설계!
+솔직히 이 혜택에 이 케어 서비스? 이건 가전업계 G.O.A.T 인정해야 함 🐐 입주 6개월 전 1:1 평면도 맞춤 설계!
 
 19년 경력 노하우로 카톡 하나로 끝내는 비대면 가전 졸업. 링크 확인해 주세요! #진센조
 
@@ -118,23 +116,23 @@
 ## 📝 1. 네이버 블로그용 프롬프트 (가로형 16:9, 텍스트 없는 고급 이미지)
 블로그 본문 중간에 배치하여 읽는 재미를 더하는 극사실주의 감성 이미지입니다.
 
-### 📸 이미지 1: 입주 설계 전문가 (도입부 배치)
+### 📸 이미지 1: 우리 집 입주 준비 (도입부 배치)
 **프롬프트:**
 ```
-A highly photorealistic, cinematic shot of a professional male consultant in his 40s wearing a neat dark navy suit, standing in an empty unit of "" apartment. He is holding a tablet displaying a detailed floor plan of "", pointing at the kitchen area. Large floor-to-ceiling windows reveal a panoramic city view. Trustworthy, authoritative atmosphere. DSLR photography, 35mm wide lens. Do not include any text. Aspect ratio 16:9.
+A photorealistic shot of a happy Korean family standing in front of the impressive main gate of 'a luxury apartment complex'. They are holding keys and looking up at the building with hopeful expressions. Bright morning light, crisp architectural details. Do not include any text. Aspect ratio 16:9.
 ```
 
-### 📸 이미지 2: 새 아파트의 완벽한 빌트인 (본문 배치)
+### 📸 이미지 2: 진주 투어와 가전 설계 (본문 배치)
 **프롬프트:**
 ```
-A photorealistic interior of a brand-new "" high-rise apartment. Focus on the kitchen area with seamless built-in Samsung bespoke refrigerator and dishwasher, perfectly flush with premium cabinetry. Clean construction smell implied by pristine white walls. Bright natural light flooding in. New home excitement. Interior design photography. Do not include any text. Aspect ratio 16:9.
+A photorealistic shot of a professional male consultant showing a detailed 3D kitchen layout on a large screen to a couple. The screen shows the exact floor plan of ''. In the background, a large window reveals a beautiful view of '경상남도수목원' in Jinju. Expert and premium vibe. Do not include any text. Aspect ratio 16:9.
 ```
 
 ### 📸 이미지 3: 타겟별 맞춤 감성 (결론부 배치)
-[신규입주 타겟용]
+[입주 타겟용]
 **프롬프트:**
 ```
-A wide, photorealistic shot of the stunning, newly built "" apartment complex during the golden hour. The building exterior is modern and sophisticated, with beautifully landscaped gardens and a water feature in the foreground. Peaceful, premium residential, hopeful new beginning. Do not include any text. Aspect ratio 16:9.
+A photorealistic, high-end interior shot of a fully furnished living room in ''. Samsung Bespoke appliances are perfectly integrated into the modern, neutral-toned interior. Warm evening lighting, luxurious and cozy family home. Do not include any text. Aspect ratio 16:9.
 ```
 
 ---
@@ -154,7 +152,7 @@ Background scene: A breathtaking aerial view of "" luxury apartment complex, bat
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 2: 공감 유발
+### 🖼️ Slide 2: 공감 유발 (Problem)
 **📌 이미지 위에 들어갈 텍스트:** "입주 가전, 6개월 전이 골든타임"
 **프롬프트:**
 ```
@@ -166,7 +164,7 @@ Background scene: A young Korean couple standing in an empty unit of "", looking
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 3: 해결책 제시
+### 🖼️ Slide 3: 해결책 제시 (Solution)
 **📌 이미지 위에 들어갈 텍스트:** "평면도 맞춤형 1:1 큐레이션"
 **프롬프트:**
 ```
@@ -178,7 +176,7 @@ Background scene: A dynamic split-screen: left side shows an architectural floor
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 4: 핵심 베네핏
+### 🖼️ Slide 4: 핵심 베네핏 (Benefit)
 **📌 이미지 위에 들어갈 텍스트:** "입주민을 위한 특별 우대 혜택"
 **프롬프트:**
 ```
@@ -190,19 +188,19 @@ Background scene: A stunning, perfectly organized modern kitchen in "" with seam
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 5: 사회적 증거
-**📌 이미지 위에 들어갈 텍스트:** "19년 마스터의 완벽한 공간 설계"
+### 🖼️ Slide 5: 거리의 장벽을 넘는 혜택 (Distance)
+**📌 이미지 위에 들어갈 텍스트:** "부산/울산/창원에서 1시간, 거리는 숫자에 불과합니다"
 **프롬프트:**
 ```
 Create a premium social media image (Instagram post, 4:5 aspect ratio).
-The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '19년 마스터의 완벽한 공간 설계'.
+The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '부산/울산/창원에서 1시간, 거리는 숫자에 불과합니다'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A photorealistic shot of a happy Korean family (parents and a toddler) cooking together in their brand-new "" kitchen. Built-in appliances gleaming. Warm overhead pendant lights, cozy family moment.
+Background scene: A photorealistic, cinematic shot from inside a premium car, looking through the windshield at a highway sign that reads "Jinju (진주)" with an arrow. The sun is setting, creating a warm, hopeful glow. On the dashboard, a smartphone shows a navigation app with a short remaining time. High-end, aspirational travel vibe.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 6: CTA 행동 유도
+### 🖼️ Slide 6: CTA 행동 유도 (Action)
 **📌 이미지 위에 들어갈 텍스트:** "매장 방문 없이 비대면 5분 견적"
 **프롬프트:**
 ```
@@ -210,7 +208,7 @@ Create a premium social media image (Instagram post, 4:5 aspect ratio).
 The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '매장 방문 없이 비대면 5분 견적'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A clean, modern graphic design background with soft gradient. A large 3D arrow pointing upward-right or a CTA button. Minimalist, trendy, Instagram-native aesthetic with space for text.
+Background scene: A clean, modern graphic design background with a Deep Navy to Charcoal gradient and Gold accents. A large, elegant 3D 'Consult Now' button or arrow. Minimalist, premium Instagram-native aesthetic with ample space for text.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
@@ -224,35 +222,42 @@ The overall mood should be premium, clean, and eye-catching for social media.
 
 ## 💡 [혼수(Wedding)] 전용 콘텐츠
 
+### 📱 [SELECTED_LOCAL_INFO] 채널
+---
+
 ### 📱 [NAVER_BLOG] 채널
-**제목**: [NAVER BLOG] 19년 짬바가 말해준다! 혼수 가전에서 절대 타협하면 안 되는 3가지
+**제목**: [NAVER BLOG] 전국구 혼수 성지 진센조, 비대면으로 끝내는 완벽한 혼수 가전
 
 **본문**:
-안녕하세요. 가전 그 이상의 가치를 설계하는 JCC 진센조입니다.
+예비 부부님들의 합리적이고 프리미엄한 신혼집 완성을 위한 하이브리드 설계 전문가, 진센조입니다.
 
-요즘 가장 핫한 검색어인 **[신혼가전 예산]**, 혹시 찾아보셨나요?
-많은 분들이 단순히 카탈로그 스펙이나 인터넷 최저가만 보고 가전을 결정합니다. 하지만 아파트의 평면도, 가족의 라이프스타일, 그리고 숨겨진 통합 할인 정책을 모르면 결국 10년 내내 후회하게 됩니다. 진짜 중요한 건 제품이 아니라 **'공간에 맞는 정확한 설계'**입니다.
+요즘 인스타그램과 블로그에서 **[신혼가전 온라인 오프라인]** 키워드가 정말 많이 언급되고 있습니다. 많은 분들이 단순히 스펙이나 가격만 보고 결정하시지만, 진짜 중요한 건 **'내 공간과 라이프스타일에 맞는 정확한 설계'**입니다. 19년 마스터로서 단언컨대, 잘못된 선택은 결국 10년의 후회를 낳습니다.
 
-이미 울산 남구 문수로 푸르지오 어반피스 입주민 및 수많은 고객의 30% 이상이 진센조의 맞춤 설계를 선택하신 진짜 이유가 있습니다.
-사실 저도 **울산 토박이**입니다. 고향 분들이 왜 굳이 진주 매장까지 찾아오실까요? 바로 진주 매장이 전국적으로 보아도 **할인 혜택과 정책이 가장 압도적**이기 때문입니다. 고향 분들께 가장 유리한 조건을 만들어 드리기 위해 제가 직접 설계합니다.
+이미 울산 남구을 비롯한 부산, 창원, 김해 등 인근 지역의 고객님들이 굳이 진주 통합매장을 찾으시는 데에는 명확한 이유가 있습니다. 혼수는 특정 브랜드의 프리미엄 라인과 실속형 라인을 적절히 섞는 '하이브리드 설계'가 핵심이기 때문입니다. 타 브랜드와 비교해도 압도적인 통합 혜택을 제안해 드립니다. 
 
-**너무 많은 옵션에 지치셨죠?** 인터넷의 수많은 가전 리스트와 복잡한 견적서에 피로감을 느끼셨다면 이제 멈추셔도 됩니다.
-19년 마스터의 노하우로 고객님 댁에 최적화된 **딱 2가지 솔루션**만 깔끔하게 제안해 드립니다. 백화점의 프리미엄 모델과 로드샵의 실속형 모델을 결합한 하이브리드 설계로 비용은 낮추고 만족도는 극대화합니다.
+**"거리가 멀어서 망설여지시나요?"**
+고속도로를 이용하면 부산, 울산, 창원 어디서든 1시간 내외면 도착할 수 있는 거리입니다. 10년을 사용하는 가전, 단 1시간의 투자로 수백만 원의 가치와 19년 마스터의 평생 케어를 얻으실 수 있다면 결코 먼 거리가 아닙니다.
 
-**"혹시 설치하다 문제가 생기면 어떡하지?"** 이런 불안감도 완벽히 지워드립니다.
-2007년 삼성전자 서비스 입사 후 수리, 배송, 설치, 영업까지 모두 직접 경험한 마스터로서, 현장에서 발생할 수 있는 단 1mm의 단차나 변수조차 사전에 원천 차단합니다. 10년을 쓰는 고관여 제품, 대충 고르고 후회하는 비용이 지금 아끼는 몇십만 원보다 훨씬 큽니다.
+특히 제가 울산 토박이로서 고향 분들께는 전국 최고 수준의 할인 정책을 적용해 드리기 위해 더 꼼꼼히 설계하고 있습니다. 혜택이 압도적이면 거리는 숫자에 불과하니까요.
 
+**"복잡한 견적서, 이제 그만 보셔도 됩니다."**
+19년 마스터의 노하우로 고객님 상황에 최적화된 **딱 2가지 솔루션**만 제안해 드립니다. 비용은 낮추고, 가전의 격은 높이는 설계를 직접 경험해 보세요.
 
-### 🗺️ 진센조 추천: 가전 졸업 후 즐기는 '진주 힐링 투어' 코스
-가전 졸업의 성지 진주 통합매장까지 오신 김에, 진센조가 추천하는 힐링 투어로 스트레스까지 모두 날려버리세요!
+### 🏯 왜 가전 졸업은 '진주'여야 할까요?
+진주 통합매장은 단순히 제품을 사는 곳이 아니라, 진주의 넉넉한 인심과 마스터의 정밀 설계가 만나는 공간입니다. 진주는 천년의 역사를 품은 남강의 도시로, 방문하시는 것만으로도 힐링이 되는 곳이죠.
 
-| 구분 | 장소/명칭 | 특징 |
+**역사와 미식의 도시**: 상담 후에는 진주대첩의 현장인 **진주성**과 남강의 절경을 품은 **촉석루**를 꼭 둘러보세요. 금강산도 식후경이라죠? 진주의 자랑 **하연옥**에서 해물육수와 육전 고명이 일품인 진주냉면의 명가을 즐기시는 코스를 강력 추천합니다.
+
+**감성 충전 코스**: 요즘 SNS에서 핫한 **물빛나루**에서 남강 유등 뷰와 함께 즐기는 낭만적인 티타임을 즐기며 여유를 만끽해 보세요. 철도문화공원(구 진주역 부지의 이색적인 포토존과 문화 공간)까지 방문하신다면 완벽한 가전 졸업 여행이 완성됩니다.
+
+### 🗺️ 진센조가 선별한 '진주 힐링 투어' 리스트
+가전 졸업의 성지 진주까지 오신 김에 스트레스까지 날려버릴 수 있는 선별 코스입니다.
+
+| 구분 | 명칭 | 마스터의 추천 이유 |
 | :--- | :--- | :--- |
-| **분위기** | 살롱드 인사 | 인스타 감성 뿜뿜, 꽃분수와 스테이크 맛집 |
-| **카페** | 은안재 | 신혼부부에게 어울리는 고즈넉한 한옥 감성 카페 |
-| **야경** | 김시민호(유람선) | 남강 위에서 즐기는 로맨틱한 진주성 야경 |
-| **산책** | 소망진산 유등공원 | 365일 빛나는 유등과 함께하는 야경 산책 |
-
+| **맛집** | 하연옥 | 해물육수와 육전 고명이 일품인 진주냉면의 명가 |
+| **카페** | 물빛나루 | 남강 유등 뷰와 함께 즐기는 낭만적인 티타임 |
+| **명소** | 철도문화공원 | 구 진주역 부지의 이색적인 포토존과 문화 공간 |
 
 --- 
 
@@ -301,7 +306,7 @@ The overall mood should be premium, clean, and eye-catching for social media.
 **내용**: [THREADS]
 가전, 굳이 멀리까지 가실 필요 없습니다. 🛋️
 
-가전은 역시 삼성이 근본. 진센조 19년 짬바가 보여주는 근본니즘 설계 💼 혼수가전은 백화점+로드샵 하이브리드가 진리!
+솔직히 이 혜택에 이 케어 서비스? 이건 가전업계 G.O.A.T 인정해야 함 🐐 혼수가전은 백화점+로드샵 하이브리드가 진리!
 
 19년 경력 노하우로 카톡 하나로 끝내는 비대면 가전 졸업. 링크 확인해 주세요! #진센조
 
@@ -319,23 +324,23 @@ The overall mood should be premium, clean, and eye-catching for social media.
 ## 📝 1. 네이버 블로그용 프롬프트 (가로형 16:9, 텍스트 없는 고급 이미지)
 블로그 본문 중간에 배치하여 읽는 재미를 더하는 극사실주의 감성 이미지입니다.
 
-### 📸 이미지 1: 혼수 상담의 시작 (도입부 배치)
+### 📸 이미지 1: 혼수 상담 후의 여유 (도입부 배치)
 **프롬프트:**
 ```
-A photorealistic, cinematic shot of a professional male consultant in his 40s presenting a beautifully organized appliance catalog to a young Korean couple across a sleek desk. Warm cafe-like ambiance with soft bokeh lights in the background. The couple looks engaged and excited. DSLR photography, 85mm lens, shallow depth of field. Do not include any text. Aspect ratio 16:9.
+A photorealistic, cinematic shot of a young Korean couple walking happily towards the entrance of '물빛나루' in Jinju. The cafe has a modern and stylish exterior. The couple is dressed in elegant spring outfits, looking excited for their consultation. Warm afternoon sunlight, high-end lifestyle photography. Do not include any text. Aspect ratio 16:9.
 ```
 
-### 📸 이미지 2: 프리미엄 신혼 인테리어 (본문 배치)
+### 📸 이미지 2: 프리미엄 미식 경험 (본문 배치)
 **프롬프트:**
 ```
-A photorealistic interior of a luxurious newlywed Korean apartment. A seamless built-in bespoke refrigerator in matte white beside a modern kitchen island. Fresh flowers in a vase on the counter, warm morning light through sheer curtains. Romantic, elegant, aspirational newlywed lifestyle. Interior design photography. Do not include any text. Aspect ratio 16:9.
+A photorealistic close-up shot of a traditional Jinju meal at '하연옥'. Beautifully plated Korean dishes, steam rising from the bowl, premium food photography. The background shows a refined, traditional yet modern restaurant interior in Jinju. Warm and appetizing atmosphere. Do not include any text. Aspect ratio 16:9.
 ```
 
 ### 📸 이미지 3: 타겟별 맞춤 감성 (결론부 배치)
 [혼수 타겟용]
 **프롬프트:**
 ```
-A photorealistic shot of a happy, stylish young Korean couple in their late 20s, holding hands and smiling warmly while standing in their newly furnished, modern bright living room in a high-end apartment. The room has elegant lighting and a premium smart TV on the wall. Emotional, joyful, warm sunlight, romantic and hopeful atmosphere. Do not include any text. Aspect ratio 16:9.
+A photorealistic shot of a happy, stylish young Korean couple in their late 20s, standing at '철도문화공원' at night with beautiful lanterns glowing in the background. They are smiling warmly, looking at each other. Emotional, joyful, romantic night view of Jinju. Do not include any text. Aspect ratio 16:9.
 ```
 
 ---
@@ -355,7 +360,7 @@ Background scene: A stylish Korean couple in their late 20s standing back-to-bac
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 2: 공감 유발
+### 🖼️ Slide 2: 공감 유발 (Problem)
 **📌 이미지 위에 들어갈 텍스트:** "혼수가전, 발품 팔지 말고 한 곳에서"
 **프롬프트:**
 ```
@@ -367,7 +372,7 @@ Background scene: A young Korean woman sitting at a cluttered desk with multiple
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 3: 해결책 제시
+### 🖼️ Slide 3: 해결책 제시 (Solution)
 **📌 이미지 위에 들어갈 텍스트:** "백화점 프리미엄 + 로드샵 가성비의 결합"
 **프롬프트:**
 ```
@@ -379,7 +384,7 @@ Background scene: A warm, bright image of a professional consultant video-callin
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 4: 핵심 베네핏
+### 🖼️ Slide 4: 핵심 베네핏 (Benefit)
 **📌 이미지 위에 들어갈 텍스트:** "오직 예비부부만을 위한 1:1 맞춤 조합"
 **프롬프트:**
 ```
@@ -391,19 +396,19 @@ Background scene: A beautifully arranged flat-lay on a white marble surface: a p
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 5: 사회적 증거
-**📌 이미지 위에 들어갈 텍스트:** "19년 마스터의 전국구 비대면 견적"
+### 🖼️ Slide 5: 거리의 장벽을 넘는 혜택 (Distance)
+**📌 이미지 위에 들어갈 텍스트:** "부산/울산/창원에서 1시간, 거리는 숫자에 불과합니다"
 **프롬프트:**
 ```
 Create a premium social media image (Instagram post, 4:5 aspect ratio).
-The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '19년 마스터의 전국구 비대면 견적'.
+The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '부산/울산/창원에서 1시간, 거리는 숫자에 불과합니다'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A warm, photorealistic shot of a newlywed Korean couple sitting on a modern sofa, toasting with champagne glasses. Behind them, a beautifully set up living room with premium appliances. Celebration mood, golden hour lighting.
+Background scene: A photorealistic, cinematic shot from inside a premium car, looking through the windshield at a highway sign that reads "Jinju (진주)" with an arrow. The sun is setting, creating a warm, hopeful glow. On the dashboard, a smartphone shows a navigation app with a short remaining time. High-end, aspirational travel vibe.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 6: CTA 행동 유도
+### 🖼️ Slide 6: CTA 행동 유도 (Action)
 **📌 이미지 위에 들어갈 텍스트:** "지금 바로 프로필 링크를 확인하세요!"
 **프롬프트:**
 ```
@@ -411,7 +416,7 @@ Create a premium social media image (Instagram post, 4:5 aspect ratio).
 The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '지금 바로 프로필 링크를 확인하세요!'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A clean, modern graphic design background with soft gradient. A large 3D arrow pointing upward-right or a CTA button. Minimalist, trendy, Instagram-native aesthetic with space for text.
+Background scene: A clean, modern graphic design background with a Deep Navy to Charcoal gradient and Gold accents. A large, elegant 3D 'Consult Now' button or arrow. Minimalist, premium Instagram-native aesthetic with ample space for text.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
@@ -425,6 +430,9 @@ The overall mood should be premium, clean, and eye-catching for social media.
 
 ## 💡 [AI 가전 구독] 전용 콘텐츠
 
+### 📱 [SELECTED_LOCAL_INFO] 채널
+---
+
 ### 📱 [INSTAGRAM] 채널
 **캡션**: [INSTAGRAM]
 ✨ 가전, 이제 초기 비용 없이 똑똑하게 구독하세요 💎
@@ -433,7 +441,7 @@ The overall mood should be premium, clean, and eye-catching for social media.
 
 ✅ 초기 비용 0원, 부담 없는 시작
 ✅ 365일 안심! 블루패스 무상 케어 서비스
-✅ CGV, 외식 바우처 등 풍성한 라이프스타일 혜택
+✅ 19년 마스터의 전국 비대면 1:1 정밀 견적
 
 지금 바로 프로필 링크 클릭하고 1:1 비대면 구독 상담을 신청하세요.
 
@@ -453,11 +461,11 @@ The overall mood should be premium, clean, and eye-catching for social media.
 
 ### 📱 [THREADS] 채널
 **내용**: [THREADS]
-1️⃣ 바쁜 직장인들, 가전은 AI 구독으로 알아서 케어받고 갓생 살자✨ 가전 1개만 필요해도 초기비용 0원으로 비대면 구독 가능!
+1️⃣ 솔직히 이 혜택에 이 케어 서비스? 이건 가전업계 G.O.A.T 인정해야 함 🐐 가전 1개만 필요해도 초기비용 0원으로 비대면 구독 가능!
 
-2️⃣ 가전 상담하러 매장 갈 필요 없음! 커터칼퇴근하고 집에서 카톡으로 비대면 상담 끝 🏃‍♂️ 고장 나면 블루패스로 바로바로 케어받으세요.
+2️⃣ 비대면으로 견적 받았는데 혜택이 오히려 좋아! 완전 럭키비키잖아🍀 고장 나면 블루패스로 바로바로 케어받으세요.
 
-3️⃣ 요즘은 가전도 스마트하게 글로 읽고 비대면으로 스윽- 결제하는 게 진짜 텍스트힙이지📚 CGV, 외식 바우처까지 주는 혜자 구독 클럽!
+3️⃣ 가전 상담하러 매장 갈 필요 없음! 커터칼퇴근하고 집에서 카톡으로 비대면 상담 끝 🏃‍♂️ 19년 마스터가 직접 설계하는 프리미엄 큐레이션!
 
 ---
 
@@ -470,8 +478,31 @@ The overall mood should be premium, clean, and eye-catching for social media.
 원고 내용("subscription")과 완벽하게 매칭되는 고품질 이미지를 생성하기 위한 프롬프트입니다. 한글 오탈자 방지를 위한 강력한 지시가 포함되어 있습니다.
 
 ---
+## 📝 1. 네이버 블로그용 프롬프트 (가로형 16:9, 텍스트 없는 고급 이미지)
+블로그 본문 중간에 배치하여 읽는 재미를 더하는 극사실주의 감성 이미지입니다.
 
-## 📱 1. 인스타그램용 프롬프트 (4:5, 후킹 텍스트 + 이미지 통합)
+### 📸 이미지 1: 스마트한 구독 라이프 (도입부 배치)
+**프롬프트:**
+```
+A photorealistic, cinematic shot of a modern Korean professional using a Samsung tablet to manage their appliance subscription while sitting in a trendy cafe in Jinju like '로스팅웨어'. Clean, high-tech, and relaxed atmosphere. DSLR photography. Do not include any text. Aspect ratio 16:9.
+```
+
+### 📸 이미지 2: 걱정 없는 프리미엄 케어 (본문 배치)
+**프롬프트:**
+```
+A photorealistic shot of a professional Samsung service technician performing a 'Blue Pass' maintenance check on a Bespoke refrigerator in a high-end Korean home. The scene conveys trust, expertise, and peace of mind. Sharp focus on the technician's professional uniform and tools. Do not include any text. Aspect ratio 16:9.
+```
+
+### 📸 이미지 3: 타겟별 맞춤 감성 (결론부 배치)
+[삼성 AI 가전 구독용]
+**프롬프트:**
+```
+A wide, photorealistic shot of a modern Korean person relaxing in a beautiful, AI-powered smart home. Samsung Bespoke appliances are seamlessly integrated into the premium interior design. The person looks satisfied and stress-free. Bright, airy, and high-end. Do not include any text. Aspect ratio 16:9.
+```
+
+---
+
+## 📱 2. 인스타그램용 프롬프트 (4:5, 후킹 텍스트 + 이미지 통합)
 ⚠️ **중요:** 아래 프롬프트는 이미지 안에 한국어 후킹 메시지가 직접 포함됩니다. 각 슬라이드별로 복사해서 사용하세요.
 
 ### 🖼️ Slide 1: 표지 후킹 ⚡
@@ -482,11 +513,11 @@ Create a premium social media image (Instagram post, 4:5 aspect ratio).
 The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '단 1개라도 상담 가능! 삼성 AI 가전 구독으로 시작하는 0원 라이프'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A futuristic, glowing smart home appliance (refrigerator or washer) in a dark, premium studio setting with a subtle holographic '0 Won' badge floating. Dramatic rim lighting, high-tech aura.
+Background scene: A ultra-premium, futuristic studio setting with a Deep Navy and Gold color theme. A glowing Samsung AI refrigerator stands center stage with a subtle holographic '0 Won' badge floating next to it. Dramatic rim lighting, luxury brand aesthetic.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 2: 공감 유발
+### 🖼️ Slide 2: 공감 유발 (Problem)
 **📌 이미지 위에 들어갈 텍스트:** "초기 비용 0원으로 만나는 프리미엄 가전"
 **프롬프트:**
 ```
@@ -494,11 +525,11 @@ Create a premium social media image (Instagram post, 4:5 aspect ratio).
 The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '초기 비용 0원으로 만나는 프리미엄 가전'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A photorealistic image of a young Korean professional looking slightly worried while staring at a broken old washing machine in a small apartment laundry room. Relatable everyday stress.
+Background scene: A relatable shot of a young Korean professional looking stressed while checking a high credit card bill on their phone, with an old, broken appliance in the background. Dimly lit room, emphasizing financial burden.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 3: 해결책 제시
+### 🖼️ Slide 3: 해결책 제시 (Solution)
 **📌 이미지 위에 들어갈 텍스트:** "고장 걱정 끝! 블루패스 무상 케어"
 **프롬프트:**
 ```
@@ -506,11 +537,11 @@ Create a premium social media image (Instagram post, 4:5 aspect ratio).
 The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '고장 걱정 끝! 블루패스 무상 케어'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A sleek, modern infographic-style scene showing a glowing 'Blue Pass' card emitting a soft blue aura over a brand new AI appliance, symbolizing premium care and zero maintenance stress.
+Background scene: A tech-focused close-up of a smartphone screen displaying the 'Blue Pass' digital card with a glowing gold aura. In the background, a Samsung service technician in a clean uniform is smiling warmly, representing 'AI Pre-Care' and peace of mind.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 4: 핵심 베네핏
+### 🖼️ Slide 4: 핵심 베네핏 (Benefit)
 **📌 이미지 위에 들어갈 텍스트:** "단 1개라도 전국 비대면 1:1 상담"
 **프롬프트:**
 ```
@@ -518,23 +549,23 @@ Create a premium social media image (Instagram post, 4:5 aspect ratio).
 The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '단 1개라도 전국 비대면 1:1 상담'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A warm scene of a person happily holding a movie ticket (CGV) and a restaurant voucher in one hand, while relaxing on a modern sofa next to a premium AI air purifier. Lifestyle benefits concept.
+Background scene: A photorealistic interior of a stunning, modern smart home living room. A professional consultant (Master) is seen on a laptop screen, explaining a customized 3D appliance layout to the customer. High-tech, organized, and premium. Focus on '1:1 Expert Curation'.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 5: 사회적 증거
-**📌 이미지 위에 들어갈 텍스트:** "라이프스타일 바우처 매월 혜택"
+### 🖼️ Slide 5: 거리의 장벽을 넘는 혜택 (Distance)
+**📌 이미지 위에 들어갈 텍스트:** "부산/울산/창원에서 1시간, 거리는 숫자에 불과합니다"
 **프롬프트:**
 ```
 Create a premium social media image (Instagram post, 4:5 aspect ratio).
-The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '라이프스타일 바우처 매월 혜택'.
+The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '부산/울산/창원에서 1시간, 거리는 숫자에 불과합니다'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A mosaic collage of 4 small images: a smiling customer giving thumbs up, a smartphone screen showing a '0 Won' subscription contract, a beautifully furnished room, and a close-up of a 1:1 KakaoTalk consultation. Trust-building.
+Background scene: A photorealistic, cinematic shot from inside a premium car, looking through the windshield at a highway sign that reads "Jinju (진주)" with an arrow. The sun is setting, creating a warm, hopeful glow. On the dashboard, a smartphone shows a navigation app with a short remaining time. High-end, aspirational travel vibe.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
-### 🖼️ Slide 6: CTA 행동 유도
+### 🖼️ Slide 6: CTA 행동 유도 (Action)
 **📌 이미지 위에 들어갈 텍스트:** "지금 바로 프로필 링크를 확인하세요!"
 **프롬프트:**
 ```
@@ -542,12 +573,13 @@ Create a premium social media image (Instagram post, 4:5 aspect ratio).
 The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '지금 바로 프로필 링크를 확인하세요!'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
-Background scene: A clean, modern graphic design background with soft gradient. A large 3D arrow pointing upward-right or a CTA button. Minimalist, trendy, Instagram-native aesthetic with space for text.
+Background scene: A clean, modern graphic design background with a Deep Navy to Charcoal gradient and Gold accents. A large, elegant 3D 'Consult Now' button or arrow. Minimalist, premium Instagram-native aesthetic with ample space for text.
 The overall mood should be premium, clean, and eye-catching for social media.
 ```
 
 ---
 💡 **사용 팁:**
+- 블로그용 이미지는 텍스트가 없는 순수 감성 이미지입니다.
 - 인스타그램용 이미지는 후킹 메시지가 포함됩니다. 만약 한글 오탈자가 발생했다면 "텍스트에 오탈자가 있어. 내가 적어준 문구 그대로 단어 하나하나 다시 확인해서 정확하게 그려줘"라고 재요청하세요.
 - 텍스트 폰트 분위기를 바꾸고 싶으면 프롬프트 끝에 "Use a bold, rounded Korean font like Noto Sans KR Black"을 추가하세요.
 
