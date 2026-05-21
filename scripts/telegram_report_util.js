@@ -15,4 +15,16 @@ async function sendReport(date, targetNames) {
     }
 }
 
-module.exports = { sendReport };
+async function sendError(date, errorMessage) {
+    const bot = new TelegramBot(token);
+    const message = `🚨 *[JCC 진센조 자동화 오류]*\n\n📅 날짜: ${date}\n❌ 오류: ${errorMessage}\n\n콘텐츠 생성 중 문제가 발생했습니다. 수동 확인이 필요합니다.`;
+    
+    try {
+        await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+        console.log("🚨 Telegram error alert sent.");
+    } catch (e) {
+        console.error("❌ Failed to send error alert:", e.message);
+    }
+}
+
+module.exports = { sendReport, sendError };

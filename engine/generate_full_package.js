@@ -1,9 +1,14 @@
 const ContentGenerator = require('./content_generator');
 const ImageEngine = require('./image_engine');
+const { generatePromptPack } = require('./prompt_generator');
+const updateTrends = require('./trend_updater');
 const fs = require('fs');
 const path = require('path');
 
 async function generateFullPackage() {
+    console.log("🔄 [Full Package] Checking for live trend updates...");
+    await updateTrends();
+
     const contentGenerator = new ContentGenerator();
     const imageEngine = new ImageEngine();
 
@@ -21,8 +26,17 @@ async function generateFullPackage() {
 
     console.log(`🚀 [Full Package] Generating for priority target: ${target.name} (${target.region})...`);
     
-    // 1. Content Generation
-    const contents = await contentGenerator.generateMultiChannelContent(target.key || 'new_apartment', target.region, target.name);
+    // 1. Content Generation for all three core targets
+    const targetTypes = [
+        { key: 'move_in', title: '신규입주' },
+        { key: 'wedding', title: '혼수(Wedding)' },
+        { key: 'subscription', title: 'AI 가전 구독' }
+    ];
+
+    const allContents = {};
+    for (const t of targetTypes) {
+        allContents[t.title] = await contentGenerator.generateMultiChannelContent(t.key, target.region, target.name);
+    }
 
     // 2. Image Generation - Hook Image (Naver/FB)
     console.log('[Full Package] Generating Hook Image...');
@@ -49,15 +63,24 @@ async function generateFullPackage() {
     }
     report += `\n---\n\n`;
 
-    for (const [platform, content] of Object.entries(contents)) {
-        report += `### 📱 [${platform.toUpperCase()}] 채널\n`;
-        if (content.title) report += `**제목**: ${content.title}\n\n`;
-        if (content.body) report += `**본문**:\n${content.body}\n\n`;
-        if (content.caption) report += `**캡션**: ${content.caption}\n\n`;
-        if (content.text) report += `**내용**: ${content.text}\n\n`;
-        if (content.shorts_script) report += `**영상 스크립트**: ${content.shorts_script}\n\n`;
-        if (content.hashtags) report += `**해시태그**: ${content.hashtags}\n\n`;
-        report += `---\n\n`;
+    for (const t of targetTypes) {
+        const contents = allContents[t.title];
+        if (!contents) continue;
+        report += `## 💡 [${t.title}] 전용 콘텐츠\n\n`;
+        for (const [platform, content] of Object.entries(contents)) {
+            if (!content) continue;
+            report += `### 📱 [${platform.toUpperCase()}] 채널\n`;
+            if (content.title) report += `**제목**: ${content.title}\n\n`;
+            if (content.body) report += `**본문**:\n${content.body}\n\n`;
+            if (content.caption) report += `**캡션**: ${content.caption}\n\n`;
+            if (content.text) report += `**내용**: ${content.text}\n\n`;
+            if (content.shorts_script) report += `**영상 스크립트**: ${content.shorts_script}\n\n`;
+            if (content.hashtags) report += `**해시태그**: ${content.hashtags}\n\n`;
+            report += `---\n\n`;
+        }
+        report += `## 🎨 [${t.title}] 전용 이미지 프롬프트\n\n`;
+        report += generatePromptPack(t.key, contents);
+        report += `\n---\n\n`;
     }
 
     const now = new Date();

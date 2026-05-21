@@ -21,7 +21,7 @@ class TextValidator {
             
             // Basic cleaning for comparison
             const cleanExtracted = text.replace(/\s/g, '');
-            const cleanExpected = expectedText.replace(/\s/g, '');
+            const cleanExpected = (expectedText || "").replace(/\s/g, '');
 
             // Check if major parts of the expected text exist in the OCR result
             // (OCR isn't always 100% perfect with stylised fonts, so we check for partial matches)

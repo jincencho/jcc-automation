@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const TARGETS_FILE = path.join(__dirname, '../viral_targets.json');
+const TARGETS_FILE = path.join(__dirname, '../data/viral_targets.json');
 const TEMPLATE_FILE = path.join(__dirname, '../viral_hook_design.html');
 const OUTPUT_DIR = path.join(__dirname, '../generated_hooks');
 

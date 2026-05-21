@@ -1,13 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 const ContentGenerator = require('../engine/content_generator');
-const ImageEngine = require('../engine/image_engine');
+const { generatePromptPack } = require('../engine/prompt_generator');
+const updateTrends = require('../engine/trend_updater');
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, ImageRun, ExternalHyperlink } = require("docx");
 
 async function runDailyViral() {
+    console.log("🔄 [DailyTask] Checking for live trend updates...");
+    await updateTrends();
+
     // 0. Determine Target Date
     const args = process.argv.slice(2);
-    const targetDate = args[0] || new Date().toISOString().split('T')[0];
+    // Use KST (Asia/Seoul) to ensure correct date even at 8 AM KST (which is 23:00 UTC previous day)
+    const getKstDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+    const targetDate = args[0] || getKstDate();
     const baseDir = path.join(__dirname, '../', targetDate);
     
     if (!fs.existsSync(baseDir)) {
@@ -25,18 +31,21 @@ async function runDailyViral() {
         id: 'default_target'
     };
 
-    // 2. Define 3 Mandatory Categories
-    const categories = [
-        { key: 'move_in', folder: '입주', name: '신규입주', region: mainTarget.region, apartment: mainTarget.name },
-        { key: 'wedding', folder: '혼수', name: '혼수웨딩', region: mainTarget.region, apartment: '' },
-        { key: 'subscription', folder: '구독', name: '삼성 AI 가전 구독 클럽', region: '전국', apartment: '' }
+    // 2. Daily Multi-Target Strategy
+    // ✅ 네이버 블로그: 매일 2개 (입주 + 혼수)
+    // ✅ 인스타그램: 매일 3개 (입주 + 혼수 + 구독)
+    const allCategories = [
+        { key: 'move_in', folder: '입주', name: '신규입주', region: mainTarget.region, apartment: mainTarget.name, channels: ['blog', 'instagram'] },
+        { key: 'wedding', folder: '혼수', name: '혼수웨딩', region: mainTarget.region, apartment: '', channels: ['blog', 'instagram'] },
+        { key: 'subscription', folder: '구독', name: '삼성 AI 가전 구독 클럽', region: '전국', apartment: '', channels: ['instagram'] }
     ];
 
-    const generator = new ContentGenerator();
-    const imageEngine = new ImageEngine();
+    console.log(`📅 [DailyTask] Generating ALL targets: 블로그 2개(입주+혼수) + 인스타 3개(입주+혼수+구독)`);
 
-    for (let cat of categories) {
-        console.log(`🎯 Processing Category: ${cat.folder} (${cat.name})`);
+    const generator = new ContentGenerator();
+
+    for (let cat of allCategories) {
+        console.log(`🎯 Processing Category: ${cat.folder} (${cat.name}) [${cat.channels.join(', ')}]`);
         
         // Create Subfolder
         const subDir = path.join(baseDir, cat.folder);
@@ -44,70 +53,64 @@ async function runDailyViral() {
             fs.mkdirSync(subDir);
         }
 
-        // 1. Generate Content
+        // 1. Generate Content for all channels
         const content = await generator.generateMultiChannelContent(cat.key, cat.region, cat.apartment);
-        
-        // 2. Generate Images (Hook + Jinju Local)
-        const targetId = `${mainTarget.id}_${cat.key}`;
-        const targetData = { 
-            id: targetId, 
-            name: cat.name, 
-            region: cat.region, 
-            hook_message: content.instagram.image_hook 
-        };
-        const images = await imageEngine.generateDailyBlogImages(targetData, subDir);
+        const images = [];
 
-        // 3. Generate Instagram Carousel (6 Slides)
-        console.log(`📸 [DailyTask] Generating Carousel for: ${cat.folder}`);
-        const carouselSlides = [
-            { badge: "JCC 진센조", html: `<span class="highlight">${content.instagram.image_hook}</span>` },
-            ...content.instagram.carousel_hints.map(hint => ({
-                badge: cat.name,
-                html: hint
-            })),
-            { badge: "상담 예약", html: "지금 바로 <span class=\"highlight\">프로필 링크</span>를 확인하세요!" }
-        ];
-        const instaImages = await imageEngine.generateCarouselImages(targetData, carouselSlides, cat.key);
-        
-        // Move Carousel images to subfolder
-        instaImages.forEach((img, idx) => {
-            const fileName = `insta_carousel_${idx + 1}.png`;
-            fs.renameSync(img, path.join(subDir, fileName));
-        });
-
-        // 4. Combine contents for output
-        const allChannelLines = [
+        // 2. Build output based on assigned channels
+        const outputLines = [
             `# 🚀 [업로드용] JCC 진센조 ${cat.name} 바이럴 패키지`,
-            `---`,
-            `## 📝 [NAVER BLOG] 원고`,
-            `**제목: ${content.naver_blog.title.replace('[NAVER BLOG] ', '')}**`,
-            `\n`,
-            ...content.naver_blog.body.split('\n'),
-            `\n`,
-            `**해시태그:**`,
-            content.naver_blog.hashtags,
-            `\n---`,
-            `## 📸 [INSTAGRAM] 캡션`,
-            content.instagram.caption.replace('[INSTAGRAM]\n', ''),
-            `\n---`,
+            `---`
+        ];
+
+        // --- NAVER BLOG (입주 + 혼수만) ---
+        if (cat.channels.includes('blog')) {
+            outputLines.push(
+                `## 📝 [NAVER BLOG] 원고`,
+                `**제목: ${content.naver_blog.title.replace('[NAVER BLOG] ', '')}**`,
+                `\n`,
+                ...content.naver_blog.body.split('\n'),
+                `\n`,
+                `**해시태그:**`,
+                content.naver_blog.hashtags,
+                `\n---`
+            );
+        }
+
+        // --- INSTAGRAM (전 타겟) ---
+        if (cat.channels.includes('instagram')) {
+            outputLines.push(
+                `## 📸 [INSTAGRAM] 캡션`,
+                content.instagram.caption.replace('[INSTAGRAM]\n', ''),
+                `\n---`
+            );
+        }
+
+        // --- 보조 채널 (전 타겟 공통) ---
+        outputLines.push(
             `## 👥 [FACEBOOK] 게시글`,
             content.facebook.text.replace('[FACEBOOK]\n', ''),
             `\n---`,
-            `## 🎬 [YOUTUBE SHORTS] 스크립트`,
-            content.youtube_shorts.shorts_script.replace('[YOUTUBE SHORTS]\n', '')
-        ];
+            `## 🧵 [THREADS] 게시글`,
+            content.threads.text.replace(/\[THREADS\]\n/g, '')
+        );
 
-        // 4. Create DOCX
+        // 3. Create DOCX
         const fileNameBase = `[진센조_${cat.folder}]`;
         await createDocx(
             path.join(subDir, `${fileNameBase}.docx`),
             `[JCC 진센조] ${cat.name} 바이럴 패키지`,
-            allChannelLines,
+            outputLines,
             images
         );
         
-        // 5. Save MD
-        fs.writeFileSync(path.join(subDir, `${fileNameBase}.md`), allChannelLines.join('\n'));
+        // 4. Save MD
+        fs.writeFileSync(path.join(subDir, `${fileNameBase}.md`), outputLines.join('\n'));
+
+        // 5. Generate and Save ChatGPT Prompt Pack (with actual hooking messages from content)
+        console.log(`🤖 [DailyTask] Generating ChatGPT Prompts for: ${cat.folder}`);
+        const promptText = generatePromptPack(cat.key, content, target.name);
+        fs.writeFileSync(path.join(subDir, `[진센조_이미지프롬프트].md`), promptText);
     }
 
     console.log(`✅ [DailyTask] Completed multi-category package for ${targetDate}.`);
@@ -115,7 +118,7 @@ async function runDailyViral() {
     // Notify Telegram
     try {
         const { sendReport } = require('./telegram_report_util');
-        await sendReport(targetDate, categories.map(c => c.folder));
+        await sendReport(targetDate, allCategories.map(c => c.folder));
     } catch (e) {
         console.log("Telegram report skipped.");
     }
@@ -184,6 +187,18 @@ async function createDocx(filePath, title, lines, imagePaths) {
     fs.writeFileSync(filePath, buffer);
 }
 
+// generatePromptPack logic is now imported from engine/prompt_generator.js
+
 if (require.main === module) {
-    runDailyViral().catch(console.error);
+    runDailyViral().catch(async (err) => {
+        console.error("❌ Daily viral task failed:", err.message);
+        try {
+            const { sendError } = require('./telegram_report_util');
+            const todayKst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+            await sendError(todayKst, err.message);
+        } catch (e) {
+            console.error("❌ Could not send error alert:", e.message);
+        }
+        process.exit(1);
+    });
 }

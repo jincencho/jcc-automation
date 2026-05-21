@@ -4,7 +4,6 @@
     "region": "경남 김해",
     "name": "더샵 신문그리니티",
     "move_in_date": "2026-02",
-    "months_left": -3,
     "scheduled_date": "2026-05-11",
     "status": "completed"
   },
@@ -13,26 +12,47 @@
     "region": "부산 강서구",
     "name": "에코델타시티 대성베르힐",
     "move_in_date": "2026-03",
-    "months_left": -2,
     "scheduled_date": "2026-05-12",
     "status": "completed"
   },
   {
-    "id": "changwon_lotte_forest",
-    "region": "경남 창원",
-    "name": "창원 롯데캐슬 포레스트 1BL",
-    "move_in_date": "2026-05",
-    "months_left": 0,
-    "scheduled_date": "2026-05-13",
-    "status": "active"
+    "id": "daegu_daemyung_xi",
+    "region": "대구 남구",
+    "name": "대명 자이 그랜드시티",
+    "move_in_date": "2026-04",
+    "scheduled_date": "2026-05-15",
+    "status": "completed"
   },
   {
     "id": "ulsan_munsu_prugio",
     "region": "울산 남구",
     "name": "문수로 푸르지오 어반피스",
-    "move_in_date": "2026-06",
-    "months_left": 1,
+    "move_in_date": "2026-04",
+    "scheduled_date": "2026-05-16",
+    "status": "active"
+  },
+  {
+    "id": "changwon_lotte_forest",
+    "region": "경남 창원",
+    "name": "창원 롯데캐슬 포레스트 1단지",
+    "move_in_date": "2026-05",
+    "scheduled_date": "2026-05-17",
+    "status": "active"
+  },
+  {
+    "id": "gimhae_daecheongcheon_epit",
+    "region": "경남 김해",
+    "name": "김해대청천에피트",
+    "move_in_date": "2026-05",
     "scheduled_date": "2026-05-18",
+    "status": "active"
+  },
+  {
+    "id": "busan_thepole_ocean",
+    "region": "부산",
+    "name": "더폴디오션",
+    "move_in_date": "2026-05",
+    "scheduled_date": "2026-05-19",
     "status": "active"
   },
   {
@@ -40,8 +60,15 @@
     "region": "부산 남구",
     "name": "롯데캐슬 인피니엘",
     "move_in_date": "2026-06",
-    "months_left": 1,
-    "scheduled_date": "2026-05-15",
+    "scheduled_date": "2026-05-20",
+    "status": "active"
+  },
+  {
+    "id": "busan_shicheong_haemoro",
+    "region": "부산",
+    "name": "시청역 해모로 센티아",
+    "move_in_date": "2026-06",
+    "scheduled_date": "2026-05-21",
     "status": "active"
   },
   {
@@ -49,8 +76,15 @@
     "region": "부산 수영구",
     "name": "드파인 광안",
     "move_in_date": "2026-06",
-    "months_left": 1,
-    "scheduled_date": "2026-05-16",
+    "scheduled_date": "2026-05-22",
+    "status": "active"
+  },
+  {
+    "id": "busan_ecodelta_detre",
+    "region": "부산 강서구",
+    "name": "에코델타시티 디에트르 더 퍼스트",
+    "move_in_date": "2026-07",
+    "scheduled_date": "2026-05-23",
     "status": "active"
   },
   {
@@ -58,8 +92,7 @@
     "region": "울산 남구",
     "name": "옥동 경남아너스빌 ubc",
     "move_in_date": "2026-08",
-    "months_left": 3,
-    "scheduled_date": "2026-05-17",
+    "scheduled_date": "2026-05-24",
     "status": "active"
   },
   {
@@ -67,8 +100,7 @@
     "region": "울산 남구",
     "name": "문수로 롯데캐슬 그랑파르크",
     "move_in_date": "2026-08",
-    "months_left": 3,
-    "scheduled_date": "2026-05-14",
+    "scheduled_date": "2026-05-25",
     "status": "active"
   },
   {
@@ -76,8 +108,15 @@
     "region": "경남 거제",
     "name": "오션 월드메르디앙 더리치먼드",
     "move_in_date": "2026-08",
-    "months_left": 3,
-    "scheduled_date": "2026-05-19",
+    "scheduled_date": "2026-05-26",
+    "status": "active"
+  },
+  {
+    "id": "busan_geoje_yangwoo",
+    "region": "부산",
+    "name": "거제역 양우내안애 아시아드",
+    "move_in_date": "2026-09",
+    "scheduled_date": "2026-05-27",
     "status": "active"
   },
   {
@@ -85,8 +124,7 @@
     "region": "경남 밀양",
     "name": "삼문 시그니처 웰가",
     "move_in_date": "2026-10",
-    "months_left": 5,
-    "scheduled_date": "2026-05-20",
+    "scheduled_date": "2026-05-28",
     "status": "active"
   },
   {
@@ -94,8 +132,7 @@
     "region": "울산 남구",
     "name": "e편한세상 신정 스카이하임",
     "move_in_date": "2026-10",
-    "months_left": 5,
-    "scheduled_date": "2026-05-21",
+    "scheduled_date": "2026-05-29",
     "status": "active"
   },
   {
@@ -103,8 +140,7 @@
     "region": "전남 장성",
     "name": "첨단 제일풍경채 A2",
     "move_in_date": "2026-10",
-    "months_left": 5,
-    "scheduled_date": "2026-05-22",
+    "scheduled_date": "2026-05-30",
     "status": "active"
   },
   {
@@ -112,8 +148,111 @@
     "region": "전남 장성",
     "name": "힐스테이트 첨단센트럴",
     "move_in_date": "2026-10",
-    "months_left": 5,
-    "scheduled_date": "2026-05-23",
+    "scheduled_date": "2026-05-31",
+    "status": "active"
+  },
+  {
+    "id": "busan_ecodelta_jungheung",
+    "region": "부산 강서구",
+    "name": "에코델타시티 중흥S-클래스",
+    "move_in_date": "2026-11",
+    "scheduled_date": "2026-06-01",
+    "status": "active"
+  },
+  {
+    "id": "busan_dongrae_bando",
+    "region": "부산",
+    "name": "동래반도유보라",
+    "move_in_date": "2026-11",
+    "scheduled_date": "2026-06-02",
+    "status": "active"
+  },
+  {
+    "id": "changwon_jinhae_dudong",
+    "region": "경남 창원",
+    "name": "진해 두동지구 민간임대",
+    "move_in_date": "2026-11",
+    "scheduled_date": "2026-06-03",
+    "status": "active"
+  },
+  {
+    "id": "busan_hillstate_gaya",
+    "region": "부산",
+    "name": "힐스테이트 가야",
+    "move_in_date": "2026-12",
+    "scheduled_date": "2026-06-04",
+    "status": "active"
+  },
+  {
+    "id": "busan_harrington_mare",
+    "region": "부산",
+    "name": "해링턴마레",
+    "move_in_date": "2026-12",
+    "scheduled_date": "2026-06-05",
+    "status": "active"
+  },
+  {
+    "id": "ulsan_wujeong_epit",
+    "region": "울산 중구",
+    "name": "울산 우정 에피트",
+    "move_in_date": "2027-01",
+    "scheduled_date": "2026-06-06",
+    "status": "active"
+  },
+  {
+    "id": "busan_dongrae_ecopalace",
+    "region": "부산 동래구",
+    "name": "동래에코팰리스아시아드",
+    "move_in_date": "2027-02",
+    "scheduled_date": "2026-06-07",
+    "status": "active"
+  },
+  {
+    "id": "busan_thesharp_geumjeong",
+    "region": "부산 금정구",
+    "name": "더샵금정위버시티",
+    "move_in_date": "2027-02",
+    "scheduled_date": "2026-06-08",
+    "status": "active"
+  },
+  {
+    "id": "busan_jangan_detre",
+    "region": "부산 기장군",
+    "name": "부산장안지구디에트르디오션",
+    "move_in_date": "2027-02",
+    "scheduled_date": "2026-06-09",
+    "status": "active"
+  },
+  {
+    "id": "ulsan_hillstate_munsu",
+    "region": "울산 남구",
+    "name": "힐스테이트 문수로 센트럴",
+    "move_in_date": "2027-02",
+    "scheduled_date": "2026-06-10",
+    "status": "active"
+  },
+  {
+    "id": "ulsan_thepole_shinjung",
+    "region": "울산 남구",
+    "name": "더폴 울산신정",
+    "move_in_date": "2027-02",
+    "scheduled_date": "2026-06-11",
+    "status": "active"
+  },
+  {
+    "id": "busan_yangjeong_lotte",
+    "region": "부산 진구",
+    "name": "양정롯데캐슬프론티엘",
+    "move_in_date": "2027-03",
+    "scheduled_date": "2026-06-12",
+    "status": "active"
+  },
+  {
+    "id": "busan_ilwang_norway",
+    "region": "부산 기장군",
+    "name": "일광노르웨이숲오션포레",
+    "move_in_date": "2027-03",
+    "scheduled_date": "2026-06-13",
     "status": "active"
   }
 ]
