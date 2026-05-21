@@ -89,13 +89,24 @@ class ContentGenerator {
                     // 최종 태그 병합
                     tags = [...baseTags, ...selectedAppliance, ...selectedFoodPlaces];
 
-                    // Optimization: Max 30 tags, Max 200 characters total to accommodate all dynamic ratios
-                    const uniqueTags = [...new Set(tags)].slice(0, 30);
+                    // 중복 및 빈 태그 제거
+                    const uniqueTags = [...new Set(tags.filter(t => t && t.trim() !== ""))];
+
+                    // '진센조' 브랜드 태그는 항상 맨 처음에 고정
+                    const hasJinsenzo = uniqueTags.includes('진센조');
+                    const otherTags = uniqueTags.filter(t => t !== '진센조');
+
+                    // 나머지 태그들을 무작위 셔플링하여 특정 카테고리가 100자 컷오프 시 완전히 잘려 나가는 것을 방지
+                    const shuffledOthers = otherTags.sort(() => 0.5 - Math.random());
+
+                    // 최종 태그 배열 (진센조가 있다면 맨 처음에 고정 배치)
+                    const finalTags = hasJinsenzo ? ['진센조', ...shuffledOthers] : shuffledOthers;
+
                     let result = "";
-                    for (const tag of uniqueTags) {
-                        if (!tag || tag.trim() === "") continue;
+                    for (const tag of finalTags) {
                         const nextTag = `#${tag} `;
-                        if ((result + nextTag).length <= 200) {
+                        // 네이버 블로그 해시태그 규정: 절대 규칙 100자 이내 (공백 포함 총 길이 기준)
+                        if ((result + nextTag).trim().length <= 100) {
                             result += nextTag;
                         } else {
                             break;
