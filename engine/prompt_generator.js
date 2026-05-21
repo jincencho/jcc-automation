@@ -92,7 +92,7 @@ ${blogTargetPrompt}
                 ? `A beautifully arranged flat-lay on a white marble surface: a premium wedding invitation, a golden pen, a small gift box with a ribbon, and a sleek tablet showing an appliance catalog. Luxurious and aspirational.`
                 : (targetType === 'move_in'
                     ? `A stunning, perfectly organized modern kitchen in "${apartmentName}" with seamlessly built-in Samsung appliances. Morning sunlight streaming through large windows. Interior magazine quality.`
-                    : `A warm scene of a person happily holding a movie ticket (CGV) and a restaurant voucher in one hand, while relaxing on a modern sofa next to a premium AI air purifier. Lifestyle benefits concept.`)
+                    : `A cozy, modern living room where a person is comfortably sitting on a stylish sofa, holding a smartphone showing a clean 1:1 KakaoTalk-style chat window, communicating with a consultant. A premium AI air purifier stands next to the sofa. Extremely convenient, comfortable digital lifestyle atmosphere.`)
         },
         {
             title: `Slide 5: 사회적 증거`,

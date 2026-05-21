@@ -44,28 +44,58 @@ class ContentGenerator {
                       `\n\n---\n\n✨ **가전 졸업 성지, 진센조 더 알아보기**\n🔗 [진센조 전용 홈페이지 바로가기](${this.strategy.homepage_url || 'https://jcc-band.vercel.app/'})`,
                 hashtags: (() => {
                     let tags = [];
+                    
+                    // 맛집 및 명소 해시태그 풀 (본문 언급 및 진주 투어 연관)
+                    const foodAndPlaces = [
+                        '하연옥', '제일식당', '살롱드인사', '진주맛집', '진주냉면', '육회비빔밥',
+                        '진주성', '촉석루', '진양호', '은안재', '김시민호', '소망진산', '유등공원', '진주가볼만한곳'
+                    ];
+                    
+                    // 가전 관련 해시태그 풀
+                    const applianceTags = [
+                        '가전졸업', '가전성지', '삼성스토어', '삼성스토어갤러리아진주', '입주가전', '혼수가전', '신혼가전'
+                    ];
+
+                    let regionalAndApartment = [];
                     if (targetType === 'move_in') {
                         const broadRegion = region.split(' ')[0]; // '울산 남구' -> '울산'
                         const liveMoves = this.strategy.live_search_keywords.move_in || [];
                         const randomLiveTags = liveMoves.sort(() => 0.5 - Math.random()).slice(0, 3).map(k => k.replace(/ /g, ''));
                         
-                        tags = [
+                        regionalAndApartment = [
                             ...(this.strategy.regional_cafes[broadRegion] || this.strategy.regional_cafes[region] || this.strategy.regional_cafes['경남']),
                             ...(displayApartment ? [displayApartment.replace(/ /g, ''), `${displayApartment.replace(/ /g, '')}입주`] : []),
-                            ...this.strategy.target_segments.move_in.hashtags,
-                            ...randomLiveTags,
-                            '진센조', '가전졸업'
+                            ...randomLiveTags
                         ];
                     } else {
-                        tags = ['진센조', '가전졸업', target.name, `${region}가전`, '삼성스토어갤러리아진주'];
+                        regionalAndApartment = [target.name, `${region}가전`].map(k => k ? k.replace(/ /g, '') : '');
                     }
 
-                    // Optimization: Max 30 tags, Max 100 characters total
+                    // 1. 가전 해시태그 추출 및 20% 축소 (가전 해시태그 비중 20% 감소 적용)
+                    const targetHashtags = target.hashtags || [];
+                    let combinedAppliance = [...new Set([...applianceTags, ...targetHashtags])];
+                    const reducedCount = Math.round(combinedAppliance.length * 0.8);
+                    const selectedAppliance = combinedAppliance.sort(() => 0.5 - Math.random()).slice(0, reducedCount);
+
+                    // 2. 기본/지역 태그
+                    const baseTags = ['진센조', ...regionalAndApartment];
+
+                    // 3. 맛집 & 명소 태그 (전체 해시태그 중 20% 비중 설정)
+                    // 수학적 비율: 맛집개수 / (나머지개수 + 맛집개수) = 0.20 => 맛집개수 = 0.25 * 나머지개수
+                    const otherTagsCount = baseTags.length + selectedAppliance.length;
+                    const foodPlaceCount = Math.max(2, Math.round(otherTagsCount * 0.25)); // 최소 2개 보장
+                    const selectedFoodPlaces = foodAndPlaces.sort(() => 0.5 - Math.random()).slice(0, foodPlaceCount);
+
+                    // 최종 태그 병합
+                    tags = [...baseTags, ...selectedAppliance, ...selectedFoodPlaces];
+
+                    // Optimization: Max 30 tags, Max 200 characters total to accommodate all dynamic ratios
                     const uniqueTags = [...new Set(tags)].slice(0, 30);
                     let result = "";
                     for (const tag of uniqueTags) {
+                        if (!tag || tag.trim() === "") continue;
                         const nextTag = `#${tag} `;
-                        if ((result + nextTag).length <= 100) {
+                        if ((result + nextTag).length <= 200) {
                             result += nextTag;
                         } else {
                             break;
