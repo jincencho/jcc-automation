@@ -43,64 +43,81 @@ class ContentGenerator {
                 body: this.buildTargetedDiary(targetType, target, displayRegion, displayApartment, randomTip) + 
                       `\n\n---\n\n✨ **가전 졸업 성지, 진센조 더 알아보기**\n🔗 [진센조 전용 홈페이지 바로가기](${this.strategy.homepage_url || 'https://jcc-band.vercel.app/'})`,
                 hashtags: (() => {
-                    let tags = [];
-                    
-                    // 맛집 및 명소 해시태그 풀 (본문 언급 및 진주 투어 연관)
+                    // 1. 브랜드 태그 (정확히 1개만 사용, 절대 규칙 고정)
+                    const brandTag = '진센조';
+
+                    // 2. 타겟과 지역에 맞는 인기 커뮤니티 풀 (20% => 2개 추출)
+                    const broadRegion = region.split(' ')[0]; // '울산 남구' -> '울산'
+                    const communityPool = [
+                        ...(this.strategy.regional_cafes[broadRegion] || this.strategy.regional_cafes[region] || []),
+                        '부산맘', '부경맘', '울산맘', '경남맘', '진주맘', '창원맘', '김해맘'
+                    ].map(k => k.replace(/ /g, '')).filter(k => k !== brandTag);
+                    const selectedCommunity = [...new Set(communityPool)]
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, 2);
+
+                    // 3. 맛집과 명소 풀 (20% => 2개 추출)
                     const foodAndPlaces = [
                         '하연옥', '제일식당', '살롱드인사', '진주맛집', '진주냉면', '육회비빔밥',
                         '진주성', '촉석루', '진양호', '은안재', '김시민호', '소망진산', '유등공원', '진주가볼만한곳'
-                    ];
-                    
-                    // 가전 관련 해시태그 풀
-                    const applianceTags = [
-                        '가전졸업', '가전성지', '삼성스토어', '삼성스토어갤러리아진주', '입주가전', '혼수가전', '신혼가전'
-                    ];
+                    ].map(k => k.replace(/ /g, '')).filter(k => k !== brandTag);
+                    const selectedFoodPlaces = [...new Set(foodAndPlaces)]
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, 2);
 
-                    let regionalAndApartment = [];
+                    // 4. 타겟에 맞는 인기 검색어 풀 (40% => 4개 추출)
+                    let searchKeywordsPool = [];
+                    const targetHashtags = target.hashtags || [];
                     if (targetType === 'move_in') {
-                        const broadRegion = region.split(' ')[0]; // '울산 남구' -> '울산'
                         const liveMoves = this.strategy.live_search_keywords.move_in || [];
-                        const randomLiveTags = liveMoves.sort(() => 0.5 - Math.random()).slice(0, 3).map(k => k.replace(/ /g, ''));
-                        
-                        regionalAndApartment = [
-                            ...(this.strategy.regional_cafes[broadRegion] || this.strategy.regional_cafes[region] || this.strategy.regional_cafes['경남']),
-                            ...(displayApartment ? [displayApartment.replace(/ /g, ''), `${displayApartment.replace(/ /g, '')}입주`] : []),
-                            ...randomLiveTags
+                        searchKeywordsPool = [
+                            ...liveMoves,
+                            ...(displayApartment ? [displayApartment, `${displayApartment}입주`] : []),
+                            '입주가전', '입주가전리스트', '입주전체크리스트', '신축아파트입주'
+                        ];
+                    } else if (targetType === 'wedding') {
+                        const liveWeddings = this.strategy.live_search_keywords.wedding || [];
+                        searchKeywordsPool = [
+                            ...liveWeddings,
+                            '혼수가전', '신혼가전', '결혼준비', '가전졸업', '웨딩가전'
                         ];
                     } else {
-                        regionalAndApartment = [target.name, `${region}가전`].map(k => k ? k.replace(/ /g, '') : '');
+                        const liveSubs = this.strategy.live_search_keywords.subscription || [];
+                        searchKeywordsPool = [
+                            ...liveSubs,
+                            '가전구독', '삼성AI구독클럽', '비대면상담', '0원라이프', '가전구독서비스'
+                        ];
                     }
+                    searchKeywordsPool = [...searchKeywordsPool, ...targetHashtags]
+                        .map(k => k.replace(/ /g, ''))
+                        .filter(k => k !== brandTag);
+                    
+                    const selectedSearchKeywords = [...new Set(searchKeywordsPool)]
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, 4);
 
-                    // 1. 가전 해시태그 추출 및 20% 축소 (가전 해시태그 비중 20% 감소 적용)
-                    const targetHashtags = target.hashtags || [];
-                    let combinedAppliance = [...new Set([...applianceTags, ...targetHashtags])];
-                    const reducedCount = Math.round(combinedAppliance.length * 0.8);
-                    const selectedAppliance = combinedAppliance.sort(() => 0.5 - Math.random()).slice(0, reducedCount);
+                    // 5. 삼성전자 인기가전 풀 (20% => 2개 추출)
+                    const samsungAppliancePool = [
+                        '삼성스토어', '삼성스토어갤러리아진주', '삼성AI가전', '삼성가전', 
+                        '가전성지', '가전졸업', '삼성전자'
+                    ].map(k => k.replace(/ /g, '')).filter(k => k !== brandTag);
+                    const selectedSamsungAppliance = [...new Set(samsungAppliancePool)]
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, 2);
 
-                    // 2. 기본/지역 태그
-                    const baseTags = ['진센조', ...regionalAndApartment];
+                    // 각 카테고리 태그 결합 (진센조 제외 및 중복 차단)
+                    const otherTags = [
+                        ...selectedCommunity,
+                        ...selectedFoodPlaces,
+                        ...selectedSearchKeywords,
+                        ...selectedSamsungAppliance
+                    ].filter(t => t !== brandTag);
 
-                    // 3. 맛집 & 명소 태그 (전체 해시태그 중 20% 비중 설정)
-                    // 수학적 비율: 맛집개수 / (나머지개수 + 맛집개수) = 0.20 => 맛집개수 = 0.25 * 나머지개수
-                    const otherTagsCount = baseTags.length + selectedAppliance.length;
-                    const foodPlaceCount = Math.max(2, Math.round(otherTagsCount * 0.25)); // 최소 2개 보장
-                    const selectedFoodPlaces = foodAndPlaces.sort(() => 0.5 - Math.random()).slice(0, foodPlaceCount);
+                    // 인기 커뮤니티(20%), 맛집/명소(20%), 인기검색어(40%), 삼성인기가전(20%)을 무작위 셔플링
+                    const shuffledOthers = [...new Set(otherTags)].sort(() => 0.5 - Math.random());
 
-                    // 최종 태그 병합
-                    tags = [...baseTags, ...selectedAppliance, ...selectedFoodPlaces];
-
-                    // 중복 및 빈 태그 제거
-                    const uniqueTags = [...new Set(tags.filter(t => t && t.trim() !== ""))];
-
-                    // '진센조' 브랜드 태그는 항상 맨 처음에 고정
-                    const hasJinsenzo = uniqueTags.includes('진센조');
-                    const otherTags = uniqueTags.filter(t => t !== '진센조');
-
-                    // 나머지 태그들을 무작위 셔플링하여 특정 카테고리가 100자 컷오프 시 완전히 잘려 나가는 것을 방지
-                    const shuffledOthers = otherTags.sort(() => 0.5 - Math.random());
-
-                    // 최종 태그 배열 (진센조가 있다면 맨 처음에 고정 배치)
-                    const finalTags = hasJinsenzo ? ['진센조', ...shuffledOthers] : shuffledOthers;
+                    // 최종 태그 리스트: 진센조는 맨 처음에 무조건 '1개만' 고정 배치
+                    const finalTags = [brandTag, ...shuffledOthers];
 
                     let result = "";
                     for (const tag of finalTags) {
