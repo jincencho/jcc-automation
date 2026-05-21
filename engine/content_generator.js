@@ -48,10 +48,34 @@ class ContentGenerator {
 
                     // 2. 타겟과 지역에 맞는 인기 커뮤니티 풀 (20% => 2개 추출)
                     const broadRegion = region.split(' ')[0]; // '울산 남구' -> '울산'
-                    const communityPool = [
-                        ...(this.strategy.regional_cafes[broadRegion] || this.strategy.regional_cafes[region] || []),
-                        '부산맘', '부경맘', '울산맘', '경남맘', '진주맘', '창원맘', '김해맘'
-                    ].map(k => k.replace(/ /g, '')).filter(k => k !== brandTag);
+                    let communityPool = [];
+
+                    if (targetType === 'move_in') {
+                        // 입주타겟: 부동산 인기카페와 지역인기 커뮤니티
+                        communityPool = [
+                            ...(this.strategy.regional_cafes[broadRegion] || this.strategy.regional_cafes[region] || []),
+                            '부동산스터디', '아름다운내집갖기', '텐인텐', '레몬테라스', 
+                            `${broadRegion}부동산카페`, `${region}부동산`, 
+                            '부산맘', '부경맘', '울산맘', '경남맘', '진주맘', '창원맘', '김해맘'
+                        ];
+                    } else if (targetType === 'wedding') {
+                        // 혼수타겟: 혼수준비 인기카페 커뮤니티명
+                        communityPool = [
+                            '다이렉트결혼준비', '메이크마이웨딩', '맥마웨', '레몬테라스', 
+                            '신부공방', '웨딩공부', '은결준', '결준모'
+                        ];
+                    } else {
+                        // 구독타겟 등: 기본 지역 맘카페 및 실속 소비 커뮤니티
+                        communityPool = [
+                            '부산맘', '부경맘', '울산맘', '경남맘', '진주맘', '창원맘', 
+                            '자취생으로살아남기', '레몬테라스'
+                        ];
+                    }
+
+                    communityPool = communityPool
+                        .map(k => k.replace(/ /g, ''))
+                        .filter(k => k !== brandTag);
+
                     const selectedCommunity = [...new Set(communityPool)]
                         .sort(() => 0.5 - Math.random())
                         .slice(0, 2);
