@@ -546,6 +546,9 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
   const cursorX = useRef(200);
   const cooldownRef = useRef(false);
 
+  const stateRef = useRef('ready');
+  const overflowTimerRef = useRef(0);
+
   // Set random next grade (0 to 3 for starting)
   const rollNextGrade = () => {
     const roll = Math.floor(Math.random() * 4);
@@ -559,12 +562,14 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
     setScore(0);
     rollNextGrade();
     setGameState('playing');
+    stateRef.current = 'playing';
+    overflowTimerRef.current = 0;
     playSound('reset');
   };
 
   // Drop a circle from the top
   const handleDrop = () => {
-    if (gameState !== 'playing' || cooldownRef.current) return;
+    if (stateRef.current !== 'playing' || cooldownRef.current) return;
     
     // Position at top guideline
     const dropGrade = nextGradeRef.current;
@@ -722,33 +727,33 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
       // Filter out merged circles
       circlesRef.current = circlesRef.current.filter(c => !c.merged);
 
-      // Game Over Check: If any circle rests above Y=120 line
+      // Game Over Check: If the top edge of any settled circle is above the cutline (Y=135)
       let hasOverflow = false;
       circlesRef.current.forEach(c => {
-        // Let circle settle for at least 1 second before overflow check
-        if (c.y < 135 && Math.abs(c.vy) < 0.1) {
+        if (c.y - c.radius < 135 && Math.abs(c.vy) < 0.3) {
           hasOverflow = true;
         }
       });
 
-      if (hasOverflow && gameState === 'playing') {
-        // Double check after 1.5 seconds to prevent instant overflow triggers
-        setTimeout(() => {
-          let recheck = false;
-          circlesRef.current.forEach(c => {
-            if (c.y < 135 && Math.abs(c.vy) < 0.1) recheck = true;
-          });
-          if (recheck && gameState === 'playing') {
-            setGameState('gameover');
-            playSound('reset');
-            // Save highscore
-            const currentHigh = parseInt(localStorage.getItem('hs_merge_score') || '0');
-            if (scoreRef.current > currentHigh) {
-              localStorage.setItem('hs_merge_score', scoreRef.current);
-              setHighScore(scoreRef.current);
-            }
+      if (hasOverflow && stateRef.current === 'playing') {
+        if (overflowTimerRef.current === 0) {
+          overflowTimerRef.current = Date.now();
+        } else if (Date.now() - overflowTimerRef.current > 1500) {
+          // Overflowed consistently for 1.5 seconds! Trigger game over!
+          setGameState('gameover');
+          stateRef.current = 'gameover';
+          playSound('reset');
+          
+          // Save highscore
+          const currentHigh = parseInt(localStorage.getItem('hs_merge_score') || '0');
+          if (scoreRef.current > currentHigh) {
+            localStorage.setItem('hs_merge_score', scoreRef.current);
+            setHighScore(scoreRef.current);
           }
-        }, 1500);
+          overflowTimerRef.current = 0;
+        }
+      } else {
+        overflowTimerRef.current = 0; // Reset when line is clear
       }
     };
 
