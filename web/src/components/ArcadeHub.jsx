@@ -167,7 +167,7 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
               style={cardStyle('#ec4899')}
             >
               <div style={badgeStyle('#ec4899')}>MERGE PUZZLE</div>
-              <h3 style={cardTitleStyle}>🍉 비스포크 가전 머지 게임</h3>
+              <h3 style={cardTitleStyle}>🍉 삼성 AI 가전 머지 게임</h3>
               <p style={cardDescStyle}>가전을 떨어뜨려 병합하고 최고의 비스포크 마이크로 RGB TV를 완성하세요!</p>
               <div style={scoreBadgeStyle}>최고 점수: {bestScores.merge}점</div>
             </div>
@@ -853,7 +853,7 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '1rem', width: '100%' }}>
         <button onClick={onBack} style={miniBackButtonStyle}>← 게임 선택으로</button>
-        <h2 style={{ ...gameTitleStyle, color: '#ec4899' }}>🍉 비스포크 가전 머지</h2>
+        <h2 style={{ ...gameTitleStyle, color: '#ec4899' }}>🍉 삼성 AI 가전 머지</h2>
       </div>
 
       {/* Info Stats Board */}
