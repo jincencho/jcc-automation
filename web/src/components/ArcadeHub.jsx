@@ -520,14 +520,13 @@ function WaterSortGame({ onBack, onNavigateToReservation }) {
 // ============================================================================
 const MERGE_GRADES = [
   { grade: 0, radius: 15, color: '#ff80ab', label: 'AI큐커', emoji: '🍳' },
-  { grade: 1, radius: 21, color: '#ff4081', label: 'AI스팀울트라', emoji: '🧹' },
-  { grade: 2, radius: 28, color: '#00e5ff', label: 'AI인덕션', emoji: '🔥' },
-  { grade: 3, radius: 36, color: '#00b0ff', label: 'AI로봇청소기', emoji: '🤖' },
-  { grade: 4, radius: 45, color: '#1de9b6', label: 'AI에어드레서', emoji: '👔' },
-  { grade: 5, radius: 55, color: '#00e676', label: 'AI콤보 세탁기', emoji: '🧺' },
-  { grade: 6, radius: 66, color: '#ffea00', label: 'AI무풍갤러리 에어컨', emoji: '🌬️' },
-  { grade: 7, radius: 78, color: '#ff9100', label: 'AI패밀리허브', emoji: '❄️' },
-  { grade: 8, radius: 90, color: '#ff3d00', label: '마이크로RGB TV', emoji: '📺' }
+  { grade: 1, radius: 22, color: '#ff4081', label: 'AI인덕션', emoji: '🔥' },
+  { grade: 2, radius: 30, color: '#00e5ff', label: 'AI스팀울트라', emoji: '🧹' },
+  { grade: 3, radius: 39, color: '#00b0ff', label: 'AI에어드레서', emoji: '👔' },
+  { grade: 4, radius: 49, color: '#1de9b6', label: 'AI콤보', emoji: '🧺' },
+  { grade: 5, radius: 60, color: '#00e676', label: 'AI무풍콤보', emoji: '🌀' },
+  { grade: 6, radius: 72, color: '#ffea00', label: 'AI패밀리허브', emoji: '❄️' },
+  { grade: 7, radius: 88, color: '#ff3d00', label: '마이크로RGB', emoji: '📺' }
 ];
 
 function BespokeMergeGame({ onBack, onNavigateToReservation }) {
@@ -660,7 +659,7 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
 
           if (dist < minDist) {
             // Check if they are of the same grade -> MERGE!
-            if (c1.grade === c2.grade && c1.grade < 8) {
+            if (c1.grade === c2.grade && c1.grade < 7) {
               c1.merged = true;
               c2.merged = true;
               playSound('merge');
@@ -692,7 +691,7 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
                 circlesRef.current.push(newCircle);
               }, 0);
 
-              if (newGrade === 8) {
+              if (newGrade === 7) {
                 playSound('win');
               }
             } else {
