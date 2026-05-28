@@ -4,6 +4,7 @@ import Reservation from './components/Reservation';
 import AdminSchedule from './components/AdminSchedule';
 import About from './components/About';
 import WhySamsung from './components/WhySamsung';
+import ArcadeHub from './components/ArcadeHub';
 import './index.css';
 
 function App() {
@@ -56,6 +57,7 @@ function App() {
         <div className="nav-links" style={{ display: 'flex', gap: '2rem', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('home'); }} style={{ color: currentView === 'home' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>홈</a>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('about'); }} style={{ color: currentView === 'about' || currentView === 'why-samsung' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>더 알아보기</a>
+          <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('arcade'); }} style={{ color: currentView === 'arcade' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>👾 게임존</a>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('reservation'); }} style={{ color: currentView === 'reservation' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>상담 예약</a>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('admin'); }} style={{ color: currentView === 'admin' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>관리자</a>
         </div>
@@ -67,6 +69,7 @@ function App() {
         {currentView === 'why-samsung' && <WhySamsung onBack={() => setCurrentView('about')} />}
         {currentView === 'reservation' && <Reservation onBack={() => setCurrentView('home')} />}
         {currentView === 'admin' && <AdminSchedule onBack={() => setCurrentView('home')} />}
+        {currentView === 'arcade' && <ArcadeHub onBack={() => setCurrentView('home')} onNavigateToReservation={() => setCurrentView('reservation')} />}
       </main>
 
       <footer style={{ textAlign: 'center', padding: '3rem 2rem', color: 'var(--text-secondary)', borderTop: '1px solid var(--glass-border)', marginTop: '4rem' }}>
