@@ -217,7 +217,7 @@ const badgeStyle = (bgColor) => ({
   display: 'inline-block',
   background: bgColor,
   color: '#0f172a',
-  fontSize: '0.75rem',
+  fontSize: 'clamp(0.7rem, 2.5vw, 0.75rem)',
   fontWeight: 800,
   padding: '0.2rem 0.6rem',
   borderRadius: '20px',
@@ -226,14 +226,14 @@ const badgeStyle = (bgColor) => ({
 });
 
 const cardTitleStyle = {
-  fontSize: '1.25rem',
+  fontSize: 'clamp(1.1rem, 4.5vw, 1.25rem)',
   fontWeight: 700,
   margin: '0 0 0.5rem 0',
   color: '#f8fafc'
 };
 
 const cardDescStyle = {
-  fontSize: '0.85rem',
+  fontSize: 'clamp(0.78rem, 3.2vw, 0.85rem)',
   color: '#94a3b8',
   margin: '0 0 1rem 0',
   lineHeight: '1.4'
@@ -241,7 +241,7 @@ const cardDescStyle = {
 
 const scoreBadgeStyle = {
   display: 'inline-flex',
-  fontSize: '0.85rem',
+  fontSize: 'clamp(0.78rem, 3vw, 0.85rem)',
   fontWeight: 600,
   color: '#e2e8f0',
   background: 'rgba(255, 255, 255, 0.05)',
@@ -442,10 +442,10 @@ function BrickBreaker({ onBack, onGameOver, onNavigateToReservation }) {
     <div ref={containerRef} style={gameContainerStyle}>
       <div style={gameHeaderStyle}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: '0.80rem', fontWeight: 800 }}>← 뒤로</button>
-          <span>🧱 브릭 브레이커</span>
+          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: 'clamp(0.7rem, 2.5vw, 0.8rem)', fontWeight: 800 }}>← 뒤로</button>
+          <span style={{ fontSize: 'clamp(0.85rem, 3.2vw, 1.05rem)' }}>🧱 브릭 브레이커</span>
         </div>
-        <span style={{ color: '#818cf8', fontWeight: 800 }}>SCORE: {score}</span>
+        <span style={{ color: '#818cf8', fontWeight: 800, fontSize: 'clamp(0.85rem, 3.2vw, 1.05rem)' }}>SCORE: {score}</span>
       </div>
 
       <div style={{ position: 'relative', width: '100%', aspectRatio: '5/6', background: '#0f0f15', borderRadius: '12px', overflow: 'hidden' }}>
@@ -466,10 +466,10 @@ function BrickBreaker({ onBack, onGameOver, onNavigateToReservation }) {
         {gameState !== 'playing' && (
           <div style={canvasOverlayStyle}>
             {gameState === 'ready' && (
-              <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px' }}>
-                <h3 style={{ margin: '0 0 0.5rem 0' }}>네온 벽돌 깨기</h3>
-                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: '0.75rem', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5' }}>
-                  <div style={{ fontWeight: 700, color: '#818cf8', marginBottom: '0.25rem' }}>📖 게임 방법</div>
+              <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px', width: '100%' }}>
+                <h3 style={{ margin: '0 0 0.5rem 0', fontSize: 'clamp(1.1rem, 4vw, 1.4rem)' }}>네온 벽돌 깨기</h3>
+                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: 'clamp(0.68rem, 2.6vw, 0.78rem)', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5', wordBreak: 'keep-all' }}>
+                  <div style={{ fontWeight: 700, color: '#818cf8', marginBottom: '0.25rem', fontSize: 'clamp(0.72rem, 2.8vw, 0.82rem)' }}>📖 게임 방법</div>
                   • 📱 <b>모바일</b>: 화면 패들을 터치해 좌우로 부드럽게 드래그합니다.<br/>
                   • 💻 <b>PC</b>: 마우스 커서를 좌우로 움직여 패들을 조절합니다.<br/>
                   • 🎯 <b>목표</b>: 공이 아래로 떨어지지 않게 튕겨 상단 네온 블록을 모두 격파하세요!
@@ -479,12 +479,12 @@ function BrickBreaker({ onBack, onGameOver, onNavigateToReservation }) {
             )}
 
             {gameState === 'gameover' && (
-              <div style={{ textAlign: 'center', padding: '1rem' }}>
-                <h2 style={{ color: '#f43f5e', margin: '0 0 0.5rem 0' }}>GAME OVER</h2>
-                <p style={{ margin: '0 0 1.5rem 0' }}>최종 점수: {score}점</p>
+              <div style={{ textAlign: 'center', padding: '1rem', width: '100%' }}>
+                <h2 style={{ color: '#f43f5e', margin: '0 0 0.5rem 0', fontSize: 'clamp(1.5rem, 5.5vw, 2rem)' }}>GAME OVER</h2>
+                <p style={{ margin: '0 0 1.5rem 0', fontSize: 'clamp(0.9rem, 3.2vw, 1.1rem)' }}>최종 점수: {score}점</p>
                 
                 <div style={arcadeCtaStyle}>
-                  <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#cbd5e1' }}>앗, 아쉽네요! 19년 마스터와 함께 가전 졸업 설계는 훨씬 더 쉽고 막힘없이 성공할 수 있답니다! 🎓</p>
+                  <p style={{ margin: '0 0 0.75rem 0', fontSize: 'clamp(0.75rem, 2.8vw, 0.85rem)', color: '#cbd5e1', wordBreak: 'keep-all', lineHeight: '1.4' }}>앗, 아쉽네요! 19년 마스터와 함께 가전 졸업 설계는 훨씬 더 쉽고 막힘없이 성공할 수 있답니다! 🎓</p>
                   <button onClick={onNavigateToReservation} style={ctaButtonStyle}>진센조 비대면 상담 예약하기 💍</button>
                 </div>
 
@@ -493,12 +493,12 @@ function BrickBreaker({ onBack, onGameOver, onNavigateToReservation }) {
             )}
 
             {gameState === 'win' && (
-              <div style={{ textAlign: 'center', padding: '1rem' }}>
-                <h2 style={{ color: '#34d399', margin: '0 0 0.5rem 0' }}>🏆 STAGE CLEAR!</h2>
-                <p style={{ margin: '0 0 1.5rem 0' }}>최종 점수: {score}점</p>
+              <div style={{ textAlign: 'center', padding: '1rem', width: '100%' }}>
+                <h2 style={{ color: '#34d399', margin: '0 0 0.5rem 0', fontSize: 'clamp(1.4rem, 5.5vw, 1.8rem)' }}>🏆 STAGE CLEAR!</h2>
+                <p style={{ margin: '0 0 1.5rem 0', fontSize: 'clamp(0.9rem, 3.2vw, 1.1rem)' }}>최종 점수: {score}점</p>
                 
                 <div style={arcadeCtaStyle}>
-                  <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#cbd5e1' }}>완벽한 클리어! 뛰어난 공간 감각을 가지셨네요! 우리 집 평면에 꼭 맞는 명품 가전 레이아웃도 마스터 조준석 매니저에게 설계 받아보세요. 📐</p>
+                  <p style={{ margin: '0 0 0.75rem 0', fontSize: 'clamp(0.75rem, 2.8vw, 0.85rem)', color: '#cbd5e1', wordBreak: 'keep-all', lineHeight: '1.4' }}>완벽한 클리어! 뛰어난 공간 감각을 가지셨네요! 우리 집 평면에 꼭 맞는 명품 가전 레이아웃도 마스터 조준석 매니저에게 설계 받아보세요. 📐</p>
                   <button onClick={onNavigateToReservation} style={ctaButtonStyle}>마스터에게 무료 배치설계 받기 🎁</button>
                 </div>
 
@@ -707,10 +707,10 @@ function SpaceRunner({ onBack, onGameOver, onNavigateToReservation }) {
     <div style={gameContainerStyle}>
       <div style={gameHeaderStyle}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: '0.80rem', fontWeight: 800 }}>← 뒤로</button>
-          <span>🚀 은하계 스페이스 러너</span>
+          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: 'clamp(0.7rem, 2.5vw, 0.8rem)', fontWeight: 800 }}>← 뒤로</button>
+          <span style={{ fontSize: 'clamp(0.85rem, 3.2vw, 1.05rem)' }}>🚀 은하계 스페이스 러너</span>
         </div>
-        <span style={{ color: '#ec4899', fontWeight: 800 }}>SCORE: {score}</span>
+        <span style={{ color: '#ec4899', fontWeight: 800, fontSize: 'clamp(0.85rem, 3.2vw, 1.05rem)' }}>SCORE: {score}</span>
       </div>
 
       <div 
@@ -729,10 +729,10 @@ function SpaceRunner({ onBack, onGameOver, onNavigateToReservation }) {
         {gameState !== 'playing' && (
           <div style={canvasOverlayStyle}>
             {gameState === 'ready' && (
-              <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px' }}>
-                <h3 style={{ margin: '0 0 0.5rem 0' }}>은하계 스페이스 러너</h3>
-                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: '0.75rem', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5' }}>
-                  <div style={{ fontWeight: 700, color: '#ec4899', marginBottom: '0.25rem' }}>📖 게임 방법</div>
+              <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px', width: '100%' }}>
+                <h3 style={{ margin: '0 0 0.5rem 0', fontSize: 'clamp(1.1rem, 4vw, 1.4rem)' }}>은하계 스페이스 러너</h3>
+                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: 'clamp(0.68rem, 2.6vw, 0.78rem)', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5', wordBreak: 'keep-all' }}>
+                  <div style={{ fontWeight: 700, color: '#ec4899', marginBottom: '0.25rem', fontSize: 'clamp(0.72rem, 2.8vw, 0.82rem)' }}>📖 게임 방법</div>
                   • 📱 <b>모바일</b>: 화면 아무 곳이나 터치하면 우주선이 위로 가속합니다.<br/>
                   • 💻 <b>PC</b>: 마우스 클릭 시 우주선이 위로 가속합니다.<br/>
                   • 🎯 <b>목표</b>: 장애물(운석)을 점프로 피하고, 고득점 황금 별을 획득하세요!
@@ -742,12 +742,12 @@ function SpaceRunner({ onBack, onGameOver, onNavigateToReservation }) {
             )}
 
             {gameState === 'gameover' && (
-              <div style={{ textAlign: 'center', padding: '1rem' }} onClick={(e) => e.stopPropagation()}>
-                <h2 style={{ color: '#f43f5e', margin: '0 0 0.5rem 0' }}>비행 종료</h2>
-                <p style={{ margin: '0 0 1.5rem 0' }}>최종 탐사 점수: {score}점</p>
+              <div style={{ textAlign: 'center', padding: '1rem', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+                <h2 style={{ color: '#f43f5e', margin: '0 0 0.5rem 0', fontSize: 'clamp(1.5rem, 5.5vw, 2rem)' }}>비행 종료</h2>
+                <p style={{ margin: '0 0 1.5rem 0', fontSize: 'clamp(0.9rem, 3.2vw, 1.1rem)' }}>최종 탐사 점수: {score}점</p>
                 
                 <div style={arcadeCtaStyle}>
-                  <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#cbd5e1' }}>우주 비행선처럼 스마트한 원격 비대면 가전 설계! 오직 진센조 19년 마스터와 함께라면 카톡 하나로 모든 견적 비교 끝입니다! 🚀</p>
+                  <p style={{ margin: '0 0 0.75rem 0', fontSize: 'clamp(0.75rem, 2.8vw, 0.85rem)', color: '#cbd5e1', wordBreak: 'keep-all', lineHeight: '1.4' }}>우주 비행선처럼 스마트한 원격 비대면 가전 설계! 오직 진센조 19년 마스터와 함께라면 카톡 하나로 모든 견적 비교 끝입니다! 🚀</p>
                   <button onClick={onNavigateToReservation} style={ctaButtonStyle}>진센조 비대면 즉시 무료설계 신청</button>
                 </div>
 
@@ -851,10 +851,10 @@ function CardMatch({ onBack, onGameOver, onNavigateToReservation }) {
     <div style={gameContainerStyle}>
       <div style={gameHeaderStyle}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: '0.80rem', fontWeight: 800 }}>← 뒤로</button>
-          <span>🃏 가전 카드 매칭</span>
+          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: 'clamp(0.7rem, 2.5vw, 0.8rem)', fontWeight: 800 }}>← 뒤로</button>
+          <span style={{ fontSize: 'clamp(0.85rem, 3.2vw, 1.05rem)' }}>🃏 가전 카드 매칭</span>
         </div>
-        <span style={{ color: '#34d399', fontWeight: 800 }}>⏳ {sec}초 | 🔄 {moves}회</span>
+        <span style={{ color: '#34d399', fontWeight: 800, fontSize: 'clamp(0.85rem, 3.2vw, 1.05rem)' }}>⏳ {sec}초 | 🔄 {moves}회</span>
       </div>
 
       <div style={{
@@ -868,10 +868,10 @@ function CardMatch({ onBack, onGameOver, onNavigateToReservation }) {
         position: 'relative'
       }}>
         {gameState === 'ready' && (
-          <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px' }}>
-            <h3 style={{ margin: '0 0 0.5rem 0' }}>가전 카드 뒤집기</h3>
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: '0.75rem', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5' }}>
-              <div style={{ fontWeight: 700, color: '#34d399', marginBottom: '0.25rem' }}>📖 게임 방법</div>
+          <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px', width: '100%' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: 'clamp(1.1rem, 4vw, 1.4rem)' }}>가전 카드 뒤집기</h3>
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: 'clamp(0.68rem, 2.6vw, 0.78rem)', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5', wordBreak: 'keep-all' }}>
+              <div style={{ fontWeight: 700, color: '#34d399', marginBottom: '0.25rem', fontSize: 'clamp(0.72rem, 2.8vw, 0.82rem)' }}>📖 게임 방법</div>
               • 📱/💻 <b>조작</b>: 카드를 터치/클릭하여 뒤집습니다.<br/>
               • 🎯 <b>목표</b>: 뒤집힌 가전 아이콘의 짝을 기억해 가장 빠른 속도로 8쌍의 똑같은 가전 짝을 완성하세요!
             </div>
@@ -915,7 +915,7 @@ function CardMatch({ onBack, onGameOver, onNavigateToReservation }) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '1.25rem',
+                    fontSize: 'clamp(0.8rem, 3.2vw, 1.25rem)',
                     boxShadow: 'inset 0 0 8px rgba(52, 211, 153, 0.15)'
                   }}>
                     JCC
@@ -934,7 +934,7 @@ function CardMatch({ onBack, onGameOver, onNavigateToReservation }) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     transform: 'rotateY(180deg)',
-                    fontSize: '1.75rem',
+                    fontSize: 'clamp(1.2rem, 5vw, 1.75rem)',
                     boxShadow: '0 0 15px rgba(52, 211, 153, 0.3)'
                   }}>
                     {card.emoji}
@@ -947,11 +947,11 @@ function CardMatch({ onBack, onGameOver, onNavigateToReservation }) {
 
         {gameState === 'win' && (
           <div style={{ textAlign: 'center', padding: '1rem', width: '100%' }}>
-            <h2 style={{ color: '#34d399', margin: '0 0 0.5rem 0' }}>🏆 CHALLENGE CLEAR!</h2>
-            <p style={{ margin: '0 0 1.5rem 0' }}>걸린 시간: {sec}초 | 움직인 횟수: {moves}회</p>
+            <h2 style={{ color: '#34d399', margin: '0 0 0.5rem 0', fontSize: 'clamp(1.4rem, 5.5vw, 1.8rem)' }}>🏆 CHALLENGE CLEAR!</h2>
+            <p style={{ margin: '0 0 1.5rem 0', fontSize: 'clamp(0.9rem, 3.2vw, 1.1rem)' }}>걸린 시간: {sec}초 | 움직인 횟수: {moves}회</p>
             
             <div style={arcadeCtaStyle}>
-              <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#cbd5e1' }}>대단한 뇌지컬입니다! 복잡하고 골치 아픈 삼성스토어 갤러리아진주의 혜택 짝 맞추기 설계도, 진센조 마스터 조준석 매니저가 한 방에 시원하게 큐레이션 해드립니다! 🃏</p>
+              <p style={{ margin: '0 0 0.75rem 0', fontSize: 'clamp(0.75rem, 2.8vw, 0.85rem)', color: '#cbd5e1', wordBreak: 'keep-all', lineHeight: '1.4' }}>대단한 뇌지컬입니다! 복잡하고 골치 아픈 삼성스토어 갤러리아진주의 혜택 짝 맞추기 설계도, 진센조 마스터 조준석 매니저가 한 방에 시원하게 큐레이션 해드립니다! 🃏</p>
               <button onClick={onNavigateToReservation} style={ctaButtonStyle}>진센조 명품 가전 맞춤 설계 받아보기 🎓</button>
             </div>
 
@@ -1209,10 +1209,10 @@ function Neon2048({ onBack, onGameOver, onNavigateToReservation }) {
         }}
       >
         {gameState === 'ready' && (
-          <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px' }}>
-            <h3 style={{ margin: '0 0 0.5rem 0' }}>2048 네온 슬라이드</h3>
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: '0.75rem', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5' }}>
-              <div style={{ fontWeight: 700, color: '#fbbf24', marginBottom: '0.25rem' }}>📖 게임 방법</div>
+          <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px', width: '100%' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: 'clamp(1.1rem, 4vw, 1.4rem)' }}>2048 네온 슬라이드</h3>
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: 'clamp(0.68rem, 2.6vw, 0.78rem)', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5', wordBreak: 'keep-all' }}>
+              <div style={{ fontWeight: 700, color: '#fbbf24', marginBottom: '0.25rem', fontSize: 'clamp(0.72rem, 2.8vw, 0.82rem)' }}>📖 게임 방법</div>
               • 📱 <b>모바일</b>: 화면을 상하좌우 방향으로 터치 슬라이드(스와이프)합니다.<br/>
               • 💻 <b>PC</b>: 키보드 방향키 또는 W, S, A, D 키를 활용합니다.<br/>
               • 🎯 <b>목표</b>: 타일을 합쳐 최고 등급인 2048(비스포크 TV 8K)을 완성하세요!
@@ -1250,8 +1250,8 @@ function Neon2048({ onBack, onGameOver, onNavigateToReservation }) {
               >
                 {val > 0 && (
                   <>
-                    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#f8fafc' }}>{val}</span>
-                    <span style={{ fontSize: '0.5rem', color: '#94a3b8', textAlign: 'center', wordBreak: 'keep-all', marginTop: '2px', fontWeight: 600 }}>{getTileLabel(val)}</span>
+                    <span style={{ fontSize: 'clamp(0.8rem, 3.2vw, 1.15rem)', fontWeight: 800, color: '#f8fafc' }}>{val}</span>
+                    <span style={{ fontSize: 'clamp(0.42rem, 1.8vw, 0.55rem)', color: '#94a3b8', textAlign: 'center', wordBreak: 'keep-all', marginTop: '2px', fontWeight: 600 }}>{getTileLabel(val)}</span>
                   </>
                 )}
               </div>
@@ -1261,12 +1261,12 @@ function Neon2048({ onBack, onGameOver, onNavigateToReservation }) {
 
         {gameState === 'gameover' && (
           <div style={canvasOverlayStyle}>
-            <div style={{ textAlign: 'center', padding: '1rem' }}>
-              <h2 style={{ color: '#f43f5e', margin: '0 0 0.5rem 0' }}>GAME OVER</h2>
-              <p style={{ margin: '0 0 1.5rem 0' }}>최종 지수: {score}점</p>
+            <div style={{ textAlign: 'center', padding: '1rem', width: '100%' }}>
+              <h2 style={{ color: '#f43f5e', margin: '0 0 0.5rem 0', fontSize: 'clamp(1.5rem, 5.5vw, 2rem)' }}>GAME OVER</h2>
+              <p style={{ margin: '0 0 1.5rem 0', fontSize: 'clamp(0.9rem, 3.2vw, 1.1rem)' }}>최종 지수: {score}점</p>
               
               <div style={arcadeCtaStyle}>
-                <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.85rem', color: '#cbd5e1' }}>가전을 2048까지 병합하고 조립하듯! 19년 마스터 조준석 매니저가 백화점 프리미엄과 로드샵 실속형을 가장 정밀하게 결합해 최저 단가 설계를 완성해 드립니다! 🧩</p>
+                <p style={{ margin: '0 0 0.75rem 0', fontSize: 'clamp(0.75rem, 2.8vw, 0.85rem)', color: '#cbd5e1', wordBreak: 'keep-all', lineHeight: '1.4' }}>가전을 2048까지 병합하고 조립하듯! 19년 마스터 조준석 매니저가 백화점 프리미엄과 로드샵 실속형을 가장 정밀하게 결합해 최저 단가 설계를 완성해 드립니다! 🧩</p>
                 <button onClick={onNavigateToReservation} style={ctaButtonStyle}>1:1 무료 가전 조립 설계상담 받기 💎</button>
               </div>
 
@@ -1297,7 +1297,7 @@ const gameHeaderStyle = {
   justifyContent: 'space-between',
   alignItems: 'center',
   fontWeight: 700,
-  fontSize: '1rem',
+  fontSize: 'clamp(0.85rem, 3vw, 1rem)',
   marginBottom: '1rem',
   paddingBottom: '0.5rem',
   borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
@@ -1323,7 +1323,7 @@ const playButtonStyle = (shadowColor) => ({
   padding: '0.75rem 2rem',
   borderRadius: '25px',
   fontWeight: 800,
-  fontSize: '0.95rem',
+  fontSize: 'clamp(0.85rem, 3vw, 0.95rem)',
   cursor: 'pointer',
   transition: 'all 0.2s',
   boxShadow: `0 4px 15px ${shadowColor}33`
@@ -1346,7 +1346,7 @@ const ctaButtonStyle = {
   padding: '0.6rem 1.2rem',
   borderRadius: '8px',
   fontWeight: 700,
-  fontSize: '0.85rem',
+  fontSize: 'clamp(0.75rem, 2.8vw, 0.85rem)',
   cursor: 'pointer',
   width: '100%',
   marginTop: '0.25rem',

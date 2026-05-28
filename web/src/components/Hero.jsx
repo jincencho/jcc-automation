@@ -53,7 +53,7 @@ export default function Hero({ onNavigateToReservation, onNavigateToAbout }) {
               <strong>진센조란?</strong><br /> 조준석 매니저가 있는 진주에서 가전을 완벽하게 졸업했다는 뜻
             </p>
           </div>
-          <h1 style={{ fontSize: '3.5rem', fontWeight: 700, marginBottom: '1rem', lineHeight: 1.2, wordBreak: 'keep-all' }}>
+          <h1 style={{ fontSize: 'clamp(2rem, 8vw, 3.5rem)', fontWeight: 700, marginBottom: '1rem', lineHeight: 1.2, wordBreak: 'keep-all' }}>
             결국 가전은 진주에서<br />
             <span className="text-gradient">완벽하게 졸업했다</span>
           </h1>
