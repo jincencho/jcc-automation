@@ -168,7 +168,7 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
             >
               <div style={badgeStyle('#ec4899')}>MERGE PUZZLE</div>
               <h3 style={cardTitleStyle}>🍉 비스포크 가전 머지 게임</h3>
-              <p style={cardDescStyle}>가전을 떨어뜨려 병합하고 최고의 비스포크 8K TV를 완성하세요!</p>
+              <p style={cardDescStyle}>가전을 떨어뜨려 병합하고 최고의 비스포크 마이크로 RGB TV를 완성하세요!</p>
               <div style={scoreBadgeStyle}>최고 점수: {bestScores.merge}점</div>
             </div>
           </div>
@@ -527,7 +527,7 @@ const MERGE_GRADES = [
   { grade: 5, radius: 55, color: '#00e676', label: '인덕션', emoji: '🔥' },
   { grade: 6, radius: 66, color: '#ffea00', label: '세탁기', emoji: '🧺' },
   { grade: 7, radius: 78, color: '#ff9100', label: '4도어냉장고', emoji: '❄️' },
-  { grade: 8, radius: 90, color: '#ff3d00', label: '8K TV 졸업', emoji: '📺' }
+  { grade: 8, radius: 90, color: '#ff3d00', label: '마이크로RGB TV', emoji: '📺' }
 ];
 
 function BespokeMergeGame({ onBack, onNavigateToReservation }) {
@@ -900,7 +900,7 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
                   <div style={{ fontWeight: 800, color: '#ec4899', marginBottom: '0.4rem' }}>📖 게임 방법</div>
                   • 📱/💻 <b>조작</b>: 터치 슬라이드/마우스 이동으로 조준선을 맞추고, 화면을 터치/클릭하여 떨어트립니다.<br/>
                   • 🎯 <b>규칙</b>: 같은 등급의 가전이 닿으면 더 큰 상위 스마트 가전으로 결합하여 크기가 커집니다.<br/>
-                  • 👑 <b>목표</b>: 가전이 보드 위로 넘치지 않게 끊임없이 합쳐 최고 등급 **비스포크 8K TV 졸업**을 이뤄내세요!
+                  • 👑 <b>목표</b>: 가전이 보드 위로 넘치지 않게 끊임없이 합쳐 최고 등급 **비스포크 마이크로 RGB TV 졸업**을 이뤄내세요!
                 </div>
                 <button onClick={initGame} style={playButtonStyle('#ec4899')}>머지 도전 시작</button>
               </div>
