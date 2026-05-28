@@ -464,9 +464,14 @@ function BrickBreaker({ onGameOver, onNavigateToReservation }) {
         {gameState !== 'playing' && (
           <div style={canvasOverlayStyle}>
             {gameState === 'ready' && (
-              <div style={{ textAlign: 'center' }}>
-                <h3 style={{ margin: '0 0 1rem 0' }}>네온 벽돌 깨기</h3>
-                <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '1.5rem' }}>하단 패들을 드래그하여 공을 튕겨내세요!</p>
+              <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px' }}>
+                <h3 style={{ margin: '0 0 0.5rem 0' }}>네온 벽돌 깨기</h3>
+                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: '0.75rem', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5' }}>
+                  <div style={{ fontWeight: 700, color: '#818cf8', marginBottom: '0.25rem' }}>📖 게임 방법</div>
+                  • 📱 <b>모바일</b>: 화면 패들을 터치해 좌우로 부드럽게 드래그합니다.<br/>
+                  • 💻 <b>PC</b>: 마우스 커서를 좌우로 움직여 패들을 조절합니다.<br/>
+                  • 🎯 <b>목표</b>: 공이 아래로 떨어지지 않게 튕겨 상단 네온 블록을 모두 격파하세요!
+                </div>
                 <button onClick={initGame} style={playButtonStyle('#818cf8')}>게임 시작</button>
               </div>
             )}
@@ -719,9 +724,14 @@ function SpaceRunner({ onGameOver, onNavigateToReservation }) {
         {gameState !== 'playing' && (
           <div style={canvasOverlayStyle}>
             {gameState === 'ready' && (
-              <div style={{ textAlign: 'center' }}>
-                <h3 style={{ margin: '0 0 1rem 0' }}>은하계 스페이스 러너</h3>
-                <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '1.5rem' }}>화면 아무 곳이나 클릭/터치하면 우주선이 위로 가속합니다!</p>
+              <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px' }}>
+                <h3 style={{ margin: '0 0 0.5rem 0' }}>은하계 스페이스 러너</h3>
+                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: '0.75rem', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5' }}>
+                  <div style={{ fontWeight: 700, color: '#ec4899', marginBottom: '0.25rem' }}>📖 게임 방법</div>
+                  • 📱 <b>모바일</b>: 화면 아무 곳이나 터치하면 우주선이 위로 가속합니다.<br/>
+                  • 💻 <b>PC</b>: 마우스 클릭 시 우주선이 위로 가속합니다.<br/>
+                  • 🎯 <b>목표</b>: 장애물(운석)을 점프로 피하고, 고득점 황금 별을 획득하세요!
+                </div>
                 <button onClick={(e) => { e.stopPropagation(); initGame(); }} style={playButtonStyle('#ec4899')}>우주 비행 시작</button>
               </div>
             )}
@@ -850,9 +860,13 @@ function CardMatch({ onGameWin, onNavigateToReservation }) {
         position: 'relative'
       }}>
         {gameState === 'ready' && (
-          <div style={{ textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 1rem 0' }}>가전 카드 뒤집기</h3>
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '1.5rem' }}>가장 빠른 속도로 삼성 AI 가전 카드 8쌍의 짝을 찾아 맞춰 보세요!</p>
+          <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0' }}>가전 카드 뒤집기</h3>
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: '0.75rem', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5' }}>
+              <div style={{ fontWeight: 700, color: '#34d399', marginBottom: '0.25rem' }}>📖 게임 방법</div>
+              • 📱/💻 <b>조작</b>: 카드를 터치/클릭하여 뒤집습니다.<br/>
+              • 🎯 <b>목표</b>: 뒤집힌 가전 아이콘의 짝을 기억해 가장 빠른 속도로 8쌍의 똑같은 가전 짝을 완성하세요!
+            </div>
             <button onClick={initGame} style={playButtonStyle('#34d399')}>매칭 챌린지 시작</button>
           </div>
         )}
@@ -1184,9 +1198,14 @@ function Neon2048({ onGameOver, onNavigateToReservation }) {
         }}
       >
         {gameState === 'ready' && (
-          <div style={{ textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 1rem 0' }}>2048 네온 슬라이드</h3>
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '1.5rem' }}>화면을 상하좌우로 드래그(스와이프)하여 가전 등급을 병합하세요!</p>
+          <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '360px' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0' }}>2048 네온 슬라이드</h3>
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '0.75rem', fontSize: '0.75rem', color: '#cbd5e1', textAlign: 'left', margin: '0 auto 1.25rem auto', lineHeight: '1.5' }}>
+              <div style={{ fontWeight: 700, color: '#fbbf24', marginBottom: '0.25rem' }}>📖 게임 방법</div>
+              • 📱 <b>모바일</b>: 화면을 상하좌우 방향으로 터치 슬라이드(스와이프)합니다.<br/>
+              • 💻 <b>PC</b>: 키보드 방향키 또는 W, S, A, D 키를 활용합니다.<br/>
+              • 🎯 <b>목표</b>: 타일을 합쳐 최고 등급인 2048(비스포크 TV 8K)을 완성하세요!
+            </div>
             <button onClick={initGame} style={playButtonStyle('#fbbf24')}>슬라이드 시작</button>
           </div>
         )}
