@@ -519,14 +519,14 @@ function WaterSortGame({ onBack, onNavigateToReservation }) {
 // GAME 2: BESPOKE MERGE GAME COMPONENT (SUIKA FRUIT MERGE PHYSICS)
 // ============================================================================
 const MERGE_GRADES = [
-  { grade: 0, radius: 15, color: '#ff80ab', label: '큐커', emoji: '🍳' },
-  { grade: 1, radius: 21, color: '#ff4081', label: '제트청소기', emoji: '🌀' },
-  { grade: 2, radius: 28, color: '#00e5ff', label: '식기세척기', emoji: '🍽️' },
-  { grade: 3, radius: 36, color: '#00b0ff', label: '공기청정기', emoji: '🌬️' },
-  { grade: 4, radius: 45, color: '#1de9b6', label: '에어드레서', emoji: '👔' },
-  { grade: 5, radius: 55, color: '#00e676', label: '인덕션', emoji: '🔥' },
-  { grade: 6, radius: 66, color: '#ffea00', label: '세탁기', emoji: '🧺' },
-  { grade: 7, radius: 78, color: '#ff9100', label: '4도어냉장고', emoji: '❄️' },
+  { grade: 0, radius: 15, color: '#ff80ab', label: 'AI큐커', emoji: '🍳' },
+  { grade: 1, radius: 21, color: '#ff4081', label: 'AI스팀울트라', emoji: '🧹' },
+  { grade: 2, radius: 28, color: '#00e5ff', label: 'AI공기청정기', emoji: '🌬️' },
+  { grade: 3, radius: 36, color: '#00b0ff', label: 'AI에어드레서', emoji: '👔' },
+  { grade: 4, radius: 45, color: '#1de9b6', label: 'AI인덕션', emoji: '🔥' },
+  { grade: 5, radius: 55, color: '#00e676', label: 'AI콤보', emoji: '🧺' },
+  { grade: 6, radius: 66, color: '#ffea00', label: 'AI갤러리콤보', emoji: '🌀' },
+  { grade: 7, radius: 78, color: '#ff9100', label: 'AI패밀리허브', emoji: '❄️' },
   { grade: 8, radius: 90, color: '#ff3d00', label: '마이크로RGB TV', emoji: '📺' }
 ];
 
