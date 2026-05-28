@@ -4,6 +4,7 @@ const path = require('path');
 class ContentGenerator {
     constructor() {
         this.strategy = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/marketing_strategy.json'), 'utf8'));
+        this.templates = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/content_templates.json'), 'utf8'));
     }
 
     async generateMultiChannelContent(targetType, region, apartmentName = "") {
@@ -158,39 +159,37 @@ class ContentGenerator {
             };
         }
 
-        // [INSTAGRAM] & [FACEBOOK] - 타겟별 완전 맞춤형 멘트 생성
-        let instaCaption, instaHook, instaHints;
-        let fbText;
+        // [INSTAGRAM] & [FACEBOOK] - 타겟별 동적 생성
+        const cleanRegion = displayRegion || "전국";
+        const cleanApartment = displayApartment || "신규아파트";
 
-        switch (targetType) {
-            case 'wedding':
-                instaHook = `혼수 가전, 백화점과 로드샵 모델을 한 곳에서 비교하세요`;
-                instaCaption = `[INSTAGRAM]\n✨ 예비 부부님들 축하드립니다! 가장 설레는 혼수 준비 💍\n\n백화점 모델과 로드샵 실속형 모델 사이에서 고민 중이신가요? 전국 유일무이! 진주 통합 매장 진센조에서는 프리미엄과 가성비 라인업을 한 곳에서 비교하고 혼합 설계할 수 있습니다.\n\n✅ 19년 마스터의 1:1 완벽한 하이브리드 설계\n✅ 필요한 품목별 맞춤 조합으로 최적의 견적\n✅ 진주 살롱드 인사 투어와 함께하는 로맨틱한 상담\n\n발품 팔 필요 없이 비대면으로도 가장 유리한 견적을 확인하세요.\n\n#혼수가전 #진센조 #가전성지 #신혼부부 #결혼준비 #가전졸업`;
-                instaHints = ["혼수가전, 발품 팔지 말고 한 곳에서", "백화점 프리미엄 + 로드샵 가성비의 결합", "오직 예비부부만을 위한 1:1 맞춤 조합", "19년 마스터의 전국구 비대면 견적"];
-                fbText = `[FACEBOOK]\n📢 예비 부부님들을 위한 혼수가전 특급 정보! 🎉\n\n백화점과 로드샵 모델을 섞어서 사고 싶으셨나요? 진센조 통합 솔루션에서는 가능합니다. 19년 마스터가 고객님의 예산과 라이프스타일에 맞게 백화점 에누리와 로드샵 혜택을 결합하여 최적의 하이브리드 견적을 설계해 드립니다. 지금 바로 확인하세요!\n\n#혼수가전 #진센조 #하이브리드설계 #가전졸업`;
-                break;
+        const instaTemplates = this.templates.instagram_templates[targetType] || this.templates.instagram_templates['move_in'];
+        const fbTemplates = this.templates.facebook_templates[targetType] || this.templates.facebook_templates['move_in'];
 
-            case 'subscription':
-                instaHook = `단 1개라도 상담 가능! 삼성 AI 가전 구독으로 시작하는 0원 라이프`;
-                instaCaption = `[INSTAGRAM]\n✨ 가전, 이제 초기 비용 없이 똑똑하게 구독하세요 💎\n\n매장 방문? 큰 목돈? 이제 필요 없습니다! 전국 어디서나 카톡 한 장으로 시작하는 삼성 AI 가전 구독클럽. 19년 마스터 진센조가 고객님 댁에 딱 맞는 구독 모델을 1:1로 큐레이션 해드립니다.\n\n✅ 초기 비용 0원, 부담 없는 시작\n✅ 365일 안심! 블루패스 무상 케어 서비스\n✅ SmartThings를 통한 자동 에너지 절감 및 기기 연동\n\n지금 바로 프로필 링크 클릭하고 1:1 비대면 구독 상담을 신청하세요.\n\n#진센조 #가전구독 #삼성AI구독클럽 #비대면상담 #가전졸업 #0원라이프`;
-                instaHints = ["초기 비용 0원으로 만나는 프리미엄 가전", "고장 걱정 끝! 블루패스 무상 케어", "단 1개라도 전국 비대면 1:1 상담", "에너지 모니터링 및 스마트홈 자동화"];
-                fbText = `[FACEBOOK]\n📢 전국 어디서나 카톡 하나로 끝내는 스마트 가전 구독!\n\n가전, 이젠 목돈 들여 사지 말고 똑똑하게 구독하세요. 19년 마스터가 최적의 요금제와 혜택을 조합하여 전국 비대면으로 맞춤 설계해 드립니다. 고장 걱정 없는 AI 사전 진단과 블루패스 케어까지 한 번에 챙겨가세요! 🎁\n\n#가전구독 #삼성스토어 #진센조 #비대면상담 #AI가전`;
-                break;
+        const randomInsta = instaTemplates[Math.floor(Math.random() * instaTemplates.length)];
+        const randomFb = fbTemplates[Math.floor(Math.random() * fbTemplates.length)];
 
-            case 'move_in':
-            default:
-                instaHook = `${displayApartment || target.name} 입주민만을 위한 공간 맞춤형 AI 가전 솔루션`;
-                instaCaption = `[INSTAGRAM]\n✨ 입주 6개월 전, 가장 설레는 가전 졸업의 시작 🏠\n\n${displayRegion} ${displayApartment || ''} 입주를 앞둔 고객님들 축하드립니다! 가전은 '언제, 누구에게' 설계 받느냐가 평면도 속 인테리어와 할인 혜택을 결정합니다. 진주 통합 매장 진센조만의 압도적인 혜택을 확인하세요.\n\n✅ 입주 평면도 기반 1:1 맞춤 배치
-✅ 입주 공동구매 이상의 개별 혜택
-✅ 19년 마스터의 프리미엄 현장 정밀 검수
+        const formatSnsTemplate = (text) => {
+            if (!text) return "";
+            return text
+                .replace(/{region}/g, cleanRegion)
+                .replace(/{apartmentName}/g, cleanApartment)
+                .replace(/{expertTip}/g, randomTip.tip)
+                .replace(/{brand}/g, "진센조");
+        };
 
-전용 홈페이지를 통해 비대면으로도 완벽한 입주 큐레이션을 받아보실 수 있습니다.
+        let instaCaption = formatSnsTemplate(randomInsta.caption);
+        let fbText = formatSnsTemplate(randomFb.caption);
 
-#입주가전 #진센조 #가전성지 #신규입주 #랜선집들이 #인테리어완성`;
-                instaHints = ["입주 가전, 6개월 전이 골든타임", "평면도 맞춤형 1:1 큐레이션", "입주민을 위한 특별 우대 혜택", "19년 마스터의 완벽한 공간 설계", "매장 방문 없이 비대면 5분 견적"];
-                fbText = `[FACEBOOK]\n📢 ${displayRegion} ${displayApartment || ''} 입주민 여러분 주목! 🎉\n\n입주 지정 매장보다 더 앞서가는 혜택, 진센조 통합 솔루션을 만나보세요. 단순한 가전 배치가 아닌, 평면도 기반의 인테리어 맞춤 설계와 사후 관리까지 책임집니다. 전국 어디서나 비대면 상담 가능!\n\n#입주가전 #진센조 #비대면견적 #입주할인`;
-                break;
-        }
+        // Generate dynamic hashtags
+        const snsHashtags = this.generateSnsHashtags(targetType, region, apartmentName);
+
+        // Append hashtags
+        instaCaption += `\n\n${snsHashtags}`;
+        fbText += `\n\n${snsHashtags}`;
+
+        let instaHook = formatSnsTemplate(randomInsta.hook);
+        let instaHints = randomInsta.hints.map(hint => formatSnsTemplate(hint));
 
         results.instagram = {
             caption: instaCaption,
@@ -260,30 +259,56 @@ class ContentGenerator {
 
         let content = `안녕하세요. 가전 그 이상의 가치를 설계하는 JCC 진센조입니다.\n\n`;
         
-        // Phase 1: ELM (이성적 중심 경로 자극 - 정교화 가능성 모델)
-        content += `요즘 가장 핫한 검색어인 **[${randomLiveKeyword}]**, 혹시 찾아보셨나요?\n`;
+        const p1List = this.templates.phase1[targetType] || this.templates.phase1.default;
+        const p2List = this.templates.phase2[targetType] || this.templates.phase2.default;
+        const p3List = this.templates.phase3[targetType] || this.templates.phase3.default;
+        const p4List = this.templates.phase4;
+
+        const p1 = p1List[Math.floor(Math.random() * p1List.length)];
+        const p2 = p2List[Math.floor(Math.random() * p2List.length)];
+        const p3 = p3List[Math.floor(Math.random() * p3List.length)];
+        const p4 = p4List[Math.floor(Math.random() * p4List.length)];
+
+        let hotTopicText = "";
         if (randomHotTopic) {
-            content += `특히 최근 입주민들 사이에서는 **'${randomHotTopic}'**가 큰 화두가 되고 있습니다. `;
+            hotTopicText = `특히 최근 입주민들 사이에서는 **'${randomHotTopic}'**가 큰 화두가 되고 있습니다. `;
         }
-        content += `많은 분들이 단순히 카탈로그 스펙이나 인터넷 최저가만 보고 가전을 결정합니다. 하지만 아파트의 평면도, 가족의 라이프스타일, 그리고 숨겨진 통합 할인 정책을 모르면 결국 10년 내내 후회하게 됩니다. 진짜 중요한 건 제품이 아니라 **'공간에 맞는 정확한 설계'**입니다.\n\n`;
 
-        // Phase 2: Social Proof (사회적 증거 효과) & Regional Story
-        content += `이미 ${region} ${apartmentName ? apartmentName + ' ' : ''}입주민 및 수많은 고객의 30% 이상이 진센조의 맞춤 설계를 선택하신 진짜 이유가 있습니다.\n`;
+        // Phase 1
+        content += p1.replace(/\[\{randomLiveKeyword\}\]/g, `[${randomLiveKeyword}]`)
+                     .replace(/\{hotTopicText\}/g, hotTopicText);
+
+        // Phase 2: Region Story
+        let regionStory = "";
         if (region.includes("울산")) {
-            content += `사실 저도 **울산 토박이**입니다. 고향 분들이 왜 굳이 진주 매장까지 찾아오실까요? 바로 진주 매장이 전국적으로 보아도 **할인 혜택과 정책이 가장 압도적**이기 때문입니다. 고향 분들께 가장 유리한 조건을 만들어 드리기 위해 제가 직접 설계합니다.\n\n`;
+            if(targetType === 'wedding') {
+                regionStory = `사실 저도 **울산 토박이**입니다. 고향의 예비 부부님들이 왜 굳이 진주 매장까지 찾아오실까요? 바로 진주 매장이 전국적으로 보아도 **혼수가전 할인 혜택과 정책이 가장 압도적**이기 때문입니다. 고향 분들께 가장 유리한 신혼 살림을 만들어 드리기 위해 제가 직접 설계합니다.\n\n`;
+            } else {
+                regionStory = `사실 저도 **울산 토박이**입니다. 고향 분들이 왜 굳이 진주 매장까지 찾아오실까요? 바로 진주 매장이 전국적으로 보아도 **할인 혜택과 정책이 가장 압도적**이기 때문입니다. 고향 분들께 가장 유리한 조건을 만들어 드리기 위해 제가 직접 설계합니다.\n\n`;
+            }
         } else if (region.includes("진주")) {
-            content += `특히 진주 지역 고객님들께는 **백화점 에누리 최고 15%**와 로드샵의 유연한 정책을 결합한 통합 솔루션을 가장 빠르게 제공해 드립니다.\n\n`;
+            if(targetType === 'wedding') {
+                regionStory = `특히 진주 지역 예비 부부님들께는 **백화점 에누리 최고 15%**와 로드샵의 유연한 정책을 결합한 혼수 전용 통합 솔루션을 가장 빠르게 제공해 드립니다.\n\n`;
+            } else {
+                regionStory = `특히 진주 지역 고객님들께는 **백화점 에누리 최고 15%**와 로드샵의 유연한 정책을 결합한 통합 솔루션을 가장 빠르게 제공해 드립니다.\n\n`;
+            }
         } else {
-            content += `전국 어디서나 비대면 카톡 한 장으로 이 놀라운 혜택을 동일하게 받으실 수 있기 때문입니다.\n\n`;
+            if(targetType === 'wedding') {
+                regionStory = `전국 어디서나 비대면 카톡 한 장으로 이 놀라운 혼수 혜택을 동일하게 받으실 수 있기 때문입니다.\n\n`;
+            } else {
+                regionStory = `전국 어디서나 비대면 카톡 한 장으로 이 놀라운 혜택을 동일하게 받으실 수 있기 때문입니다.\n\n`;
+            }
         }
 
-        // Phase 3: Paradox of Choice (선택의 역설 방지)
-        content += `**너무 많은 옵션에 지치셨죠?** 인터넷의 수많은 가전 리스트와 복잡한 견적서에 피로감을 느끼셨다면 이제 멈추셔도 됩니다.\n`;
-        content += `19년 마스터의 노하우로 고객님 댁에 최적화된 **딱 2가지 솔루션**만 깔끔하게 제안해 드립니다. 백화점의 프리미엄 모델과 로드샵의 실속형 모델을 결합한 하이브리드 설계로 비용은 낮추고 만족도는 극대화합니다.\n\n`;
+        content += p2.replace(/\{region\}/g, region)
+                     .replace(/\{apartmentName\}/g, apartmentName ? apartmentName + ' ' : '')
+                     .replace(/\{regionStory\}/g, regionStory);
 
-        // Phase 4: Perceived Risk 관리 (지각된 위험 방어)
-        content += `**"혹시 설치하다 문제가 생기면 어떡하지?"** 이런 불안감도 완벽히 지워드립니다.\n`;
-        content += `2007년 삼성전자 서비스 입사 후 수리, 배송, 설치, 영업까지 모두 직접 경험한 마스터로서, 현장에서 발생할 수 있는 단 1mm의 단차나 변수조차 사전에 원천 차단합니다. 10년을 쓰는 고관여 제품, 대충 고르고 후회하는 비용이 지금 아끼는 몇십만 원보다 훨씬 큽니다.\n\n`;
+        // Phase 3
+        content += p3;
+        
+        // Phase 4
+        content += p4;
 
         // Target Specific specifics
         if (targetType === 'move_in') {
@@ -331,6 +356,48 @@ class ContentGenerator {
 | **산책** | 소망진산 유등공원 | 365일 빛나는 유등과 함께하는 야경 산책 |`;
         }
         return "";
+    }
+
+    generateSnsHashtags(targetType, region, apartmentName = "") {
+        const brandTag = '진센조';
+        const coreTags = ['가전성지', '가전졸업', '삼성가전', '비대면견적'];
+        const broadRegion = region ? region.split(' ')[0] : '';
+        
+        let targetTags = [];
+        if (targetType === 'move_in') {
+            targetTags = ['입주가전', '입주가전리스트', '입주전체크리스트', '신축아파트입주', '새집인테리어', '공동구매'];
+            if (apartmentName) {
+                targetTags.push(apartmentName, `${apartmentName}입주`);
+            }
+            if (broadRegion) {
+                targetTags.push(`${broadRegion}입주가전`, `${broadRegion}맘카페`);
+            }
+        } else if (targetType === 'wedding') {
+            targetTags = ['혼수가전', '신혼가전', '결혼준비', '예비부부', '신혼집인테리어', '다이렉트결혼준비', '메이크마이웨딩'];
+            if (broadRegion) {
+                targetTags.push(`${broadRegion}결혼준비`, `${broadRegion}신혼가전`);
+            }
+        } else if (targetType === 'subscription') {
+            targetTags = ['가전구독', '삼성가전구독', '삼성AI구독클럽', '0원라이프', '시성비', '가전구독서비스', '스마트홈'];
+        }
+        
+        // Strategy tags
+        const strategyTags = (this.strategy.target_segments[targetType] && this.strategy.target_segments[targetType].hashtags) || [];
+        
+        // Combine them
+        const allPossibleTags = [
+            ...coreTags,
+            ...targetTags,
+            ...strategyTags,
+            '삼성AI가전', '삼성스토어', '비스포크AI'
+        ].map(k => k.replace(/[\s/#]/g, '')).filter(k => k !== brandTag && k.length > 0);
+        
+        // Shuffle and take 12 tags
+        const uniqueOthers = [...new Set(allPossibleTags)].sort(() => 0.5 - Math.random()).slice(0, 12);
+        
+        // Combine with brandTag
+        const finalTags = [brandTag, ...uniqueOthers];
+        return finalTags.map(tag => `#${tag}`).join(' ');
     }
 }
 

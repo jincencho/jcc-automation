@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// Web Audio API Retro Sound Synthesizer with Bubble & Merge Tones
+// Web Audio API Retro Sound Synthesizer with Bubble, Merge & Tetris Tones
 const playSound = (type) => {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -10,7 +10,7 @@ const playSound = (type) => {
     gain.connect(ctx.destination);
     const now = ctx.currentTime;
     
-    if (type === 'select') {
+    if (type === 'select' || type === 'rotate') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(320, now);
       osc.frequency.exponentialRampToValueAtTime(480, now + 0.08);
@@ -18,6 +18,14 @@ const playSound = (type) => {
       gain.gain.linearRampToValueAtTime(0, now + 0.08);
       osc.start(now);
       osc.stop(now + 0.08);
+    } else if (type === 'move') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(200, now);
+      osc.frequency.exponentialRampToValueAtTime(150, now + 0.05);
+      gain.gain.setValueAtTime(0.05, now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.05);
+      osc.start(now);
+      osc.stop(now + 0.05);
     } else if (type === 'pour' || type === 'drop') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(200, now);
@@ -28,16 +36,16 @@ const playSound = (type) => {
       gain.gain.linearRampToValueAtTime(0, now + 0.25);
       osc.start(now);
       osc.stop(now + 0.25);
-    } else if (type === 'merge') {
-      // Satisying upward ding
+    } else if (type === 'merge' || type === 'clear') {
+      // Ascending chord ding
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(523.25, now); // C5
       osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.12); // G5
       osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.24); // C6
       gain.gain.setValueAtTime(0.15, now);
-      gain.gain.linearRampToValueAtTime(0, now + 0.3);
+      gain.gain.linearRampToValueAtTime(0, now + 0.35);
       osc.start(now);
-      osc.stop(now + 0.3);
+      osc.stop(now + 0.35);
     } else if (type === 'win') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(523.25, now); // C5
@@ -50,12 +58,12 @@ const playSound = (type) => {
       osc.stop(now + 0.8);
     } else if (type === 'reset') {
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(400, now);
-      osc.frequency.exponentialRampToValueAtTime(150, now + 0.2);
+      osc.frequency.setValueAtTime(350, now);
+      osc.frequency.exponentialRampToValueAtTime(100, now + 0.25);
       gain.gain.setValueAtTime(0.08, now);
-      gain.gain.linearRampToValueAtTime(0, now + 0.2);
+      gain.gain.linearRampToValueAtTime(0, now + 0.25);
       osc.start(now);
-      osc.stop(now + 0.2);
+      osc.stop(now + 0.25);
     }
   } catch (e) {
     console.log("AudioContext blocked or not supported.");
@@ -66,18 +74,19 @@ const playSound = (type) => {
 // SHARED GENERAL STYLES & LOBBY SYSTEM
 // ==========================================
 export default function ArcadeHub({ onBack, onNavigateToReservation }) {
-  const [activeGame, setActiveGame] = useState(null); // 'watersort', 'merge'
+  const [activeGame, setActiveGame] = useState(null); // 'watersort', 'merge', 'tetris'
   const [bestScores, setBestScores] = useState({
     watersort: localStorage.getItem('hs_watersort_level') || 1,
-    merge: localStorage.getItem('hs_merge_score') || 0
+    merge: localStorage.getItem('hs_merge_score') || 0,
+    tetris: localStorage.getItem('hs_tetris_score') || 0
   });
 
   const handleBackToLobby = () => {
     setActiveGame(null);
-    // Reload highscores
     setBestScores({
       watersort: localStorage.getItem('hs_watersort_level') || 1,
-      merge: localStorage.getItem('hs_merge_score') || 0
+      merge: localStorage.getItem('hs_merge_score') || 0,
+      tetris: localStorage.getItem('hs_tetris_score') || 0
     });
   };
 
@@ -101,7 +110,7 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
 
       {!activeGame ? (
         // ==========================
-        // GRAND LOBBY VIEW
+        // GRAND 3-GAME LOBBY VIEW
         // ==========================
         <div style={{ zIndex: 10, textAlign: 'center', maxWidth: '600px', width: '100%' }}>
           <button 
@@ -137,7 +146,7 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
             JCC 아케이드 게임존
           </h1>
           <p style={{ color: '#94a3b8', fontSize: 'clamp(0.85rem, 3.5vw, 0.95rem)', marginBottom: '2.5rem', wordBreak: 'keep-all', lineHeight: '1.4' }}>
-            가벼운 미니게임도 즐기고, 가전 큐레이션 마스터 조준석 매니저의 특별한 성지 혜택도 만나보세요!
+            다채롭고 중독성 넘치는 3대 명작 아케이드와 함께, 갤러리아진주 조준석 매니저의 특별 가전 졸업 설계 혜택도 만나보세요!
           </p>
 
           {/* Game Selection Cards */}
@@ -171,6 +180,17 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
               <p style={cardDescStyle}>가전을 떨어뜨려 병합하고 최고의 비스포크 마이크로 RGB TV를 완성하세요!</p>
               <div style={scoreBadgeStyle}>최고 점수: {bestScores.merge}점</div>
             </div>
+
+            {/* Card 3: Neon AI Tetris */}
+            <div 
+              onClick={() => { setActiveGame('tetris'); playSound('select'); }}
+              style={cardStyle('#00b0ff')}
+            >
+              <div style={badgeStyle('#00b0ff')}>CLASSIC BLOCK</div>
+              <h3 style={cardTitleStyle}>🧱 삼성 AI 가전 테트리스</h3>
+              <p style={cardDescStyle}>네온 가전 블록을 맞춰 빈틈없이 채우고 고득점에 도전하세요!</p>
+              <div style={scoreBadgeStyle}>최고 점수: {bestScores.tetris}점</div>
+            </div>
           </div>
         </div>
       ) : (
@@ -184,67 +204,14 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
           {activeGame === 'merge' && (
             <BespokeMergeGame onBack={handleBackToLobby} onNavigateToReservation={onNavigateToReservation} />
           )}
+          {activeGame === 'tetris' && (
+            <BespokeTetrisGame onBack={handleBackToLobby} onNavigateToReservation={onNavigateToReservation} />
+          )}
         </div>
       )}
     </div>
   );
 }
-
-// Lobby Style Helpers
-const cardStyle = (glowColor) => ({
-  background: 'rgba(30, 30, 45, 0.45)',
-  border: '1.5px solid rgba(255, 255, 255, 0.08)',
-  borderRadius: '20px',
-  padding: '1.5rem',
-  cursor: 'pointer',
-  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-  backdropFilter: 'blur(20px)',
-  boxShadow: `0 4px 30px rgba(0, 0, 0, 0.4)`,
-  textAlign: 'left',
-  position: 'relative',
-  overflow: 'hidden',
-  ':hover': {
-    transform: 'translateY(-6px)',
-    borderColor: glowColor
-  }
-});
-
-const badgeStyle = (bgColor) => ({
-  display: 'inline-block',
-  background: bgColor,
-  color: '#0f172a',
-  fontSize: 'clamp(0.7rem, 2.5vw, 0.75rem)',
-  fontWeight: 800,
-  padding: '0.2rem 0.6rem',
-  borderRadius: '20px',
-  marginBottom: '0.75rem',
-  letterSpacing: '0.5px'
-});
-
-const cardTitleStyle = {
-  fontSize: 'clamp(1.15rem, 4.5vw, 1.3rem)',
-  fontWeight: 700,
-  margin: '0 0 0.5rem 0',
-  color: '#f8fafc'
-};
-
-const cardDescStyle = {
-  fontSize: 'clamp(0.78rem, 3.2vw, 0.85rem)',
-  color: '#94a3b8',
-  margin: '0 0 1.25rem 0',
-  lineHeight: '1.4'
-};
-
-const scoreBadgeStyle = {
-  display: 'inline-flex',
-  fontSize: 'clamp(0.75rem, 3vw, 0.82rem)',
-  fontWeight: 700,
-  color: '#e2e8f0',
-  background: 'rgba(255, 255, 255, 0.05)',
-  padding: '0.35rem 0.8rem',
-  borderRadius: '12px',
-  border: '1px solid rgba(255, 255, 255, 0.05)'
-};
 
 // ============================================================================
 // GAME 1: NEON WATER SORT GAME COMPONENT
@@ -311,7 +278,7 @@ function WaterSortGame({ onBack, onNavigateToReservation }) {
   const [tubes, setTubes] = useState([]);
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [history, setHistory] = useState([]);
-  const [gameState, setGameState] = useState('playing'); // 'playing', 'win'
+  const [gameState, setGameState] = useState('playing'); 
   const [moveCount, setMoveCount] = useState(0);
   const [bestScore, setBestScore] = useState(
     localStorage.getItem('hs_watersort_level') || 1
@@ -514,7 +481,6 @@ function WaterSortGame({ onBack, onNavigateToReservation }) {
   );
 }
 
-
 // ============================================================================
 // GAME 2: BESPOKE MERGE GAME COMPONENT (SUIKA FRUIT MERGE PHYSICS)
 // ============================================================================
@@ -533,7 +499,7 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [score, setScore] = useState(0);
-  const [gameState, setGameState] = useState('ready'); // 'ready', 'playing', 'gameover'
+  const [gameState, setGameState] = useState('ready'); 
   const [nextGrade, setNextGrade] = useState(0);
   const [highScore, setHighScore] = useState(
     parseInt(localStorage.getItem('hs_merge_score') || '0')
@@ -548,7 +514,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
   const stateRef = useRef('ready');
   const overflowTimerRef = useRef(0);
 
-  // Set random next grade (0 to 3 for starting)
   const rollNextGrade = () => {
     const roll = Math.floor(Math.random() * 4);
     nextGradeRef.current = roll;
@@ -566,15 +531,12 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
     playSound('reset');
   };
 
-  // Drop a circle from the top
   const handleDrop = () => {
     if (stateRef.current !== 'playing' || cooldownRef.current) return;
     
-    // Position at top guideline
     const dropGrade = nextGradeRef.current;
     const info = MERGE_GRADES[dropGrade];
     
-    // Clamp X to make sure it drops inside walls
     let x = cursorX.current;
     if (x < info.radius + 10) x = info.radius + 10;
     if (x > 390 - info.radius) x = 390 - info.radius;
@@ -597,7 +559,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
     circlesRef.current.push(newCircle);
     playSound('pour');
     
-    // Cooldown to prevent spam
     cooldownRef.current = true;
     setTimeout(() => {
       cooldownRef.current = false;
@@ -606,7 +567,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
     rollNextGrade();
   };
 
-  // Game Loop
   useEffect(() => {
     let animId;
     const canvas = canvasRef.current;
@@ -619,7 +579,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
       const friction = 0.985;
       const elasticity = 0.25;
 
-      // Update positions
       circles.forEach(c => {
         c.vy += gravity;
         c.vx *= friction;
@@ -630,27 +589,23 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
           c.hasDropped = true;
         }
 
-        // Collision: Bottom Wall (at Y=510)
         if (c.y + c.radius > 510) {
           c.y = 510 - c.radius;
           c.vy = -Math.abs(c.vy) * elasticity;
-          c.vx *= 0.8; // higher friction at bottom
+          c.vx *= 0.8;
         }
 
-        // Collision: Left Wall (at X=10)
         if (c.x - c.radius < 10) {
           c.x = 10 + c.radius;
           c.vx = Math.abs(c.vx) * elasticity;
         }
 
-        // Collision: Right Wall (at X=390)
         if (c.x + c.radius > 390) {
           c.x = 390 - c.radius;
           c.vx = -Math.abs(c.vx) * elasticity;
         }
       });
 
-      // Circle to Circle Collision & Merge
       for (let i = 0; i < circles.length; i++) {
         for (let j = i + 1; j < circles.length; j++) {
           const c1 = circles[i];
@@ -663,26 +618,23 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
           const minDist = c1.radius + c2.radius;
 
           if (dist < minDist) {
-            // Check if they are of the same grade -> MERGE!
             if (c1.grade === c2.grade && c1.grade < 7) {
               c1.merged = true;
               c2.merged = true;
               playSound('merge');
               
-              // Upgraded parameters
               const newGrade = c1.grade + 1;
               const info = MERGE_GRADES[newGrade];
               
               scoreRef.current += (newGrade) * 15;
               setScore(scoreRef.current);
 
-              // Position upgraded circle at midpoint
               const newCircle = {
                 id: Math.random().toString(),
                 x: (c1.x + c2.x) / 2,
                 y: (c1.y + c2.y) / 2,
                 vx: (c1.vx + c2.vx) * 0.5,
-                vy: (c1.vy + c2.vy) * 0.5 - 1, // small upward pop
+                vy: (c1.vy + c2.vy) * 0.5 - 1, 
                 radius: info.radius,
                 grade: newGrade,
                 color: info.color,
@@ -692,7 +644,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
                 hasDropped: true
               };
 
-              // Defer insertion to next frame logic
               setTimeout(() => {
                 circlesRef.current.push(newCircle);
               }, 0);
@@ -701,18 +652,15 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
                 playSound('win');
               }
             } else {
-              // Elastic collision response & Overlap resolution
               const overlap = minDist - dist;
               const nx = dx / dist;
               const ny = dy / dist;
 
-              // Static resolution (push apart)
               c1.x -= nx * overlap * 0.51;
               c1.y -= ny * overlap * 0.51;
               c2.x += nx * overlap * 0.51;
               c2.y += ny * overlap * 0.51;
 
-              // Elastic reflection vector math
               const rvx = c2.vx - c1.vx;
               const rvy = c2.vy - c1.vy;
               const velAlongNormal = rvx * nx + rvy * ny;
@@ -729,10 +677,8 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
         }
       }
 
-      // Filter out merged circles
       circlesRef.current = circlesRef.current.filter(c => !c.merged);
 
-      // Game Over Check: If the top edge of any settled circle is above the cutline (Y=135)
       let hasOverflow = false;
       circlesRef.current.forEach(c => {
         if (c.hasDropped && c.y - c.radius < 135) {
@@ -744,12 +690,10 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
         if (overflowTimerRef.current === 0) {
           overflowTimerRef.current = Date.now();
         } else if (Date.now() - overflowTimerRef.current > 1500) {
-          // Overflowed consistently for 1.5 seconds! Trigger game over!
           setGameState('gameover');
           stateRef.current = 'gameover';
           playSound('reset');
           
-          // Save highscore
           const currentHigh = parseInt(localStorage.getItem('hs_merge_score') || '0');
           if (scoreRef.current > currentHigh) {
             localStorage.setItem('hs_merge_score', scoreRef.current);
@@ -758,21 +702,18 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
           overflowTimerRef.current = 0;
         }
       } else {
-        overflowTimerRef.current = 0; // Reset when line is clear
+        overflowTimerRef.current = 0;
       }
     };
 
     const draw = () => {
-      // Clear
       ctx.fillStyle = '#0f0f15';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw Container Box Walls
       ctx.strokeStyle = 'rgba(255,255,255,0.15)';
       ctx.lineWidth = 4;
-      ctx.strokeRect(10, 80, 380, 430); // drop boundary starts at Y=80
+      ctx.strokeRect(10, 80, 380, 430); 
 
-      // Draw Danger Warning Line (Y=140)
       ctx.strokeStyle = 'rgba(244, 63, 94, 0.4)';
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 5]);
@@ -782,7 +723,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Draw Dropping Guide Line (if playing)
       if (gameState === 'playing') {
         const activeInfo = MERGE_GRADES[nextGradeRef.current];
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
@@ -794,7 +734,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Preview next circle at the top
         ctx.fillStyle = activeInfo.color;
         ctx.shadowBlur = 10;
         ctx.shadowColor = activeInfo.color;
@@ -813,7 +752,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
         ctx.fillText(activeInfo.emoji, cursorX.current, 50);
       }
 
-      // Draw All Circles
       circlesRef.current.forEach(c => {
         ctx.fillStyle = c.color;
         ctx.shadowBlur = 12;
@@ -823,23 +761,19 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        // Label details inside circles (Bespoke appliance grade) - Stroke + Fill for maximum legibility!
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Dynamic text sizing based on circle radius
         const emojiSize = Math.max(12, c.radius * 0.45);
         ctx.font = `bold ${emojiSize}px sans-serif`;
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 3.5;
         
-        // Offset emoji slightly upwards if there is text below
         const emojiY = c.radius > 20 ? c.y - c.radius * 0.15 : c.y;
         ctx.strokeText(c.emoji, c.x, emojiY);
         ctx.fillStyle = '#ffffff';
         ctx.fillText(c.emoji, c.x, emojiY);
 
-        // Grade title labels for circles
         if (c.radius > 20) {
           const fontSize = Math.max(8, c.radius * 0.20);
           ctx.font = `bold ${fontSize}px sans-serif`;
@@ -863,7 +797,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
     return () => cancelAnimationFrame(animId);
   }, [gameState]);
 
-  // Handle touch and mouse moves for guidelines
   const handleMouseMove = (clientX) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -874,19 +807,16 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
 
   return (
     <div style={gameLayoutWrapper}>
-      {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '1rem', width: '100%' }}>
         <button onClick={onBack} style={miniBackButtonStyle}>← 게임 선택으로</button>
         <h2 style={{ ...gameTitleStyle, color: '#ec4899' }}>🍉 삼성 AI 가전 머지</h2>
       </div>
 
-      {/* Info Stats Board */}
       <div style={statsBoardStyle}>
         <span style={{ color: '#ec4899' }}>SCORE: {score}점</span>
-        <span style={{ color: '#94a3b8' }}>최고 점수: {highScore}점</span>
+        <span style={{ color: '#94a3b8' }}>최고: {highScore}점</span>
       </div>
 
-      {/* Interactive Arena Canvas */}
       <div 
         ref={containerRef}
         style={{
@@ -914,7 +844,6 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
           style={{ width: '100%', height: '100%', display: 'block' }}
         />
 
-        {/* Screen Overlays */}
         {gameState !== 'playing' && (
           <div style={canvasOverlayStyle}>
             {gameState === 'ready' && (
@@ -949,6 +878,535 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
     </div>
   );
 }
+
+// ============================================================================
+// GAME 3: BESPOKE TETRIS GAME COMPONENT
+// ============================================================================
+const TETRIS_SHAPES = {
+  I: {
+    shape: [
+      [0, 0, 0, 0],
+      [1, 1, 1, 1],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0]
+    ],
+    color: '#00e5ff', // Neon Cyan - AI인덕션
+    label: 'AI인덕션'
+  },
+  O: {
+    shape: [
+      [1, 1],
+      [1, 1]
+    ],
+    color: '#ffea00', // Neon Yellow - AI패밀리허브
+    label: 'AI패밀리허브'
+  },
+  T: {
+    shape: [
+      [0, 1, 0],
+      [1, 1, 1],
+      [0, 0, 0]
+    ],
+    color: '#d500f9', // Neon Purple - AI무풍콤보
+    label: 'AI무풍콤보'
+  },
+  S: {
+    shape: [
+      [0, 1, 1],
+      [1, 1, 0],
+      [0, 0, 0]
+    ],
+    color: '#00e676', // Neon Green - AI큐커
+    label: 'AI큐커'
+  },
+  Z: {
+    shape: [
+      [1, 1, 0],
+      [0, 1, 1],
+      [0, 0, 0]
+    ],
+    color: '#ff3d00', // Neon Red - 마이크로RGB
+    label: '마이크로RGB'
+  },
+  J: {
+    shape: [
+      [1, 0, 0],
+      [1, 1, 1],
+      [0, 0, 0]
+    ],
+    color: '#00b0ff', // Neon Blue - AI콤보
+    label: 'AI콤보'
+  },
+  L: {
+    shape: [
+      [0, 0, 1],
+      [1, 1, 1],
+      [0, 0, 0]
+    ],
+    color: '#ff1a8c', // Neon Pink - AI에어드레서
+    label: 'AI에어드레서'
+  }
+};
+
+const SHAPE_KEYS = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
+
+function BespokeTetrisGame({ onBack, onNavigateToReservation }) {
+  const canvasRef = useRef(null);
+  const [score, setScore] = useState(0);
+  const [lines, setLines] = useState(0);
+  const [gameState, setGameState] = useState('ready'); // 'ready', 'playing', 'gameover'
+  const [highScore, setHighScore] = useState(
+    parseInt(localStorage.getItem('hs_tetris_score') || '0')
+  );
+
+  // Board State: 20 rows x 10 columns
+  const board = useRef(Array(20).fill(null).map(() => Array(10).fill(0)));
+  
+  // Current Piece State
+  const currentPiece = useRef(null);
+  const currentX = useRef(3);
+  const currentY = useRef(0);
+  const nextPieceKey = useRef('I');
+  
+  const scoreRef = useRef(0);
+  const linesRef = useRef(0);
+  const gameInterval = useRef(null);
+  const activeStateRef = useRef('ready');
+
+  const rollNextPiece = () => {
+    const keys = SHAPE_KEYS;
+    const randomKey = keys[Math.floor(Math.random() * keys.length)];
+    nextPieceKey.current = randomKey;
+  };
+
+  const initGame = () => {
+    board.current = Array(20).fill(null).map(() => Array(10).fill(0));
+    scoreRef.current = 0;
+    linesRef.current = 0;
+    setScore(0);
+    setLines(0);
+    rollNextPiece();
+    spawnPiece();
+    setGameState('playing');
+    activeStateRef.current = 'playing';
+    playSound('reset');
+
+    if (gameInterval.current) clearInterval(gameInterval.current);
+    gameInterval.current = setInterval(gameStep, 800); // 800ms base drop speed
+  };
+
+  const spawnPiece = () => {
+    const key = nextPieceKey.current;
+    currentPiece.current = {
+      key: key,
+      matrix: TETRIS_SHAPES[key].shape,
+      color: TETRIS_SHAPES[key].color,
+      label: TETRIS_SHAPES[key].label
+    };
+    currentX.current = Math.floor((10 - currentPiece.current.matrix[0].length) / 2);
+    currentY.current = 0;
+    rollNextPiece();
+
+    // Spawn Collision -> Game Over
+    if (checkCollision(currentX.current, currentY.current, currentPiece.current.matrix)) {
+      setGameState('gameover');
+      activeStateRef.current = 'gameover';
+      playSound('reset');
+      clearInterval(gameInterval.current);
+
+      const savedHigh = parseInt(localStorage.getItem('hs_tetris_score') || '0');
+      if (scoreRef.current > savedHigh) {
+        localStorage.setItem('hs_tetris_score', scoreRef.current);
+        setHighScore(scoreRef.current);
+      }
+    }
+  };
+
+  const checkCollision = (ax, ay, matrix) => {
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[r].length; c++) {
+        if (matrix[r][c] !== 0) {
+          const targetX = ax + c;
+          const targetY = ay + r;
+
+          // Out of bounds
+          if (targetX < 0 || targetX >= 10 || targetY >= 20) {
+            return true;
+          }
+
+          // Collide with settled blocks
+          if (targetY >= 0 && board.current[targetY][targetX] !== 0) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  };
+
+  const mergePiece = () => {
+    const { matrix, color } = currentPiece.current;
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[r].length; c++) {
+        if (matrix[r][c] !== 0) {
+          const targetY = currentY.current + r;
+          const targetX = currentX.current + c;
+          if (targetY >= 0) {
+            board.current[targetY][targetX] = color;
+          }
+        }
+      }
+    }
+  };
+
+  const checkLineClears = () => {
+    let cleared = 0;
+    for (let r = 20 - 1; r >= 0; r--) {
+      // Line is full if all elements are non-zero
+      if (board.current[r].every(val => val !== 0)) {
+        board.current.splice(r, 1);
+        board.current.unshift(Array(10).fill(0)); // insert empty row at top
+        cleared++;
+        r++; // check same row index again as rows shifted down
+      }
+    }
+
+    if (cleared > 0) {
+      playSound('clear');
+      linesRef.current += cleared;
+      setLines(linesRef.current);
+
+      // Scoring: 100, 300, 600, 1200 points
+      const payouts = [0, 100, 300, 600, 1200];
+      scoreRef.current += payouts[cleared] || 100;
+      setScore(scoreRef.current);
+
+      // Speed up as rows increase
+      const speed = Math.max(150, 800 - Math.floor(linesRef.current / 4) * 80);
+      clearInterval(gameInterval.current);
+      gameInterval.current = setInterval(gameStep, speed);
+    }
+  };
+
+  const settlePiece = () => {
+    mergePiece();
+    checkLineClears();
+    spawnPiece();
+  };
+
+  const moveLeft = () => {
+    if (activeStateRef.current !== 'playing') return;
+    if (!checkCollision(currentX.current - 1, currentY.current, currentPiece.current.matrix)) {
+      currentX.current -= 1;
+      playSound('move');
+    }
+  };
+
+  const moveRight = () => {
+    if (activeStateRef.current !== 'playing') return;
+    if (!checkCollision(currentX.current + 1, currentY.current, currentPiece.current.matrix)) {
+      currentX.current += 1;
+      playSound('move');
+    }
+  };
+
+  const rotatePiece = () => {
+    if (activeStateRef.current !== 'playing') return;
+    const matrix = currentPiece.current.matrix;
+    const N = matrix.length;
+    // Transpose and reverse rows
+    const rotated = Array(N).fill(null).map(() => Array(N).fill(0));
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        rotated[c][N - 1 - r] = matrix[r][c];
+      }
+    }
+
+    // Try rotating with basic wall kicks
+    if (!checkCollision(currentX.current, currentY.current, rotated)) {
+      currentPiece.current.matrix = rotated;
+      playSound('rotate');
+    } else if (!checkCollision(currentX.current - 1, currentY.current, rotated)) {
+      currentX.current -= 1;
+      currentPiece.current.matrix = rotated;
+      playSound('rotate');
+    } else if (!checkCollision(currentX.current + 1, currentY.current, rotated)) {
+      currentX.current += 1;
+      currentPiece.current.matrix = rotated;
+      playSound('rotate');
+    }
+  };
+
+  const softDrop = () => {
+    if (activeStateRef.current !== 'playing') return;
+    if (!checkCollision(currentX.current, currentY.current + 1, currentPiece.current.matrix)) {
+      currentY.current += 1;
+      playSound('move');
+    } else {
+      settlePiece();
+    }
+  };
+
+  const hardDrop = () => {
+    if (activeStateRef.current !== 'playing') return;
+    let dropY = currentY.current;
+    while (!checkCollision(currentX.current, dropY + 1, currentPiece.current.matrix)) {
+      dropY++;
+    }
+    currentY.current = dropY;
+    settlePiece();
+    playSound('pour');
+  };
+
+  const gameStep = () => {
+    if (activeStateRef.current !== 'playing') return;
+    if (!checkCollision(currentX.current, currentY.current + 1, currentPiece.current.matrix)) {
+      currentY.current += 1;
+    } else {
+      settlePiece();
+    }
+  };
+
+  // Keyboard controls for desktop
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (activeStateRef.current !== 'playing') return;
+      if (e.key === 'ArrowLeft' || e.key === 'a') { e.preventDefault(); moveLeft(); }
+      if (e.key === 'ArrowRight' || e.key === 'd') { e.preventDefault(); moveRight(); }
+      if (e.key === 'ArrowUp' || e.key === 'w') { e.preventDefault(); rotatePiece(); }
+      if (e.key === 'ArrowDown' || e.key === 's') { e.preventDefault(); softDrop(); }
+      if (e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); hardDrop(); }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (gameInterval.current) clearInterval(gameInterval.current);
+    };
+  }, []);
+
+  // Animation Loop for rendering Neon Tetris
+  useEffect(() => {
+    let animId;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const drawGrid = () => {
+      ctx.fillStyle = '#0f0f15';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const blockSize = 24; // block size inside canvas
+      
+      // Draw grid container border
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= 10; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * blockSize, 0);
+        ctx.lineTo(x * blockSize, 20 * blockSize);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= 20; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * blockSize);
+        ctx.lineTo(10 * blockSize, y * blockSize);
+        ctx.stroke();
+      }
+
+      // Draw settled blocks on board
+      for (let r = 0; r < 20; r++) {
+        for (let c = 0; c < 10; c++) {
+          const color = board.current[r][c];
+          if (color !== 0) {
+            drawBlock(ctx, c, r, color, blockSize);
+          }
+        }
+      }
+
+      // Draw current falling piece
+      if (gameState === 'playing' && currentPiece.current) {
+        const { matrix, color } = currentPiece.current;
+        for (let r = 0; r < matrix.length; r++) {
+          for (let c = 0; c < matrix[r].length; c++) {
+            if (matrix[r][c] !== 0) {
+              drawBlock(ctx, currentX.current + c, currentY.current + r, color, blockSize);
+            }
+          }
+        }
+      }
+    };
+
+    const drawBlock = (context, x, y, color, size) => {
+      context.fillStyle = color;
+      context.shadowBlur = 10;
+      context.shadowColor = color;
+      context.fillRect(x * size + 1.5, y * size + 1.5, size - 3, size - 3);
+      context.shadowBlur = 0;
+
+      // Inner shiny outline for neon aesthetic
+      context.strokeStyle = 'rgba(255,255,255,0.45)';
+      context.lineWidth = 1.5;
+      context.strokeRect(x * size + 3.5, y * size + 3.5, size - 7, size - 7);
+    };
+
+    const render = () => {
+      drawGrid();
+      animId = requestAnimationFrame(render);
+    };
+
+    render();
+    return () => cancelAnimationFrame(animId);
+  }, [gameState]);
+
+  return (
+    <div style={gameLayoutWrapper}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: '0.75rem', width: '100%' }}>
+        <button onClick={onBack} style={miniBackButtonStyle}>← 게임 선택으로</button>
+        <h2 style={{ ...gameTitleStyle, color: '#00b0ff' }}>🧱 삼성 AI 가전 테트리스</h2>
+      </div>
+
+      {/* Info Stats Board */}
+      <div style={statsBoardStyle}>
+        <span style={{ color: '#00b0ff' }}>SCORE: {score}</span>
+        <span style={{ color: '#00e676' }}>줄소거: {lines}개</span>
+        <span style={{ color: '#94a3b8' }}>최고: {highScore}</span>
+      </div>
+
+      {/* Arena and Preview Row */}
+      <div style={{
+        display: 'flex',
+        gap: '0.75rem',
+        width: '100%',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        marginBottom: '1rem'
+      }}>
+        {/* Tetris Canvas Container */}
+        <div style={{
+          position: 'relative',
+          width: '240px',
+          height: '480px',
+          background: '#0f0f15',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          border: '2px solid rgba(255,255,255,0.08)'
+        }}>
+          <canvas 
+            ref={canvasRef} 
+            width={240} 
+            height={480} 
+            style={{ display: 'block' }}
+          />
+
+          {/* Overlays */}
+          {gameState !== 'playing' && (
+            <div style={canvasOverlayStyle}>
+              {gameState === 'ready' && (
+                <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '200px' }}>
+                  <h3 style={{ fontSize: '1.1rem', color: '#00b0ff', margin: '0 0 0.5rem 0' }}>AI 가전 테트리스</h3>
+                  <div style={{ ...mergeInstructionsBoxStyle, fontSize: '0.68rem', padding: '0.5rem', marginBottom: '1rem' }}>
+                    • 📱 <b>모바일</b>: 하단 화살표와 회전 버튼을 탭하여 블록을 조작합니다.<br/>
+                    • 💻 <b>PC</b>: 방향키(이동/회전) 및 스페이스바(하드드롭)를 활용합니다.
+                  </div>
+                  <button onClick={initGame} style={playButtonStyle('#00b0ff')}>게임 시작</button>
+                </div>
+              )}
+
+              {gameState === 'gameover' && (
+                <div style={{ textAlign: 'center', padding: '0.75rem', width: '100%' }}>
+                  <h2 style={{ color: '#f43f5e', margin: '0 0 0.5rem 0', fontSize: '1.5rem', fontWeight: 800 }}>GAME OVER</h2>
+                  <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#cbd5e1' }}>최종 점수: {score}점</p>
+                  
+                  <div style={{ ...customCtaBoxStyle, padding: '0.65rem', margin: '0.3rem 0' }}>
+                    <p style={{ margin: 0, fontSize: '0.76rem', color: '#cbd5e1', wordBreak: 'keep-all', lineHeight: '1.4' }}>테트리스 블록을 빈틈없이 결합하듯! 갤러리아진주 조준석 매니저가 백화점 혜택과 비대면 비교 패키지를 완벽한 하나의 퍼즐로 맞춰 드립니다! 🧱</p>
+                    <button onClick={onNavigateToReservation} style={{ ...ctaButtonActionStyle, width: '100%', padding: '0.55rem', fontSize: '0.8rem', marginTop: '0.5rem' }}>무료 가전 견적상담 받기 📅</button>
+                  </div>
+
+                  <button onClick={initGame} style={{ ...playButtonStyle('#00b0ff'), marginTop: '0.75rem', padding: '0.55rem 1.4rem' }}>다시 하기</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Side Panel (Next Piece & Info) */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+          width: '90px'
+        }}>
+          {/* Next Piece Box */}
+          <div style={{
+            background: 'rgba(20,20,30,0.6)',
+            border: '1.5px solid rgba(255,255,255,0.08)',
+            borderRadius: '12px',
+            padding: '0.5rem',
+            textAlign: 'center'
+          }}>
+            <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 800, display: 'block', marginBottom: '0.4rem' }}>NEXT PIECE</span>
+            <div style={{
+              height: '50px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2rem',
+              color: gameState === 'playing' ? TETRIS_SHAPES[nextPieceKey.current].color : '#555'
+            }}>
+              {gameState === 'playing' ? TETRIS_SHAPES[nextPieceKey.current].emoji : '❓'}
+            </div>
+            <span style={{ fontSize: '0.55rem', color: '#cbd5e1', wordBreak: 'keep-all', display: 'block', marginTop: '0.2rem', fontWeight: 600 }}>
+              {gameState === 'playing' ? TETRIS_SHAPES[nextPieceKey.current].label : '--'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Touch Controller Panel (Only visible on Mobile view) */}
+      <div className="mobile-only" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+        width: '100%',
+        maxWidth: '300px',
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid rgba(255,255,255,0.05)',
+        borderRadius: '16px',
+        padding: '0.75rem',
+        boxSizing: 'border-box'
+      }}>
+        {/* Top row: Rotation & Harddrop */}
+        <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+          <button onClick={rotatePiece} style={controllerButtonStyle('#00b0ff')}>↻ 회전 (Rotate)</button>
+          <button onClick={hardDrop} style={controllerButtonStyle('#ff3d00')}>⚡ 즉시낙하 (Drop)</button>
+        </div>
+        {/* Bottom row: Left, Down, Right */}
+        <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+          <button onClick={moveLeft} style={controllerButtonStyle('#cbd5e1')}>◀ 좌로</button>
+          <button onClick={softDrop} style={controllerButtonStyle('#cbd5e1')}>▼ 아래로</button>
+          <button onClick={moveRight} style={controllerButtonStyle('#cbd5e1')}>▶ 우로</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const controllerButtonStyle = (color) => ({
+  flex: 1,
+  background: 'rgba(255,255,255,0.06)',
+  border: `1.5px solid ${color}40`,
+  color: color,
+  padding: '0.65rem 0',
+  borderRadius: '8px',
+  fontWeight: 800,
+  fontSize: '0.78rem',
+  cursor: 'pointer',
+  transition: 'active 0.1s',
+  outline: 'none',
+  userSelect: 'none',
+  WebkitUserSelect: 'none'
+});
 
 // ==========================================
 // SHARED GAME STYLES CONSTANTS
