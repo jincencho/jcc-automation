@@ -119,19 +119,19 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
           ← {activeGame ? '게임 목록으로' : '홈페이지로 돌아가기'}
         </button>
         <h1 style={{
-          fontSize: '2.5rem',
+          fontSize: 'clamp(1.75rem, 6.5vw, 2.5rem)',
           fontWeight: 800,
           background: 'linear-gradient(135deg, #818cf8 0%, #ec4899 100%)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           margin: '0.5rem 0',
-          letterSpacing: '-1px'
+          letterSpacing: '-1.5px',
+          wordBreak: 'keep-all'
         }}>
           JCC 아케이드 게임존
         </h1>
-        <p style={{ color: '#94a3b8', fontSize: '0.95rem', margin: 0 }}>
-          {activeGame ? '최고 기록에 도전해 보세요!' : '가벼운 미니게임도 즐기고, 19년차 가전 마스터의 시크릿 혜택도 만나보세요.'}
-        </p>
+        <p style={{ color: '#94a3b8', fontSize: 'clamp(0.85rem, 3.5vw, 0.95rem)', margin: 0, wordBreak: 'keep-all', lineHeight: '1.4' }}>
+          {activeGame ? '최고 기록에 도전해 보세요!' : '가벼운 미니게임도 즐기고, 19년차 가전 마스터의 시크릿 혜택도 만나보세요.'}</p>
       </div>
 
       {/* Main Area */}
@@ -190,11 +190,10 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
           </div>
         )}
 
-        {/* Dynamic Game Component Loading */}
-        {activeGame === 'brick' && <BrickBreaker onGameOver={(score) => updateHighScore('brick', score)} onNavigateToReservation={onNavigateToReservation} />}
-        {activeGame === 'runner' && <SpaceRunner onGameOver={(score) => updateHighScore('runner', score)} onNavigateToReservation={onNavigateToReservation} />}
-        {activeGame === 'match' && <CardMatch onGameWin={(sec) => updateHighScore('match', sec)} onNavigateToReservation={onNavigateToReservation} />}
-        {activeGame === 't2048' && <Neon2048 onGameOver={(score) => updateHighScore('t2048', score)} onNavigateToReservation={onNavigateToReservation} />}
+        {activeGame === 'brick' && <BrickBreaker onBack={() => setActiveGame(null)} onGameOver={(score) => updateHighScore('brick', score)} onNavigateToReservation={onNavigateToReservation} />}
+        {activeGame === 'runner' && <SpaceRunner onBack={() => setActiveGame(null)} onGameOver={(score) => updateHighScore('runner', score)} onNavigateToReservation={onNavigateToReservation} />}
+        {activeGame === 'match' && <CardMatch onBack={() => setActiveGame(null)} onGameWin={(sec) => updateHighScore('match', sec)} onNavigateToReservation={onNavigateToReservation} />}
+        {activeGame === 't2048' && <Neon2048 onBack={() => setActiveGame(null)} onGameOver={(score) => updateHighScore('t2048', score)} onNavigateToReservation={onNavigateToReservation} />}
       </div>
     </div>
   );
@@ -255,7 +254,7 @@ const scoreBadgeStyle = {
 // ==========================================
 // 1. NEON BRICK BREAKER GAME COMPONENT
 // ==========================================
-function BrickBreaker({ onGameOver, onNavigateToReservation }) {
+function BrickBreaker({ onBack, onGameOver, onNavigateToReservation }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [score, setScore] = useState(0);
@@ -442,7 +441,10 @@ function BrickBreaker({ onGameOver, onNavigateToReservation }) {
   return (
     <div ref={containerRef} style={gameContainerStyle}>
       <div style={gameHeaderStyle}>
-        <span>🧱 브릭 브레이커</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: '0.80rem', fontWeight: 800 }}>← 뒤로</button>
+          <span>🧱 브릭 브레이커</span>
+        </div>
         <span style={{ color: '#818cf8', fontWeight: 800 }}>SCORE: {score}</span>
       </div>
 
@@ -514,7 +516,7 @@ function BrickBreaker({ onGameOver, onNavigateToReservation }) {
 // ==========================================
 // 2. INFINITE RUNNER GAME COMPONENT
 // ==========================================
-function SpaceRunner({ onGameOver, onNavigateToReservation }) {
+function SpaceRunner({ onBack, onGameOver, onNavigateToReservation }) {
   const canvasRef = useRef(null);
   const [score, setScore] = useState(0);
   const [gameState, setGameState] = useState('ready');
@@ -704,7 +706,10 @@ function SpaceRunner({ onGameOver, onNavigateToReservation }) {
   return (
     <div style={gameContainerStyle}>
       <div style={gameHeaderStyle}>
-        <span>🚀 은하계 스페이스 러너</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: '0.80rem', fontWeight: 800 }}>← 뒤로</button>
+          <span>🚀 은하계 스페이스 러너</span>
+        </div>
         <span style={{ color: '#ec4899', fontWeight: 800 }}>SCORE: {score}</span>
       </div>
 
@@ -760,7 +765,7 @@ function SpaceRunner({ onGameOver, onNavigateToReservation }) {
 // ==========================================
 // 3. CARD MATCHING COMPONENT
 // ==========================================
-function CardMatch({ onGameWin, onNavigateToReservation }) {
+function CardMatch({ onBack, onGameOver, onNavigateToReservation }) {
   const appliances = [
     { name: '📺 비스포크 TV', emoji: '📺' },
     { name: '❄️ 비스포크 냉장고', emoji: '❄️' },
@@ -845,7 +850,10 @@ function CardMatch({ onGameWin, onNavigateToReservation }) {
   return (
     <div style={gameContainerStyle}>
       <div style={gameHeaderStyle}>
-        <span>🃏 가전 카드 매칭</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: '0.80rem', fontWeight: 800 }}>← 뒤로</button>
+          <span>🃏 가전 카드 매칭</span>
+        </div>
         <span style={{ color: '#34d399', fontWeight: 800 }}>⏳ {sec}초 | 🔄 {moves}회</span>
       </div>
 
@@ -959,7 +967,7 @@ function CardMatch({ onGameWin, onNavigateToReservation }) {
 // ==========================================
 // 4. NEON 2048 GAME COMPONENT
 // ==========================================
-function Neon2048({ onGameOver, onNavigateToReservation }) {
+function Neon2048({ onBack, onGameOver, onNavigateToReservation }) {
   const [board, setBoard] = useState(Array(16).fill(0));
   const [score, setScore] = useState(0);
   const [gameState, setGameState] = useState('ready'); // 'ready', 'playing', 'gameover'
@@ -1177,7 +1185,10 @@ function Neon2048({ onGameOver, onNavigateToReservation }) {
   return (
     <div style={gameContainerStyle}>
       <div style={gameHeaderStyle}>
-        <span>🧩 2048 네온 슬라이드</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button onClick={onBack} style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', color: '#cbd5e1', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', marginRight: '0.5rem', fontSize: '0.80rem', fontWeight: 800 }}>← 뒤로</button>
+          <span>🧩 2048 네온 슬라이드</span>
+        </div>
         <span style={{ color: '#fbbf24', fontWeight: 800 }}>SCORE: {score}</span>
       </div>
 
