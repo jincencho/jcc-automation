@@ -794,9 +794,13 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
         ctx.shadowBlur = 0;
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = '10px sans-serif';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3.5;
+        ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(activeInfo.emoji, cursorX.current, 53);
+        ctx.textBaseline = 'middle';
+        ctx.strokeText(activeInfo.emoji, cursorX.current, 50);
+        ctx.fillText(activeInfo.emoji, cursorX.current, 50);
       }
 
       // Draw All Circles
@@ -809,22 +813,32 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        // Label details inside circles (Bespoke appliance grade)
-        ctx.fillStyle = '#ffffff';
+        // Label details inside circles (Bespoke appliance grade) - Stroke + Fill for maximum legibility!
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
         // Dynamic text sizing based on circle radius
-        const emojiSize = Math.max(10, c.radius * 0.4);
+        const emojiSize = Math.max(12, c.radius * 0.45);
         ctx.font = `bold ${emojiSize}px sans-serif`;
-        ctx.fillText(c.emoji, c.x, c.y - 2);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3.5;
+        
+        // Offset emoji slightly upwards if there is text below
+        const emojiY = c.radius > 20 ? c.y - c.radius * 0.15 : c.y;
+        ctx.strokeText(c.emoji, c.x, emojiY);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(c.emoji, c.x, emojiY);
 
-        // Grade title labels for bigger circles
-        if (c.radius > 26) {
-          const fontSize = Math.max(8, c.radius * 0.18);
+        // Grade title labels for circles
+        if (c.radius > 20) {
+          const fontSize = Math.max(8, c.radius * 0.20);
           ctx.font = `bold ${fontSize}px sans-serif`;
-          ctx.fillStyle = 'rgba(255,255,255,0.9)';
-          ctx.fillText(c.label, c.x, c.y + c.radius * 0.4);
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 3;
+          const labelY = c.y + c.radius * 0.38;
+          ctx.strokeText(c.label, c.x, labelY);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(c.label, c.x, labelY);
         }
       });
 
