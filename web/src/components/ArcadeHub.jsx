@@ -53,13 +53,13 @@ const playSound = (type) => {
   }
 };
 
-// Neon Colors mapped to Samsung BESPOKE themes
+// Neon Colors mapped to Samsung BESPOKE themes (High Contrast Saturated Neon)
 const COLOR_PALETTE = {
-  pink: { hex: '#ec4899', name: '비스포크 핑크 (세탁기)' },
-  blue: { hex: '#3b82f6', name: '비스포크 블루 (냉장고)' },
-  green: { hex: '#10b981', name: '비스포크 그린 (식기세척기)' },
-  gold: { hex: '#f59e0b', name: '비스포크 골드 (인덕션)' },
-  purple: { hex: '#8b5cf6', name: '비스포크 퍼플 (에어드레서)' }
+  pink: { hex: '#ff1a8c', name: '비스포크 핑크 (세탁기)' },
+  blue: { hex: '#00b0ff', name: '비스포크 블루 (냉장고)' },
+  green: { hex: '#00e676', name: '비스포크 그린 (식기세척기)' },
+  gold: { hex: '#ffea00', name: '비스포크 골드 (인덕션)' },
+  purple: { hex: '#d500f9', name: '비스포크 퍼플 (에어드레서)' }
 };
 
 // Level configurations
