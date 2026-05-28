@@ -1601,3 +1601,59 @@ const playButtonStyle = (shadowColor) => ({
   cursor: 'pointer',
   boxShadow: `0 4px 15px ${shadowColor}33`
 });
+
+const cardStyle = (color) => ({
+  background: 'rgba(255, 255, 255, 0.03)',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
+  borderRadius: '16px',
+  padding: '1.5rem',
+  cursor: 'pointer',
+  textAlign: 'left',
+  position: 'relative',
+  overflow: 'hidden',
+  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '0.5rem',
+  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+  borderLeft: `4px solid ${color}`
+});
+
+const badgeStyle = (color) => ({
+  background: `${color}15`,
+  color: color,
+  padding: '0.25rem 0.6rem',
+  borderRadius: '6px',
+  fontSize: '0.7rem',
+  fontWeight: 800,
+  alignSelf: 'flex-start',
+  letterSpacing: '0.5px'
+});
+
+const cardTitleStyle = {
+  fontSize: '1.15rem',
+  fontWeight: 800,
+  margin: '0.25rem 0 0 0',
+  color: '#ffffff',
+  letterSpacing: '-0.5px'
+};
+
+const cardDescStyle = {
+  fontSize: '0.82rem',
+  color: '#94a3b8',
+  margin: 0,
+  lineHeight: '1.45',
+  wordBreak: 'keep-all'
+};
+
+const scoreBadgeStyle = {
+  fontSize: '0.75rem',
+  color: '#cbd5e1',
+  fontWeight: 600,
+  marginTop: '0.5rem',
+  background: 'rgba(255,255,255,0.05)',
+  padding: '0.3rem 0.6rem',
+  borderRadius: '8px',
+  alignSelf: 'flex-start'
+};
+

@@ -21,3 +21,5 @@ user_data_fb/
 scratch/
 error_*.png
 *.code-search
+
+.vercel
