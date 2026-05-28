@@ -74,11 +74,12 @@ const playSound = (type) => {
 // SHARED GENERAL STYLES & LOBBY SYSTEM
 // ==========================================
 export default function ArcadeHub({ onBack, onNavigateToReservation }) {
-  const [activeGame, setActiveGame] = useState(null); // 'watersort', 'merge', 'tetris'
+  const [activeGame, setActiveGame] = useState(null); // 'watersort', 'merge', 'tetris', 'snake'
   const [bestScores, setBestScores] = useState({
     watersort: localStorage.getItem('hs_watersort_level') || 1,
     merge: localStorage.getItem('hs_merge_score') || 0,
-    tetris: localStorage.getItem('hs_tetris_score') || 0
+    tetris: localStorage.getItem('hs_tetris_score') || 0,
+    snake: localStorage.getItem('hs_snake_score') || 0
   });
 
   const handleBackToLobby = () => {
@@ -86,7 +87,8 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
     setBestScores({
       watersort: localStorage.getItem('hs_watersort_level') || 1,
       merge: localStorage.getItem('hs_merge_score') || 0,
-      tetris: localStorage.getItem('hs_tetris_score') || 0
+      tetris: localStorage.getItem('hs_tetris_score') || 0,
+      snake: localStorage.getItem('hs_snake_score') || 0
     });
   };
 
@@ -191,6 +193,17 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
               <p style={cardDescStyle}>네온 가전 블록을 맞춰 빈틈없이 채우고 고득점에 도전하세요!</p>
               <div style={scoreBadgeStyle}>최고 점수: {bestScores.tetris}점</div>
             </div>
+
+            {/* Card 4: Neon AI Snake */}
+            <div 
+              onClick={() => { setActiveGame('snake'); playSound('select'); }}
+              style={cardStyle('#a855f7')}
+            >
+              <div style={badgeStyle('#a855f7')}>NEON ACCELERATION</div>
+              <h3 style={cardTitleStyle}>🐍 삼성 AI 스마트 그리드 스네이크</h3>
+              <p style={cardDescStyle}>빛나는 AI 가전 그리드를 연결해 나가며 뱀을 가장 길게 성장시켜 보세요!</p>
+              <div style={scoreBadgeStyle}>최고 점수: {bestScores.snake}점</div>
+            </div>
           </div>
         </div>
       ) : (
@@ -206,6 +219,9 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
           )}
           {activeGame === 'tetris' && (
             <BespokeTetrisGame onBack={handleBackToLobby} onNavigateToReservation={onNavigateToReservation} />
+          )}
+          {activeGame === 'snake' && (
+            <BespokeSnakeGame onBack={handleBackToLobby} onNavigateToReservation={onNavigateToReservation} />
           )}
         </div>
       )}
@@ -1407,6 +1423,331 @@ const controllerButtonStyle = (color) => ({
   userSelect: 'none',
   WebkitUserSelect: 'none'
 });
+
+// ============================================================================
+// GAME 4: SAMSUNG AI SMART GRID SNAKE COMPONENT
+// ============================================================================
+function BespokeSnakeGame({ onBack, onNavigateToReservation }) {
+  const canvasRef = useRef(null);
+  const [score, setScore] = useState(0);
+  const [highScore, setHighScore] = useState(
+    parseInt(localStorage.getItem('hs_snake_score') || '0', 10)
+  );
+  const [gameState, setGameState] = useState('ready'); // 'ready', 'playing', 'gameover'
+  
+  // Grid settings
+  const CELL_COUNT = 16; // 16x16 grid
+
+  // Game state refs to bypass react dynamic closure delays in requestAnimationFrame loops
+  const snake = useRef([{ x: 8, y: 8 }]);
+  const direction = useRef({ x: 0, y: -1 }); // initial direction: UP
+  const nextDirection = useRef({ x: 0, y: -1 });
+  const food = useRef({ x: 4, y: 4, grade: 0 });
+  const gameSpeed = useRef(150); // ms
+  const lastUpdateTime = useRef(0);
+
+  const initGame = () => {
+    snake.current = [
+      { x: 8, y: 8 },
+      { x: 8, y: 9 },
+      { x: 8, y: 10 }
+    ];
+    direction.current = { x: 0, y: -1 };
+    nextDirection.current = { x: 0, y: -1 };
+    spawnFood();
+    setScore(0);
+    setGameState('playing');
+    gameSpeed.current = 150;
+    lastUpdateTime.current = 0;
+    playSound('reset');
+  };
+
+  const spawnFood = () => {
+    let newX, newY;
+    let overlap = true;
+    while (overlap) {
+      newX = Math.floor(Math.random() * CELL_COUNT);
+      newY = Math.floor(Math.random() * CELL_COUNT);
+      overlap = snake.current.some(part => part.x === newX && part.y === newY);
+    }
+    const randomGrade = Math.floor(Math.random() * MERGE_GRADES.length);
+    food.current = { x: newX, y: newY, grade: randomGrade };
+  };
+
+  // Keyboard Event Handlers for PC
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (gameState !== 'playing') return;
+      const curr = direction.current;
+      
+      if (e.key === 'ArrowUp' && curr.y === 0) {
+        nextDirection.current = { x: 0, y: -1 };
+        e.preventDefault();
+      } else if (e.key === 'ArrowDown' && curr.y === 0) {
+        nextDirection.current = { x: 0, y: 1 };
+        e.preventDefault();
+      } else if (e.key === 'ArrowLeft' && curr.x === 0) {
+        nextDirection.current = { x: -1, y: 0 };
+        e.preventDefault();
+      } else if (e.key === 'ArrowRight' && curr.x === 0) {
+        nextDirection.current = { x: 1, y: 0 };
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [gameState]);
+
+  // Touch handlers for mobile buttons
+  const changeDirection = (x, y) => {
+    if (gameState !== 'playing') return;
+    const curr = direction.current;
+    if (x !== 0 && curr.x === 0) {
+      nextDirection.current = { x, y };
+      playSound('move');
+    }
+    if (y !== 0 && curr.y === 0) {
+      nextDirection.current = { x, y };
+      playSound('move');
+    }
+  };
+
+  // Main game loop (tick)
+  useEffect(() => {
+    if (gameState !== 'playing') return;
+
+    let animId;
+    const tick = (timestamp) => {
+      if (!lastUpdateTime.current) lastUpdateTime.current = timestamp;
+      const elapsed = timestamp - lastUpdateTime.current;
+
+      if (elapsed > gameSpeed.current) {
+        lastUpdateTime.current = timestamp;
+
+        // Apply next buffered direction
+        direction.current = nextDirection.current;
+
+        const head = snake.current[0];
+        const newHead = {
+          x: head.x + direction.current.x,
+          y: head.y + direction.current.y
+        };
+
+        // Collision Check: Walls
+        if (newHead.x < 0 || newHead.x >= CELL_COUNT || newHead.y < 0 || newHead.y >= CELL_COUNT) {
+          handleGameOver();
+          return;
+        }
+
+        // Collision Check: Self
+        if (snake.current.some(part => part.x === newHead.x && part.y === newHead.y)) {
+          handleGameOver();
+          return;
+        }
+
+        // Move Snake
+        const newSnake = [newHead, ...snake.current];
+
+        // Eat Check
+        if (newHead.x === food.current.x && newHead.y === food.current.y) {
+          playSound('merge');
+          setScore(prev => {
+            const next = prev + 10;
+            if (next > highScore) {
+              setHighScore(next);
+              localStorage.setItem('hs_snake_score', next.toString());
+            }
+            return next;
+          });
+          // Speed up slightly
+          gameSpeed.current = Math.max(80, 150 - Math.floor(newSnake.length * 1.5));
+          spawnFood();
+        } else {
+          newSnake.pop();
+        }
+
+        snake.current = newSnake;
+      }
+
+      // Draw Grid & Entities
+      drawGame();
+      animId = requestAnimationFrame(tick);
+    };
+
+    const drawGame = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const cellSize = canvas.width / CELL_COUNT;
+
+      // Clear Canvas
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw grid wires for AI look
+      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < CELL_COUNT; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * cellSize, 0);
+        ctx.lineTo(i * cellSize, canvas.height);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * cellSize);
+        ctx.lineTo(canvas.width, i * cellSize);
+        ctx.stroke();
+      }
+
+      // Draw glowing food (Samsung AI Appliance target)
+      const foodItem = MERGE_GRADES[food.current.grade];
+      const fx = food.current.x * cellSize + cellSize / 2;
+      const fy = food.current.y * cellSize + cellSize / 2;
+
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = foodItem.color;
+      ctx.fillStyle = foodItem.color;
+      ctx.beginPath();
+      ctx.arc(fx, fy, cellSize / 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Draw food appliance initial text overlay
+      ctx.fillStyle = '#000000';
+      ctx.font = `bold ${cellSize * 0.5}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(foodItem.emoji, fx, fy);
+
+      // Draw glowing neon snake grid stream
+      snake.current.forEach((part, index) => {
+        const px = part.x * cellSize;
+        const py = part.y * cellSize;
+        const isHead = index === 0;
+
+        // Body segment color maps to corresponding appliance index
+        const bodyGrade = index % MERGE_GRADES.length;
+        const segmentColor = isHead ? '#a855f7' : MERGE_GRADES[bodyGrade].color;
+
+        ctx.shadowBlur = isHead ? 15 : 8;
+        ctx.shadowColor = segmentColor;
+        ctx.fillStyle = segmentColor;
+        
+        // Draw head or rounded body block
+        ctx.beginPath();
+        if (isHead) {
+          ctx.arc(px + cellSize/2, py + cellSize/2, cellSize/2.2, 0, Math.PI * 2);
+        } else {
+          ctx.roundRect(px + 1.5, py + 1.5, cellSize - 3, cellSize - 3, 5);
+        }
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Draw connecting white core outline
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 3, py + 3, cellSize - 6, cellSize - 6);
+      });
+    };
+
+    const handleGameOver = () => {
+      playSound('reset');
+      setGameState('gameover');
+    };
+
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, [gameState]);
+
+  return (
+    <div style={gameLayoutWrapper}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: '0.75rem', width: '100%' }}>
+        <button onClick={onBack} style={miniBackButtonStyle}>← 게임 선택으로</button>
+        <h2 style={{ ...gameTitleStyle, color: '#a855f7' }}>🐍 AI 가전 스마트 그리드 스네이크</h2>
+      </div>
+
+      {/* Info Stats Board */}
+      <div style={statsBoardStyle}>
+        <span style={{ color: '#a855f7' }}>SCORE: {score}</span>
+        <span style={{ color: '#cbd5e1' }}>길이: {snake.current.length}m</span>
+        <span style={{ color: '#94a3b8' }}>최고: {highScore}점</span>
+      </div>
+
+      {/* Grid Board Canvas */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        aspectRatio: '1/1',
+        background: '#0f0f15',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        border: '2px solid rgba(255,255,255,0.08)',
+        marginBottom: '1rem',
+        boxSizing: 'border-box'
+      }}>
+        <canvas 
+          ref={canvasRef} 
+          width={320} 
+          height={320} 
+          style={{ width: '100%', height: '100%', display: 'block' }}
+        />
+
+        {/* Game Over / Start Overlays */}
+        {gameState !== 'playing' && (
+          <div style={canvasOverlayStyle}>
+            {gameState === 'ready' && (
+              <div style={{ textAlign: 'center', padding: '1rem', maxWidth: '240px' }}>
+                <h3 style={{ fontSize: '1.1rem', color: '#a855f7', margin: '0 0 0.5rem 0' }}>AI 가전 스네이크</h3>
+                <div style={{ ...mergeInstructionsBoxStyle, fontSize: '0.68rem', padding: '0.5rem', marginBottom: '1rem' }}>
+                  • 📱 <b>모바일</b>: 하단 방향 D-Pad 컨트롤러를 탭해 조작합니다.<br/>
+                  • 💻 <b>PC</b>: 방향키(↑ ↓ ← →)를 사용해 블록을 조작합니다.
+                </div>
+                <button onClick={initGame} style={playButtonStyle('#a855f7')}>그리드 연결 시작</button>
+              </div>
+            )}
+
+            {gameState === 'gameover' && (
+              <div style={{ textAlign: 'center', padding: '0.75rem', width: '100%' }}>
+                <h2 style={{ color: '#f43f5e', margin: '0 0 0.5rem 0', fontSize: '1.5rem', fontWeight: 800 }}>GAME OVER</h2>
+                <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#cbd5e1' }}>최종 점수: {score}점</p>
+                
+                <div style={{ ...customCtaBoxStyle, padding: '0.65rem', margin: '0.3rem 0' }}>
+                  <p style={{ margin: 0, fontSize: '0.76rem', color: '#cbd5e1', wordBreak: 'keep-all', lineHeight: '1.4' }}>스마트 가전들을 완벽한 홈 그리드로 연결하듯! 갤러리아진주 조준석 매니저가 백화점 혜택과 비대면 패키지를 가장 합리적인 견적으로 설계해 드립니다! 🐍</p>
+                  <button onClick={onNavigateToReservation} style={{ ...ctaButtonActionStyle, width: '100%', padding: '0.55rem', fontSize: '0.8rem', marginTop: '0.5rem' }}>무료 가전 견적상담 받기 📅</button>
+                </div>
+
+                <button onClick={initGame} style={{ ...playButtonStyle('#a855f7'), marginTop: '0.75rem', padding: '0.55rem 1.4rem' }}>다시 하기</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* D-Pad controls for mobile viewports */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '0.4rem',
+        width: '100%',
+        maxWidth: '180px',
+        boxSizing: 'border-box'
+      }}>
+        {/* UP */}
+        <button onClick={() => changeDirection(0, -1)} style={{ ...controllerButtonStyle('#a855f7'), width: '60px', padding: '0.55rem 0' }}>▲</button>
+        {/* LEFT / RIGHT */}
+        <div style={{ display: 'flex', gap: '0.4rem', width: '100%', justifyContent: 'center' }}>
+          <button onClick={() => changeDirection(-1, 0)} style={{ ...controllerButtonStyle('#a855f7'), width: '60px', padding: '0.55rem 0' }}>◀</button>
+          <div style={{ width: '60px' }} />
+          <button onClick={() => changeDirection(1, 0)} style={{ ...controllerButtonStyle('#a855f7'), width: '60px', padding: '0.55rem 0' }}>▶</button>
+        </div>
+        {/* DOWN */}
+        <button onClick={() => changeDirection(0, 1)} style={{ ...controllerButtonStyle('#a855f7'), width: '60px', padding: '0.55rem 0' }}>▼</button>
+      </div>
+    </div>
+  );
+}
 
 // ==========================================
 // SHARED GAME STYLES CONSTANTS
