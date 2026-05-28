@@ -590,7 +590,8 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
       color: info.color,
       label: info.label,
       emoji: info.emoji,
-      merged: false
+      merged: false,
+      hasDropped: false
     };
 
     circlesRef.current.push(newCircle);
@@ -624,6 +625,10 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
         c.vx *= friction;
         c.x += c.vx;
         c.y += c.vy;
+
+        if (c.y > 155) {
+          c.hasDropped = true;
+        }
 
         // Collision: Bottom Wall (at Y=510)
         if (c.y + c.radius > 510) {
@@ -683,7 +688,8 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
                 color: info.color,
                 label: info.label,
                 emoji: info.emoji,
-                merged: false
+                merged: false,
+                hasDropped: true
               };
 
               // Defer insertion to next frame logic
@@ -729,7 +735,7 @@ function BespokeMergeGame({ onBack, onNavigateToReservation }) {
       // Game Over Check: If the top edge of any settled circle is above the cutline (Y=135)
       let hasOverflow = false;
       circlesRef.current.forEach(c => {
-        if (c.y - c.radius < 135 && Math.abs(c.vy) < 0.3) {
+        if (c.hasDropped && c.y - c.radius < 135) {
           hasOverflow = true;
         }
       });
