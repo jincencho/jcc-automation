@@ -343,12 +343,12 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
               style={{
                 width: 'clamp(50px, 12vw, 65px)',
                 height: 'clamp(180px, 40vw, 220px)',
-                border: isSelected ? '2.5px solid #10b981' : '1.5px solid rgba(255, 255, 255, 0.2)',
+                border: isSelected ? '3.5px solid #00e676' : '2px solid #8e9cae', // Highly visible solid metallic border
                 borderRadius: '0 0 35px 35px',
-                background: 'rgba(255, 255, 255, 0.03)',
+                background: 'rgba(30, 30, 45, 0.85)', // Denser high-contrast slate backing
                 boxShadow: isSelected 
-                  ? '0 0 20px rgba(16, 185, 129, 0.4), inset 0 0 10px rgba(255,255,255,0.05)' 
-                  : 'inset 0 0 12px rgba(255, 255, 255, 0.05)',
+                  ? '0 0 25px rgba(0, 230, 118, 0.5), inset 0 0 10px rgba(255,255,255,0.1)' 
+                  : 'inset 0 0 15px rgba(0, 0, 0, 0.7)',
                 display: 'flex',
                 flexDirection: 'column-reverse',
                 justifyContent: 'flex-start',
