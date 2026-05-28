@@ -299,7 +299,7 @@ const WATER_SORT_LEVELS = [
       ['purple', 'gold', 'pink', 'blue'],
       ['green', 'purple', 'gold', 'pink'],
       ['blue', 'green', 'purple', 'gold'],
-      ['purple', 'blue', 'green', 'purple'],
+      ['purple', 'blue', 'green', 'pink'],
       [],
       []
     ]
