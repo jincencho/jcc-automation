@@ -54,8 +54,7 @@ function App() {
             }} 
           />
         </div>
-        <div className="nav-links" style={{ display: 'flex', gap: '2rem', fontWeight: 500, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-          <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('home'); }} style={{ color: currentView === 'home' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>홈</a>
+        <div className="nav-links" style={{ display: 'flex', gap: 'clamp(0.5rem, 2.5vw, 1.5rem)', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'clamp(0.72rem, 2.4vw, 0.95rem)', whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('about'); }} style={{ color: currentView === 'about' || currentView === 'why-samsung' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>더 알아보기</a>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('arcade'); }} style={{ color: currentView === 'arcade' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>👾 게임존</a>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('reservation'); }} style={{ color: currentView === 'reservation' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>상담 예약</a>
