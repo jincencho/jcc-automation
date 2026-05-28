@@ -1285,8 +1285,8 @@ function BespokeTetrisGame({ onBack, onNavigateToReservation }) {
         {/* Tetris Canvas Container */}
         <div style={{
           position: 'relative',
-          width: '240px',
-          height: '480px',
+          width: 'clamp(170px, 50vw, 240px)',
+          aspectRatio: '1/2',
           background: '#0f0f15',
           borderRadius: '12px',
           overflow: 'hidden',
@@ -1296,7 +1296,7 @@ function BespokeTetrisGame({ onBack, onNavigateToReservation }) {
             ref={canvasRef} 
             width={240} 
             height={480} 
-            style={{ display: 'block' }}
+            style={{ display: 'block', width: '100%', height: '100%' }}
           />
 
           {/* Overlays */}
@@ -1416,8 +1416,8 @@ const gameLayoutWrapper = {
   maxWidth: '440px',
   background: 'rgba(20, 20, 30, 0.65)',
   border: '1px solid rgba(255, 255, 255, 0.08)',
-  borderRadius: '24px',
-  padding: '1.25rem',
+  borderRadius: 'clamp(12px, 4vw, 24px)',
+  padding: 'clamp(0.6rem, 3.5vw, 1.25rem)',
   boxSizing: 'border-box',
   backdropFilter: 'blur(25px)',
   boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
