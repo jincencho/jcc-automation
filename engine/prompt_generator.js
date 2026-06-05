@@ -116,7 +116,7 @@ ${blogTargetPrompt}
 **📌 이미지 위에 들어갈 텍스트:** "${slide.overlayText}"
 **프롬프트:**
 \`\`\`
-Create a premium social media image (Instagram post, 4:5 aspect ratio).
+Create a premium social media image (Instagram post, 1:1 aspect ratio).
 The image MUST include the following EXACT KOREAN TEXT as a stylish, bold overlay: '${slide.overlayText}'.
 CRITICAL INSTRUCTION: You must verify the Korean spelling multiple times before rendering to ensure there are absolutely NO typos, missing letters, or errors in the text.
 The text should be large, clearly readable, and use a modern sans-serif font.
@@ -127,7 +127,7 @@ The overall mood should be premium, clean, and eye-catching for social media.
 `;
     });
 
-    return `# 🎨 JCC 진센조 전용: ChatGPT (DALL-E 3) 이미지 생성 프롬프트 팩
+    return `# 🎨 JCC JINJU CENTUM CHOJUNSEOK Image Generation Prompt Pack
 
 ⚠️ **중요 알림:** 이 파일에는 여러 개의 프롬프트가 포함되어 있습니다. DALL-E 3의 품질을 높이기 위해, **아래 프롬프트들을 한 번에 하나씩 복사하여 ChatGPT에 입력**해 주세요.
 
@@ -135,7 +135,7 @@ The overall mood should be premium, clean, and eye-catching for social media.
 
 ---
 ${blogSection}
-## 📱 ${blogSection ? '2' : '1'}. 인스타그램용 프롬프트 (4:5, 후킹 텍스트 + 이미지 통합)
+## 📱 ${blogSection ? '2' : '1'}. 인스타그램용 프롬프트 (1:1, 후킹 텍스트 + 이미지 통합)
 ⚠️ **중요:** 아래 프롬프트는 이미지 안에 한국어 후킹 메시지가 직접 포함됩니다. 각 슬라이드별로 복사해서 사용하세요.
 
 ${instaSection}---
