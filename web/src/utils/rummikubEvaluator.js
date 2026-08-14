@@ -97,7 +97,7 @@ export const validateBoard = (board) => {
  * but for simpler validation we'll use 104 standard tiles: 4 colors * 13 numbers * 2 sets).
  */
 export const generateTilePool = () => {
-  const colors = ['red', 'blue', 'black', 'orange'];
+  const colors = ['red', 'blue', 'black', 'green'];
   const pool = [];
   
   colors.forEach(color => {

@@ -467,10 +467,10 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
 
   // Color Mapping Helper
   const getTileColor = (color) => {
-    if (color === 'red') return '#f87171';
-    if (color === 'blue') return '#60a5fa';
-    if (color === 'orange') return '#fb923c';
-    return '#e2e8f0'; // black/dark mode text white
+    if (color === 'red') return '#ef4444'; // Red
+    if (color === 'blue') return '#3b82f6'; // Blue
+    if (color === 'green') return '#10b981'; // Green
+    return '#111827'; // Black
   };
 
   // Render Lobby screen (Room create/join)
@@ -673,10 +673,10 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
                   style={{
                     width: 'calc((100% - 42px) / 15)',
                     aspectRatio: '0.8', // standard card ratio
-                    background: cell ? '#1e293b' : 'rgba(255,255,255,0.02)',
+                    background: cell ? '#f8fafc' : 'rgba(255,255,255,0.02)',
                     border: isSelected 
                       ? '2px solid var(--accent-gold)' 
-                      : cell ? '1px solid rgba(255,255,255,0.2)' : '1px dashed rgba(255,255,255,0.05)',
+                      : cell ? '1px solid #cbd5e1' : '1px dashed rgba(255,255,255,0.05)',
                     borderRadius: '4px',
                     display: 'flex',
                     justifyContent: 'center',
@@ -685,7 +685,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
                     userSelect: 'none',
                     boxShadow: isSelected 
                       ? '0 0 10px rgba(212, 175, 55, 0.8)' 
-                      : cell ? '0 2px 4px rgba(0,0,0,0.3)' : 'none'
+                      : cell ? '0 2px 4px rgba(0,0,0,0.15), inset 0 -3px 0 rgba(0,0,0,0.08)' : 'none'
                   }}
                   draggable={isMyTurn && cell !== null}
                   onDragStart={() => cell && handleDragStart(cell, 'board', { r, c })}
