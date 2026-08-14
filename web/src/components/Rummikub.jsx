@@ -458,8 +458,8 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
                 type="text" 
                 placeholder="예: X7A9D"
                 value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value)}
-                style={{ ...inputStyle, textTransform: 'uppercase', flex: 1 }}
+                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                style={{ ...inputStyle, flex: 1 }}
               />
               <button onClick={handleJoinRoom} className="btn-secondary" style={{ padding: '0 1.25rem' }}>참여</button>
             </div>
