@@ -433,10 +433,12 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
           친구들과 함께 즐기는 클래식 두뇌 게임!
         </p>
 
-        <div className="glass-panel" style={{ maxWidth: '400px', width: '100%', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div className="glass-panel" style={{ maxWidth: '400px', width: '100%', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', position: 'relative', zIndex: 50 }}>
           <div>
-            <label style={labelStyle}>유저 닉네임</label>
+            <label htmlFor="user-nickname" style={labelStyle}>유저 닉네임</label>
             <input 
+              id="user-nickname"
+              name="nickname"
               type="text" 
               placeholder="예: 홍길동"
               value={nickname}
@@ -452,11 +454,15 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '0.5rem 0' }}></div>
 
           <div>
-            <label style={labelStyle}>방 코드 입력 (5글자)</label>
+            <label htmlFor="room-code" style={labelStyle}>방 코드 입력 (5글자)</label>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <input 
+                id="room-code"
+                name="roomCode"
                 type="text" 
                 placeholder="예: X7A9D"
+                autoCapitalize="characters"
+                autoComplete="off"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 style={{ ...inputStyle, flex: 1 }}
