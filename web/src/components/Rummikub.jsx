@@ -400,28 +400,118 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
       });
     });
 
-    // Check if player won (rack is empty)
-    const won = localRack.length === 0;
+    const officialBoard = roomState.game_state.board || [];
+    const me = roomState.players.find(p => p.id === playerId);
+    const hasRegisteredMeld = me.initial_meld_done;
 
+    // 1. Initial Meld Validation (등록 규칙: 합 30 이상)
+    if (!hasRegisteredMeld) {
+      // Find tiles that were newly placed on the board this turn
+      // A newly placed tile is defined as a tile present in tilesList but not in officialBoard
+      const newlyPlacedTiles = tilesList.filter(
+        tile => !officialBoard.some(offTile => offTile.id === tile.id)
+      );
+
+      if (newlyPlacedTiles.length === 0) {
+        setValidationError('첫 턴(등록)에는 자신의 받침대에서 타일을 내놓아야 합니다.');
+        return;
+      }
+
+      // Group newly placed tiles into board sets
+      const newSets = valResult.sets.filter(set =>
+        set.some(tile => newlyPlacedTiles.some(nt => nt.id === tile.id))
+      );
+
+      // Verify that every set containing newly placed tiles is comprised ENTIRELY of newly placed tiles.
+      // (Under Rummikub rules, you cannot manipulate existing sets on the board during your initial meld).
+      for (const set of newSets) {
+        const hasExistingTile = set.some(tile => officialBoard.some(offTile => offTile.id === tile.id));
+        if (hasExistingTile) {
+          setValidationError('등록(첫 등록 합 30 이상)을 하기 전에는 이미 보드판에 있는 타일을 조작하거나 조합할 수 없습니다.');
+          return;
+        }
+      }
+
+      // Sum values of new sets
+      const meldSum = newSets.reduce((sum, set) => {
+        return sum + set.reduce((setSum, tile) => setSum + tile.number, 0);
+      }, 0);
+
+      if (meldSum < 30) {
+        setValidationError(`첫 등록은 총 합이 30 이상이어야 합니다. (현재 놓은 타일의 총 합: ${meldSum}점)`);
+        return;
+      }
+    }
+
+    // Check if player finished this turn
+    const hasFinishedNow = localRack.length === 0;
+    
+    // Update players list with new rack & meld status
     const updatedPlayers = roomState.players.map(p => {
       if (p.id === playerId) {
-        return { ...p, rack: localRack };
+        return { 
+          ...p, 
+          rack: localRack,
+          initial_meld_done: true, // Registered successfully!
+          finished: hasFinishedNow
+        };
       }
       return p;
     });
 
-    const nextTurnIdx = won 
-      ? roomState.game_state.currentTurnIdx 
-      : (roomState.game_state.currentTurnIdx + 1) % roomState.players.length;
+    // Handle Ranking & Scoreboard
+    const currentRanks = roomState.game_state.ranks || [];
+    const isAlreadyRanked = currentRanks.some(r => r.id === playerId);
+    let nextRanks = [...currentRanks];
+
+    if (hasFinishedNow && !isAlreadyRanked) {
+      nextRanks.push({
+        id: playerId,
+        nickname: nickname,
+        rank: currentRanks.length + 1
+      });
+    }
+
+    // Find players who are still active (not finished)
+    const activePlayers = updatedPlayers.filter(p => !p.finished);
+
+    // End game condition: Only 1 player left active, or everyone finished
+    const gameEnded = activePlayers.length <= 1;
+
+    // If game ended, add the remaining player(s) to ranks
+    if (gameEnded) {
+      // Sort remaining active players by number of tiles left in their rack (fewer tiles = better rank)
+      const sortedRemaining = [...activePlayers].sort((a, b) => (a.rack || []).length - (b.rack || []).length);
+      sortedRemaining.forEach(p => {
+        const alreadyIn = nextRanks.some(r => r.id === p.id);
+        if (!alreadyIn) {
+          nextRanks.push({
+            id: p.id,
+            nickname: p.nickname,
+            rank: nextRanks.length + 1,
+            tilesLeft: (p.rack || []).length
+          });
+        }
+      });
+    }
+
+    // Progress Turn: skip players who have already finished
+    let nextTurnIdx = roomState.game_state.currentTurnIdx;
+    if (!gameEnded) {
+      do {
+        nextTurnIdx = (nextTurnIdx + 1) % updatedPlayers.length;
+      } while (updatedPlayers[nextTurnIdx].finished);
+    }
 
     const updateData = {
       players: updatedPlayers,
-      status: won ? 'finished' : 'playing',
+      status: gameEnded ? 'finished' : 'playing',
       game_state: {
         ...roomState.game_state,
         board: tilesList,
         currentTurnIdx: nextTurnIdx,
-        winner: won ? nickname : null
+        ranks: nextRanks,
+        winner: nextRanks[0]?.nickname || nickname
       }
     };
 
@@ -594,14 +684,38 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
 
   // Render Finished/Winner screen
   if (roomState && roomState.status === 'finished') {
+    const ranks = roomState.game_state.ranks || [];
     return (
       <div style={wrapStyle}>
-        <div className="glass-panel" style={{ maxWidth: '400px', width: '100%', padding: '3rem 2rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>👑</div>
-          <h2 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--accent-gold-light)', marginBottom: '0.5rem' }}>우승자 탄생!</h2>
-          <p style={{ fontSize: '1.25rem', fontWeight: 700, color: 'white', marginBottom: '2rem' }}>{roomState.game_state.winner}님이 먼저 모든 타일을 소모해 승리하셨습니다!</p>
+        <div className="glass-panel" style={{ maxWidth: '450px', width: '100%', padding: '2.5rem 2rem', textAlign: 'center' }}>
+          <div style={{ fontSize: '3.5rem', marginBottom: '0.75rem' }}>🏆</div>
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--accent-gold-light)', marginBottom: '0.25rem' }}>경기 종료!</h2>
+          <p style={{ fontSize: '1.1rem', color: '#cbd5e1', marginBottom: '1.5rem' }}>모든 순위가 결정되었습니다.</p>
 
-          <div style={{ background: 'rgba(197, 160, 89, 0.1)', border: '1px solid var(--accent-gold)', padding: '1rem', borderRadius: '12px', marginBottom: '2rem', fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+          {/* Ranks Leaderboard */}
+          <div style={{
+            background: 'rgba(0,0,0,0.3)',
+            borderRadius: '12px',
+            padding: '1rem',
+            marginBottom: '1.5rem',
+            textAlign: 'left'
+          }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.4rem' }}>최종 경기 순위</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {ranks.map((r, i) => (
+                <div key={r.id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', background: i === 0 ? 'rgba(212, 175, 55, 0.15)' : 'rgba(255,255,255,0.02)', borderRadius: '6px', border: i === 0 ? '1px solid var(--accent-gold)' : '1px solid transparent' }}>
+                  <span style={{ fontWeight: 700, color: i === 0 ? 'var(--accent-gold-light)' : 'white' }}>
+                    {r.rank}등: {r.nickname}
+                  </span>
+                  <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                    {r.tilesLeft !== undefined ? `남은 타일: ${r.tilesLeft}개` : '탈출 완료 🎉'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ background: 'rgba(197, 160, 89, 0.1)', border: '1px solid var(--accent-gold)', padding: '1rem', borderRadius: '12px', marginBottom: '2rem', fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5, textAlign: 'left' }}>
             <strong>💡 마스터의 추천 견적 혜택 받기</strong><br />
             "루미큐브를 통해 머리를 가볍게 푸셨다면, 갤러리아진주 조준석 매니저의 맞춤 가전 설계를 받아보세요. 1:1 맞춤 견적 졸업 혜택을 매칭해 드립니다!"
           </div>

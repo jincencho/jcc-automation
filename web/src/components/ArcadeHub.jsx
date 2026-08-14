@@ -164,7 +164,18 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
             margin: '0 auto',
             boxSizing: 'border-box'
           }}>
-            {/* Card 1: Neon Water Sort */}
+            {/* Card 1: Multiplayer Rummikub (PLACED AT TOP) */}
+            <div 
+              onClick={() => { setActiveGame('rummikub'); playSound('select'); }}
+              style={cardStyle('#d4af37')}
+            >
+              <div style={badgeStyle('#d4af37')}>MULTIPLAYER BOARD GAME</div>
+              <h3 style={cardTitleStyle}>🀄 JCC 실시간 루미큐브</h3>
+              <p style={cardDescStyle}>2~4인용 실시간 온라인 루미큐브! 보드를 완성하고 친구들과 두뇌 대결을 즐겨보세요.</p>
+              <div style={scoreBadgeStyle}>온라인 멀티플레이 가능</div>
+            </div>
+
+            {/* Card 2: Neon Water Sort */}
             <div 
               onClick={() => { setActiveGame('watersort'); playSound('select'); }}
               style={cardStyle('#10b981')}
@@ -175,7 +186,7 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
               <div style={scoreBadgeStyle}>최고 등급: 레벨 {bestScores.watersort}</div>
             </div>
 
-            {/* Card 2: Bespoke Merge Shooting (Suika) */}
+            {/* Card 3: Bespoke Merge Shooting (Suika) */}
             <div 
               onClick={() => { setActiveGame('merge'); playSound('select'); }}
               style={cardStyle('#ec4899')}
@@ -186,7 +197,7 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
               <div style={scoreBadgeStyle}>최고 점수: {bestScores.merge}점</div>
             </div>
 
-            {/* Card 3: Neon AI Tetris */}
+            {/* Card 4: Neon AI Tetris */}
             <div 
               onClick={() => { setActiveGame('tetris'); playSound('select'); }}
               style={cardStyle('#00b0ff')}
@@ -197,7 +208,7 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
               <div style={scoreBadgeStyle}>최고 점수: {bestScores.tetris}점</div>
             </div>
 
-            {/* Card 4: Neon AI Snake */}
+            {/* Card 5: Neon AI Snake */}
             <div 
               onClick={() => { setActiveGame('snake'); playSound('select'); }}
               style={cardStyle('#a855f7')}
@@ -206,17 +217,6 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
               <h3 style={cardTitleStyle}>🐍 삼성 AI 스마트 그리드 스네이크</h3>
               <p style={cardDescStyle}>빛나는 AI 가전 그리드를 연결해 나가며 뱀을 가장 길게 성장시켜 보세요!</p>
               <div style={scoreBadgeStyle}>최고 점수: {bestScores.snake}점</div>
-            </div>
-
-            {/* Card 5: Multiplayer Rummikub */}
-            <div 
-              onClick={() => { setActiveGame('rummikub'); playSound('select'); }}
-              style={cardStyle('#d4af37')}
-            >
-              <div style={badgeStyle('#d4af37')}>MULTIPLAYER BOARD GAME</div>
-              <h3 style={cardTitleStyle}>🀄 JCC 실시간 루미큐브</h3>
-              <p style={cardDescStyle}>2~4인용 실시간 온라인 루미큐브! 보드를 완성하고 친구들과 두뇌 대결을 즐겨보세요.</p>
-              <div style={scoreBadgeStyle}>온라인 멀티플레이 가능</div>
             </div>
           </div>
         </div>
