@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Rummikub from './Rummikub';
+
 
 // Web Audio API Retro Sound Synthesizer with Bubble, Merge & Tetris Tones
 const playSound = (type) => {
@@ -74,7 +76,8 @@ const playSound = (type) => {
 // SHARED GENERAL STYLES & LOBBY SYSTEM
 // ==========================================
 export default function ArcadeHub({ onBack, onNavigateToReservation }) {
-  const [activeGame, setActiveGame] = useState(null); // 'watersort', 'merge', 'tetris', 'snake'
+  const [activeGame, setActiveGame] = useState(null); // 'watersort', 'merge', 'tetris', 'snake', 'rummikub'
+
   const [bestScores, setBestScores] = useState({
     watersort: localStorage.getItem('hs_watersort_level') || 1,
     merge: localStorage.getItem('hs_merge_score') || 0,
@@ -204,6 +207,17 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
               <p style={cardDescStyle}>빛나는 AI 가전 그리드를 연결해 나가며 뱀을 가장 길게 성장시켜 보세요!</p>
               <div style={scoreBadgeStyle}>최고 점수: {bestScores.snake}점</div>
             </div>
+
+            {/* Card 5: Multiplayer Rummikub */}
+            <div 
+              onClick={() => { setActiveGame('rummikub'); playSound('select'); }}
+              style={cardStyle('#d4af37')}
+            >
+              <div style={badgeStyle('#d4af37')}>MULTIPLAYER BOARD GAME</div>
+              <h3 style={cardTitleStyle}>🀄 JCC 실시간 루미큐브</h3>
+              <p style={cardDescStyle}>2~4인용 실시간 온라인 루미큐브! 보드를 완성하고 친구들과 두뇌 대결을 즐겨보세요.</p>
+              <div style={scoreBadgeStyle}>온라인 멀티플레이 가능</div>
+            </div>
           </div>
         </div>
       ) : (
@@ -222,6 +236,9 @@ export default function ArcadeHub({ onBack, onNavigateToReservation }) {
           )}
           {activeGame === 'snake' && (
             <BespokeSnakeGame onBack={handleBackToLobby} onNavigateToReservation={onNavigateToReservation} />
+          )}
+          {activeGame === 'rummikub' && (
+            <Rummikub onBack={handleBackToLobby} onNavigateToReservation={onNavigateToReservation} />
           )}
         </div>
       )}
