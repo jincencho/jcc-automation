@@ -216,7 +216,7 @@ export default function Reservation({ onBack }) {
     }
 
     // 2. 네이버 예약 페이지 열기
-    window.open('https://m.booking.naver.com/booking/5/bizes/457633/items/3725336', '_blank');
+    window.open('https://booking.naver.com/booking/6/bizes/1660335/items/7703264?area=pll&entry=pll&lang=ko&startDate=2026-08-14&startDateTime=2026-08-14T15%3A00%3A00%2B09%3A00&theme=place', '_blank');
   };
 
   const renderSelection = () => (
