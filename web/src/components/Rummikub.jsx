@@ -433,17 +433,24 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
           친구들과 함께 즐기는 클래식 두뇌 게임!
         </p>
 
-        <div className="glass-panel" style={{ maxWidth: '400px', width: '100%', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', position: 'relative', zIndex: 50 }}>
+        <div className="glass-panel" style={{ maxWidth: '400px', width: '100%', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div>
-            <label htmlFor="user-nickname" style={labelStyle}>유저 닉네임</label>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '0.4rem' }}>유저 닉네임</label>
             <input 
-              id="user-nickname"
-              name="nickname"
               type="text" 
               placeholder="예: 홍길동"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              style={inputStyle}
+              style={{
+                width: '100%',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                background: '#1e293b',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: 'white',
+                fontSize: '1rem',
+                boxSizing: 'border-box'
+              }}
             />
           </div>
 
@@ -454,18 +461,23 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '0.5rem 0' }}></div>
 
           <div>
-            <label htmlFor="room-code" style={labelStyle}>방 코드 입력 (5글자)</label>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '0.4rem' }}>방 코드 입력 (5글자)</label>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <input 
-                id="room-code"
-                name="roomCode"
                 type="text" 
                 placeholder="예: X7A9D"
-                autoCapitalize="characters"
-                autoComplete="off"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                style={{ ...inputStyle, flex: 1 }}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  background: '#1e293b',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  color: 'white',
+                  fontSize: '1rem',
+                  boxSizing: 'border-box'
+                }}
               />
               <button onClick={handleJoinRoom} className="btn-secondary" style={{ padding: '0 1.25rem' }}>참여</button>
             </div>
