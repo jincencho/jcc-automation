@@ -147,7 +147,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
     if (!nickname.trim()) return alert('닉네임을 입력해 주세요!');
     if (!roomCode.trim()) return alert('방 코드를 입력해 주세요!');
     localStorage.setItem('rm_nickname', nickname);
-    const upperCode = roomCode.toUpperCase();
+    const upperCode = roomCode.trim().toUpperCase();
 
     let fetchedRoom = null;
 
@@ -478,14 +478,14 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
 
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '0.4rem' }}>방 코드 입력 (5글자)</label>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <input 
                 type="text" 
                 placeholder="예: X7A9D"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 style={{
-                  flex: 1,
+                  width: '100%',
                   padding: '0.75rem 1rem',
                   borderRadius: '8px',
                   background: '#1e293b',
@@ -495,7 +495,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
                   boxSizing: 'border-box'
                 }}
               />
-              <button onClick={handleJoinRoom} className="btn-secondary" style={{ padding: '0 1.25rem' }}>참여</button>
+              <button onClick={handleJoinRoom} className="btn-secondary" style={{ width: '100%', padding: '0.85rem' }}>참여하기 🎮</button>
             </div>
           </div>
         </div>
