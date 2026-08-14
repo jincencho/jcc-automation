@@ -722,11 +722,16 @@ const inputStyle = {
   width: '100%',
   padding: '0.75rem 1rem',
   borderRadius: '8px',
-  background: 'rgba(255,255,255,0.05)',
-  border: '1px solid rgba(255,255,255,0.1)',
+  background: '#1a202c', // darker background to ensure it looks distinct and editable
+  border: '2px solid rgba(255,255,255,0.2)',
   color: 'white',
   fontSize: '1rem',
-  boxSizing: 'border-box'
+  boxSizing: 'border-box',
+  cursor: 'text',
+  position: 'relative',
+  zIndex: 10,
+  WebkitUserSelect: 'text',
+  userSelect: 'text'
 };
 
 const btnControlStyle = (disabled) => ({
