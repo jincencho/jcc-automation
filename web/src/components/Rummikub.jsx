@@ -84,13 +84,13 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
   }, [inRoom, roomCode]);
 
   // Synchronize local board/rack from roomState changes
-  const [turnTimeLeft, setTurnTimeLeft] = useState(180); // 3 minutes = 180 seconds
+  const [turnTimeLeft, setTurnTimeLeft] = useState(180); // Default to 180 seconds
 
   useEffect(() => {
     if (!roomState || roomState.status !== 'playing') return;
 
     // Sync timer from server (only if it changes significantly or initializes)
-    const serverTimeLeft = roomState.game_state.turnTimeLeft ?? 180;
+    const serverTimeLeft = roomState.game_state.turnTimeLeft ?? (roomState.game_state.turnTimeLimit ?? 180);
     setTurnTimeLeft(serverTimeLeft);
   }, [roomState]);
 
@@ -107,7 +107,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
           if (isMyTurn) {
             handleDrawTile();
           }
-          return 180;
+          return roomState.game_state.turnTimeLimit ?? 180;
         }
         return prev - 1;
       });
@@ -147,6 +147,8 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
     }
   }, [roomState, playerId, hasMovedThisTurn, sortType]);
 
+  const [selectedLimitMinutes, setSelectedLimitMinutes] = useState(3); // host time limit config: 1 to 5 min
+
   // Handle Room Actions
   const handleCreateRoom = async () => {
     if (!nickname.trim()) return alert('닉네임을 입력해 주세요!');
@@ -159,6 +161,8 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
       rack: []
     };
 
+    const initialLimitSeconds = selectedLimitMinutes * 60;
+
     if (isSupabaseConfigured) {
       const { error } = await supabase.from('rummikub_rooms').insert({
         room_code: generatedCode,
@@ -169,13 +173,25 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
           board: [],
           pool: generateTilePool(),
           history: [],
-          turnTimeLeft: 60,
+          turnTimeLimit: initialLimitSeconds,
+          turnTimeLeft: initialLimitSeconds,
           winner: null
         }
       });
       if (error) return alert('방 생성 실패: ' + error.message);
     } else {
       mockRealtime.createRoom(generatedCode, hostPlayer);
+      mockRealtime.updateRoom(generatedCode, {
+        game_state: {
+          currentTurnIdx: 0,
+          board: [],
+          pool: generateTilePool(),
+          history: [],
+          turnTimeLimit: initialLimitSeconds,
+          turnTimeLeft: initialLimitSeconds,
+          winner: null
+        }
+      });
     }
 
     setRoomCode(generatedCode);
@@ -242,6 +258,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
       return { ...p, rack };
     });
 
+    const limitSeconds = roomState.game_state.turnTimeLimit ?? 180;
     const updateData = {
       status: 'playing',
       players: updatedPlayers,
@@ -249,7 +266,8 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
         ...roomState.game_state,
         pool: pool,
         currentTurnIdx: 0,
-        board: []
+        board: [],
+        turnTimeLeft: limitSeconds
       }
     };
 
@@ -434,7 +452,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
         pool,
         board: officialBoard,
         currentTurnIdx: nextTurnIdx,
-        turnTimeLeft: 180
+        turnTimeLeft: roomState.game_state.turnTimeLimit ?? 180
       }
     };
 
@@ -585,7 +603,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
         currentTurnIdx: nextTurnIdx,
         ranks: nextRanks,
         winner: nextRanks[0]?.nickname || nickname,
-        turnTimeLeft: 180
+        turnTimeLeft: roomState.game_state.turnTimeLimit ?? 180
       }
     };
 
@@ -684,6 +702,31 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
                 boxSizing: 'border-box'
               }}
             />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '0.4rem' }}>턴 제한 시간 설정</label>
+            <select
+              value={selectedLimitMinutes}
+              onChange={(e) => setSelectedLimitMinutes(Number(e.target.value))}
+              style={{
+                width: '100%',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                background: '#1e293b',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: 'white',
+                fontSize: '1rem',
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+            >
+              <option value={1}>1분 (빠른 게임)</option>
+              <option value={2}>2분</option>
+              <option value={3}>3분 (추천)</option>
+              <option value={4}>4분</option>
+              <option value={5}>5분 (여유로운 게임)</option>
+            </select>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
