@@ -652,16 +652,16 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
           background: 'rgba(15, 23, 42, 0.9)',
           border: '2px solid rgba(255,255,255,0.1)',
           borderRadius: '16px',
-          padding: '0.75rem',
+          padding: 'clamp(4px, 1.5vw, 12px)',
           display: 'grid',
           gridTemplateRows: 'repeat(8, 1fr)',
-          gap: '4px',
-          overflowX: 'auto',
-          boxShadow: 'inset 0 4px 15px rgba(0,0,0,0.5)'
+          gap: '3px',
+          boxShadow: 'inset 0 4px 15px rgba(0,0,0,0.5)',
+          boxSizing: 'border-box'
         }}
       >
         {localBoard.map((row, r) => (
-          <div key={r} style={{ display: 'flex', gap: '4px', minWidth: '780px' }}>
+          <div key={r} style={{ display: 'flex', gap: '3px', width: '100%', justifyContent: 'space-between' }}>
             {row.map((cell, c) => {
               const isSelected = selectedTile && selectedTile.source === 'board' && selectedTile.index.r === r && selectedTile.index.c === c;
               return (
@@ -671,13 +671,13 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
                   onDrop={() => handleBoardDrop(r, c)}
                   onClick={() => handleBoardClick(r, c)}
                   style={{
-                    width: 'calc(100% / 15)',
-                    height: 'clamp(38px, 6vw, 48px)',
+                    width: 'calc((100% - 42px) / 15)',
+                    aspectRatio: '0.8', // standard card ratio
                     background: cell ? '#1e293b' : 'rgba(255,255,255,0.02)',
                     border: isSelected 
                       ? '2px solid var(--accent-gold)' 
                       : cell ? '1px solid rgba(255,255,255,0.2)' : '1px dashed rgba(255,255,255,0.05)',
-                    borderRadius: '6px',
+                    borderRadius: '4px',
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
@@ -691,7 +691,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
                   onDragStart={() => cell && handleDragStart(cell, 'board', { r, c })}
                 >
                   {cell && (
-                    <span style={{ fontSize: '1.2rem', fontWeight: 800, color: getTileColor(cell.color) }}>
+                    <span style={{ fontSize: 'clamp(0.7rem, 2vw, 1.15rem)', fontWeight: 800, color: getTileColor(cell.color) }}>
                       {cell.number}
                     </span>
                   )}
