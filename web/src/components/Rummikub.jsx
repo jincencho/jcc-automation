@@ -223,52 +223,102 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
     }
   };
 
-  // Drag and drop handlers
+  // Drag and drop handlers / Click-to-place handlers for mobile
+  const [selectedTile, setSelectedTile] = useState(null); // { tile, source, index }
+
+  const handleTileClick = (tile, source, index) => {
+    if (!isMyTurn) return;
+    
+    // Toggle selection
+    if (selectedTile && selectedTile.tile.id === tile.id) {
+      setSelectedTile(null);
+    } else {
+      setSelectedTile({ tile, source, index });
+    }
+  };
+
   const handleDragStart = (tile, source, index) => {
     setDraggedTile(tile);
     setDragSource(source);
     setDragSourceIndex(index);
+    setSelectedTile(null); // Clear selected if starting drag
   };
 
   const handleBoardDrop = (r, c) => {
     if (!draggedTile) return;
+    executeTilePlacement(draggedTile, dragSource, dragSourceIndex, r, c);
+  };
 
+  const handleBoardClick = (r, c) => {
+    if (!isMyTurn) return;
+    
+    // If a tile is currently selected, place it here
+    if (selectedTile) {
+      const { tile, source, index } = selectedTile;
+      const success = executeTilePlacement(tile, source, index, r, c);
+      if (success) {
+        setSelectedTile(null); // Clear selection on success
+      }
+    } else {
+      // If a tile exists at this board slot, select it
+      const clickedTile = localBoard[r][c];
+      if (clickedTile) {
+        handleTileClick(clickedTile, 'board', { r, c });
+      }
+    }
+  };
+
+  const executeTilePlacement = (tile, source, sourceIndex, r, c) => {
     const newGrid = localBoard.map(row => [...row]);
 
-    // Check if slot is empty
-    if (newGrid[r][c] !== null) return;
+    // Check if target slot is empty
+    if (newGrid[r][c] !== null) return false;
 
-    if (dragSource === 'rack') {
+    if (source === 'rack') {
       // Remove from rack
       const newRack = [...localRack];
-      newRack.splice(dragSourceIndex, 1);
+      newRack.splice(sourceIndex, 1);
       setLocalRack(newRack);
-    } else if (dragSource === 'board') {
+    } else if (source === 'board') {
       // Move from existing board coordinates
-      const { r: prevR, c: prevC } = dragSourceIndex;
+      const { r: prevR, c: prevC } = sourceIndex;
       newGrid[prevR][prevC] = null;
     }
 
-    newGrid[r][c] = { ...draggedTile, r, c };
+    newGrid[r][c] = { ...tile, r, c };
     setLocalBoard(newGrid);
     setHasMovedThisTurn(true);
     setDraggedTile(null);
     setValidationError('');
+    return true;
   };
 
   const handleRackDrop = () => {
     if (!draggedTile) return;
+    executeMoveBackToRack(draggedTile, dragSource, dragSourceIndex);
+  };
 
-    if (dragSource === 'board') {
-      // Move from board back to rack
-      const { r, c } = dragSourceIndex;
+  const handleRackClick = () => {
+    if (!isMyTurn) return;
+
+    // Move selected board tile back to rack
+    if (selectedTile && selectedTile.source === 'board') {
+      const { tile, source, index } = selectedTile;
+      executeMoveBackToRack(tile, source, index);
+      setSelectedTile(null);
+    }
+  };
+
+  const executeMoveBackToRack = (tile, source, sourceIndex) => {
+    if (source === 'board') {
+      const { r, c } = sourceIndex;
       const newGrid = localBoard.map(row => [...row]);
       newGrid[r][c] = null;
       setLocalBoard(newGrid);
-      setLocalRack([...localRack, draggedTile]);
+      setLocalRack([...localRack, tile]);
       setHasMovedThisTurn(true);
+      setDraggedTile(null);
     }
-    setDraggedTile(null);
   };
 
   // Sort rack helpers
@@ -612,34 +662,42 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
       >
         {localBoard.map((row, r) => (
           <div key={r} style={{ display: 'flex', gap: '4px', minWidth: '780px' }}>
-            {row.map((cell, c) => (
-              <div
-                key={c}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => handleBoardDrop(r, c)}
-                style={{
-                  width: 'calc(100% / 15)',
-                  height: 'clamp(38px, 6vw, 48px)',
-                  background: cell ? '#1e293b' : 'rgba(255,255,255,0.02)',
-                  border: cell ? '1px solid rgba(255,255,255,0.2)' : '1px dashed rgba(255,255,255,0.05)',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  cursor: isMyTurn ? 'grab' : 'default',
-                  userSelect: 'none',
-                  boxShadow: cell ? '0 2px 4px rgba(0,0,0,0.3)' : 'none'
-                }}
-                draggable={isMyTurn && cell !== null}
-                onDragStart={() => cell && handleDragStart(cell, 'board', { r, c })}
-              >
-                {cell && (
-                  <span style={{ fontSize: '1.2rem', fontWeight: 800, color: getTileColor(cell.color) }}>
-                    {cell.number}
-                  </span>
-                )}
-              </div>
-            ))}
+            {row.map((cell, c) => {
+              const isSelected = selectedTile && selectedTile.source === 'board' && selectedTile.index.r === r && selectedTile.index.c === c;
+              return (
+                <div
+                  key={c}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleBoardDrop(r, c)}
+                  onClick={() => handleBoardClick(r, c)}
+                  style={{
+                    width: 'calc(100% / 15)',
+                    height: 'clamp(38px, 6vw, 48px)',
+                    background: cell ? '#1e293b' : 'rgba(255,255,255,0.02)',
+                    border: isSelected 
+                      ? '2px solid var(--accent-gold)' 
+                      : cell ? '1px solid rgba(255,255,255,0.2)' : '1px dashed rgba(255,255,255,0.05)',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    cursor: isMyTurn ? 'grab' : 'default',
+                    userSelect: 'none',
+                    boxShadow: isSelected 
+                      ? '0 0 10px rgba(212, 175, 55, 0.8)' 
+                      : cell ? '0 2px 4px rgba(0,0,0,0.3)' : 'none'
+                  }}
+                  draggable={isMyTurn && cell !== null}
+                  onDragStart={() => cell && handleDragStart(cell, 'board', { r, c })}
+                >
+                  {cell && (
+                    <span style={{ fontSize: '1.2rem', fontWeight: 800, color: getTileColor(cell.color) }}>
+                      {cell.number}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
@@ -662,6 +720,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
       <div 
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleRackDrop}
+        onClick={handleRackClick}
         style={{
           width: '100%',
           maxWidth: '850px',
@@ -671,42 +730,54 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
           padding: '1rem',
           minHeight: '100px',
           marginTop: '1rem',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.3)'
+          boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+          cursor: selectedTile && selectedTile.source === 'board' ? 'pointer' : 'default'
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-gold)' }}>내 타일 받침대</span>
           <div style={{ display: 'flex', gap: '0.4rem' }}>
-            <button onClick={handleSortRun} style={sortBtnStyle}>색상 정렬</button>
-            <button onClick={handleSortGroup} style={sortBtnStyle}>숫자 정렬</button>
+            <button onClick={(e) => { e.stopPropagation(); handleSortRun(); }} style={sortBtnStyle}>색상 정렬</button>
+            <button onClick={(e) => { e.stopPropagation(); handleSortGroup(); }} style={sortBtnStyle}>숫자 정렬</button>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', minHeight: '60px' }}>
-          {localRack.map((tile, idx) => (
-            <div
-              key={tile.id}
-              draggable={isMyTurn}
-              onDragStart={() => handleDragStart(tile, 'rack', idx)}
-              style={{
-                width: '40px',
-                height: '52px',
-                background: '#f8fafc',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                cursor: isMyTurn ? 'grab' : 'default',
-                userSelect: 'none',
-                boxShadow: '0 4px 6px rgba(0,0,0,0.15), inset 0 -4px 0 rgba(0,0,0,0.08)'
-              }}
-            >
-              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: getTileColor(tile.color) }}>
-                {tile.number}
-              </span>
-            </div>
-          ))}
+          {localRack.map((tile, idx) => {
+            const isSelected = selectedTile && selectedTile.source === 'rack' && selectedTile.index === idx;
+            return (
+              <div
+                key={tile.id}
+                draggable={isMyTurn}
+                onDragStart={() => handleDragStart(tile, 'rack', idx)}
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent rack container click from firing
+                  handleTileClick(tile, 'rack', idx);
+                }}
+                style={{
+                  width: '40px',
+                  height: '52px',
+                  background: '#f8fafc',
+                  border: isSelected ? '2px solid var(--accent-gold)' : '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  cursor: isMyTurn ? 'pointer' : 'default',
+                  userSelect: 'none',
+                  boxShadow: isSelected 
+                    ? '0 0 10px rgba(212, 175, 55, 0.8)' 
+                    : '0 4px 6px rgba(0,0,0,0.15), inset 0 -4px 0 rgba(0,0,0,0.08)',
+                  transform: isSelected ? 'translateY(-4px)' : 'none',
+                  transition: 'transform 0.15s ease'
+                }}
+              >
+                <span style={{ fontSize: '1.25rem', fontWeight: 800, color: getTileColor(tile.color) }}>
+                  {tile.number}
+                </span>
+              </div>
+            );
+          })}
           {localRack.length === 0 && (
             <p style={{ color: '#64748b', fontSize: '0.85rem', alignSelf: 'center', width: '100%', textAlign: 'center' }}>
               받침대에 타일이 없습니다. 승리가 코앞입니다!
