@@ -429,7 +429,23 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
       <div style={wrapStyle}>
         <button onClick={onBack} style={btnBackStyle}>← 게임 선택으로</button>
         <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'white', marginBottom: '0.5rem', textAlign: 'center' }}>🀄 실시간 루미큐브 (2~4인용)</h2>
-        <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '2rem', textAlign: 'center' }}>
+        
+        {/* Connection Status Badge */}
+        <div style={{
+          padding: '0.4rem 0.8rem',
+          borderRadius: '100px',
+          fontSize: '0.8rem',
+          background: isSupabaseConfigured ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+          border: isSupabaseConfigured ? '1px solid #22c55e' : '1px solid #ef4444',
+          color: isSupabaseConfigured ? '#4ade80' : '#fca5a5',
+          fontWeight: 700,
+          marginBottom: '1rem',
+          textAlign: 'center'
+        }}>
+          {isSupabaseConfigured ? '● Supabase 실시간 서버 연결됨' : '● 연결 끊김 (가상 네트워크 모드)'}
+        </div>
+
+        <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1.5rem', textAlign: 'center' }}>
           친구들과 함께 즐기는 클래식 두뇌 게임!
         </p>
 
