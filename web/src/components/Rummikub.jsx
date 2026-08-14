@@ -116,12 +116,20 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
     return () => clearInterval(timer);
   }, [roomState, playerId]);
 
+  const [sortType, setSortType] = useState('none'); // 'none', 'run', 'group'
+
   useEffect(() => {
     if (!roomState) return;
     
     const me = roomState.players.find(p => p.id === playerId);
     if (me) {
-      setLocalRack(me.rack || []);
+      let nextRack = me.rack || [];
+      if (sortType === 'run') {
+        nextRack = sortForRun(nextRack);
+      } else if (sortType === 'group') {
+        nextRack = sortForGroup(nextRack);
+      }
+      setLocalRack(nextRack);
     }
 
     // Only update local board if it is not my turn or if I haven't moved yet
@@ -137,7 +145,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
       });
       setLocalBoard(newGrid);
     }
-  }, [roomState, playerId, hasMovedThisTurn]);
+  }, [roomState, playerId, hasMovedThisTurn, sortType]);
 
   // Handle Room Actions
   const handleCreateRoom = async () => {
@@ -384,10 +392,12 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
 
   // Sort rack helpers
   const handleSortRun = () => {
+    setSortType('run');
     setLocalRack(sortForRun(localRack));
   };
 
   const handleSortGroup = () => {
+    setSortType('group');
     setLocalRack(sortForGroup(localRack));
   };
 
