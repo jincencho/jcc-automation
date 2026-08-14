@@ -84,6 +84,38 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
   }, [inRoom, roomCode]);
 
   // Synchronize local board/rack from roomState changes
+  const [turnTimeLeft, setTurnTimeLeft] = useState(300); // 5 minutes = 300 seconds
+
+  useEffect(() => {
+    if (!roomState || roomState.status !== 'playing') return;
+
+    // Sync timer from server (only if it changes significantly or initializes)
+    const serverTimeLeft = roomState.game_state.turnTimeLeft ?? 300;
+    setTurnTimeLeft(serverTimeLeft);
+  }, [roomState]);
+
+  // Turn timer countdown effect
+  useEffect(() => {
+    if (!roomState || roomState.status !== 'playing') return;
+
+    const timer = setInterval(async () => {
+      setTurnTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // If it is my turn, auto draw tile and pass turn when time runs out
+          const isMyTurn = roomState.players[roomState.game_state.currentTurnIdx]?.id === playerId;
+          if (isMyTurn) {
+            handleDrawTile();
+          }
+          return 300;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [roomState, playerId]);
+
   useEffect(() => {
     if (!roomState) return;
     
@@ -225,6 +257,28 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
 
   // Drag and drop handlers / Click-to-place handlers for mobile
   const [selectedTile, setSelectedTile] = useState(null); // { tile, source, index }
+  const [actionHistory, setActionHistory] = useState([]); // Array of snapshots for step undo: { board, rack }
+
+  const pushHistorySnapshot = (boardState, rackState) => {
+    setActionHistory(prev => [...prev, {
+      board: boardState.map(row => [...row]),
+      rack: [...rackState]
+    }]);
+  };
+
+  const handleUndoSingleStep = () => {
+    if (!isMyTurn || actionHistory.length === 0) return;
+    const historyCopy = [...actionHistory];
+    const prevSnapshot = historyCopy.pop(); // Get last snapshot
+    setActionHistory(historyCopy);
+
+    setLocalBoard(prevSnapshot.board);
+    setLocalRack(prevSnapshot.rack);
+    if (historyCopy.length === 0) {
+      setHasMovedThisTurn(false);
+    }
+    setValidationError('');
+  };
 
   const handleTileClick = (tile, source, index) => {
     if (!isMyTurn) return;
@@ -274,6 +328,9 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
     // Check if target slot is empty
     if (newGrid[r][c] !== null) return false;
 
+    // Save snapshot before making changes
+    pushHistorySnapshot(localBoard, localRack);
+
     if (source === 'rack') {
       // Remove from rack
       const newRack = [...localRack];
@@ -312,6 +369,10 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
   const executeMoveBackToRack = (tile, source, sourceIndex) => {
     if (source === 'board') {
       const { r, c } = sourceIndex;
+      
+      // Save snapshot before making changes
+      pushHistorySnapshot(localBoard, localRack);
+
       const newGrid = localBoard.map(row => [...row]);
       newGrid[r][c] = null;
       setLocalBoard(newGrid);
@@ -376,6 +437,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
     }
 
     setHasMovedThisTurn(false);
+    setActionHistory([]); // Clear steps history
     setValidationError('');
   };
 
@@ -525,6 +587,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
     }
 
     setHasMovedThisTurn(false);
+    setActionHistory([]); // Clear steps history
     setValidationError('');
   };
 
@@ -543,6 +606,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
     });
     setLocalBoard(newGrid);
     setHasMovedThisTurn(false);
+    setActionHistory([]); // Clear steps history
     setValidationError('');
   };
 
@@ -744,6 +808,19 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>남은 타일: {roomState?.game_state.pool.length}개</span>
+          {roomState && roomState.status === 'playing' && (
+            <span style={{
+              padding: '0.3rem 0.8rem',
+              borderRadius: '100px',
+              fontSize: '0.85rem',
+              background: turnTimeLeft < 30 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+              border: turnTimeLeft < 30 ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.15)',
+              color: turnTimeLeft < 30 ? '#fca5a5' : '#e2e8f0',
+              fontWeight: 700
+            }}>
+              ⏱️ {Math.floor(turnTimeLeft / 60)}분 {String(turnTimeLeft % 60).padStart(2, '0')}초
+            </span>
+          )}
           <span style={{
             padding: '0.3rem 0.8rem',
             borderRadius: '100px',
@@ -825,8 +902,9 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
 
       {/* Player Turn Controls */}
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button onClick={handleResetLocalTurn} disabled={!isMyTurn || !hasMovedThisTurn} style={btnControlStyle(!isMyTurn || !hasMovedThisTurn)}>🔄 배치 취소</button>
-        <button onClick={handleDrawTile} disabled={!isMyTurn} style={btnControlStyle(!isMyTurn)}>📥 타일 먹고 턴 넘기기</button>
+        <button onClick={handleUndoSingleStep} disabled={!isMyTurn || actionHistory.length === 0} style={btnControlStyle(!isMyTurn || actionHistory.length === 0)}>↩️ 한단계 취소</button>
+        <button onClick={handleResetLocalTurn} disabled={!isMyTurn || !hasMovedThisTurn} style={btnControlStyle(!isMyTurn || !hasMovedThisTurn)}>🔄 전체 취소</button>
+        <button onClick={handleDrawTile} disabled={!isMyTurn} style={btnControlStyle(!isMyTurn)}>📥 타일 먹기 (턴 종료)</button>
         <button onClick={handleFinishTurn} disabled={!isMyTurn || !hasMovedThisTurn} style={{ ...btnControlStyle(!isMyTurn || !hasMovedThisTurn), background: '#10b981', color: 'white' }}>✅ 배치 등록 완료</button>
       </div>
 
