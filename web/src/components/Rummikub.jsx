@@ -84,13 +84,13 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
   }, [inRoom, roomCode]);
 
   // Synchronize local board/rack from roomState changes
-  const [turnTimeLeft, setTurnTimeLeft] = useState(300); // 5 minutes = 300 seconds
+  const [turnTimeLeft, setTurnTimeLeft] = useState(180); // 3 minutes = 180 seconds
 
   useEffect(() => {
     if (!roomState || roomState.status !== 'playing') return;
 
     // Sync timer from server (only if it changes significantly or initializes)
-    const serverTimeLeft = roomState.game_state.turnTimeLeft ?? 300;
+    const serverTimeLeft = roomState.game_state.turnTimeLeft ?? 180;
     setTurnTimeLeft(serverTimeLeft);
   }, [roomState]);
 
@@ -107,7 +107,7 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
           if (isMyTurn) {
             handleDrawTile();
           }
-          return 300;
+          return 180;
         }
         return prev - 1;
       });
@@ -433,7 +433,8 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
         ...roomState.game_state,
         pool,
         board: officialBoard,
-        currentTurnIdx: nextTurnIdx
+        currentTurnIdx: nextTurnIdx,
+        turnTimeLeft: 180
       }
     };
 
@@ -583,7 +584,8 @@ export default function Rummikub({ onBack, onNavigateToReservation }) {
         board: tilesList,
         currentTurnIdx: nextTurnIdx,
         ranks: nextRanks,
-        winner: nextRanks[0]?.nickname || nickname
+        winner: nextRanks[0]?.nickname || nickname,
+        turnTimeLeft: 180
       }
     };
 
