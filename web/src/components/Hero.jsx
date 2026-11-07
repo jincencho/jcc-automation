@@ -39,7 +39,7 @@ export default function Hero({ onNavigateToReservation, onNavigateToAbout }) {
         {/* Left Side: Image */}
         <div style={{ flex: '1', minWidth: '300px', display: 'flex', justifyContent: 'center' }}>
           <img 
-            src="/images/진센조 메인사진.png" 
+            src="/images/main_hero.jpg" 
             alt="진센조 메인사진" 
             style={{ width: '100%', maxWidth: '500px', borderRadius: '24px', boxShadow: '0 20px 40px rgba(212, 175, 55, 0.1)', objectFit: 'cover', border: '1px solid var(--glass-border)' }}
           />

@@ -4,11 +4,11 @@ import Reservation from './components/Reservation';
 import AdminSchedule from './components/AdminSchedule';
 import About from './components/About';
 import WhySamsung from './components/WhySamsung';
-import ArcadeHub from './components/ArcadeHub';
+import BenefitCalculator from './components/BenefitCalculator';
 import './index.css';
 
 function App() {
-  const [currentView, setCurrentView] = useState('home'); // 'home', 'admin', 'reservation', 'about', 'why-samsung'
+  const [currentView, setCurrentView] = useState('home'); // 'home', 'admin', 'reservation', 'about', 'why-samsung', 'calculator'
 
   // 페이지 진입 시 UTM 태그 캡처 및 페이지 이동 시 최상단으로 스크롤
   React.useEffect(() => {
@@ -32,7 +32,7 @@ function App() {
   return (
     <div className="app-container">
       {/* Navigation Bar (Simple Mock) */}
-      <nav style={{ padding: '1.5rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-color)', position: 'sticky', top: 0, zIndex: 100 }}>
+      <nav className="site-nav" style={{ padding: '1.5rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--glass-border)', background: 'var(--bg-color)', position: 'sticky', top: 0, zIndex: 100 }}>
         <div 
           onClick={() => setCurrentView('home')}
           className="navbar-logo-container"
@@ -56,8 +56,8 @@ function App() {
         </div>
         <div className="nav-links" style={{ display: 'flex', gap: 'clamp(0.5rem, 2.5vw, 1.5rem)', fontWeight: 600, color: 'var(--text-secondary)', fontSize: 'clamp(0.72rem, 2.4vw, 0.95rem)', whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('about'); }} style={{ color: currentView === 'about' || currentView === 'why-samsung' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>더 알아보기</a>
-          <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('arcade'); }} style={{ color: currentView === 'arcade' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>👾 게임존</a>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('reservation'); }} style={{ color: currentView === 'reservation' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>상담 예약</a>
+          <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('calculator'); }} style={{ color: currentView === 'calculator' ? 'var(--accent-gold-light)' : 'inherit', textDecoration: 'none' }}>혜택 계산기</a>
           <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('admin'); }} style={{ color: currentView === 'admin' ? 'var(--text-primary)' : 'inherit', textDecoration: 'none' }}>관리자</a>
         </div>
       </nav>
@@ -68,10 +68,10 @@ function App() {
         {currentView === 'why-samsung' && <WhySamsung onBack={() => setCurrentView('about')} />}
         {currentView === 'reservation' && <Reservation onBack={() => setCurrentView('home')} />}
         {currentView === 'admin' && <AdminSchedule onBack={() => setCurrentView('home')} />}
-        {currentView === 'arcade' && <ArcadeHub onBack={() => setCurrentView('home')} onNavigateToReservation={() => setCurrentView('reservation')} />}
+        {currentView === 'calculator' && <BenefitCalculator onBack={() => setCurrentView('home')} />}
       </main>
 
-      <footer style={{ textAlign: 'center', padding: '3rem 2rem', color: 'var(--text-secondary)', borderTop: '1px solid var(--glass-border)', marginTop: '4rem' }}>
+      <footer className="site-footer" style={{ textAlign: 'center', padding: '3rem 2rem', color: 'var(--text-secondary)', borderTop: '1px solid var(--glass-border)', marginTop: '4rem' }}>
         <p>&copy; 2026 JCC (JINJU CENTUM CHOJUNSEOK). All rights reserved.</p>
       </footer>
     </div>
