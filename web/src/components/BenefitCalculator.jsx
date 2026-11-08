@@ -315,7 +315,7 @@ function checkIsSubFeeRecognizedCard(cardName) {
 // 필요실적 텍스트(예: '70만', '50만원', '월 70만', '700000', '70')를 원 단위 숫자로 변환
 function parseSpendToWon(spendStr) {
   if (!spendStr) return 0;
-  const s = String(spendStr).replace(/^월\s*/, '').replace(/^필요실적\s*/, '').trim();
+  const s = String(spendStr).replace(/^월\s*/, '').replace(/^필요실적\s*/, '').replace(/\s*사용$/, '').trim();
   const manMatch = s.match(/([\d.]+)\s*만/);
   if (manMatch) {
     return Math.round(parseFloat(manMatch[1]) * 10000);
@@ -332,15 +332,15 @@ function parseSpendToWon(spendStr) {
 }
 
 // 카드 필요실적 및 월 구독료를 바탕으로 실질 필요실적 안내 문구 생성
-// 구독료 실적 인정 카드(삼성/롯데)는 천원 단위 절사된 구독료를 차감하여 노출 (예: 70만원 - 75,000원 = 62.5만원)
+// 구독료 실적 인정 카드(삼성/롯데)는 천원 단위 절사된 구독료를 차감하여 노출 (예: 70만원 - 75,000원 = 월 62.5만원 사용)
 function getDeductedSpendDesc(rawSpendStr, monthlyFeeWon, cardName) {
-  let cleanBase = rawSpendStr ? String(rawSpendStr).replace(/^필요실적\s*/, '').trim() : '';
+  let cleanBase = rawSpendStr ? String(rawSpendStr).replace(/^필요실적\s*/, '').replace(/\s*사용$/, '').trim() : '';
   if (!cleanBase) return '';
   if (!cleanBase.startsWith('월')) {
     cleanBase = `월 ${cleanBase}`;
   }
   if (!checkIsSubFeeRecognizedCard(cardName)) {
-    return cleanBase;
+    return `${cleanBase} 사용`;
   }
   const targetWon = parseSpendToWon(cleanBase);
   const recFee = Math.floor((Number(monthlyFeeWon) || 0) / 1000) * 1000;
@@ -349,9 +349,9 @@ function getDeductedSpendDesc(rawSpendStr, monthlyFeeWon, cardName) {
     const remainWon = Math.max(0, targetWon - recFee);
     const remainMan = remainWon / 10000;
     const remainStr = remainMan % 1 === 0 ? `${remainMan}만원` : `${Number(remainMan.toFixed(2))}만원`;
-    return `월 ${remainStr}`;
+    return `월 ${remainStr} 사용`;
   }
-  return cleanBase;
+  return `${cleanBase} 사용`;
 }
 
 // 100% 오프라인 작동 순수 JS QR코드(Version 5-L, 37x37) SVG Path 생성기
@@ -2994,10 +2994,11 @@ export default function BenefitCalculator({ onBack }) {
                                   ? '30만'
                                   : cardItem.minSpend;
                               const deducted = getDeductedSpendDesc(segVal, seg.baseMonthly, cardItem.cardName);
+                              const cleanExpected = (segVal && segVal.startsWith('월') ? segVal : `월 ${segVal || ''}`).replace(/\s*사용$/, '') + ' 사용';
                               const isDeducted =
                                 checkIsSubFeeRecognizedCard(cardItem.cardName) &&
                                 deducted &&
-                                deducted !== (segVal && segVal.startsWith('월') ? segVal : `월 ${segVal}`);
+                                deducted !== cleanExpected;
                               return (
                                 <div key={seg.endMonth}>
                                   <div style={{ fontSize: '0.76rem', marginBottom: '0.22rem', color: '#cbd5e1' }}>
@@ -3047,10 +3048,11 @@ export default function BenefitCalculator({ onBack }) {
                               const matchedPlan = activePlans[cardIdx] || activePlans[activePlans.length - 1];
                               const pFee = matchedPlan?.rowMonthly || effectiveMonthlyBase;
                               const deducted = getDeductedSpendDesc(cardItem.minSpend, pFee, cardItem.cardName);
+                              const cleanExpected = (cardItem.minSpend && cardItem.minSpend.startsWith('월') ? cardItem.minSpend : `월 ${cardItem.minSpend || ''}`).replace(/\s*사용$/, '') + ' 사용';
                               const isDeducted =
                                 checkIsSubFeeRecognizedCard(cardItem.cardName) &&
                                 deducted &&
-                                deducted !== (cardItem.minSpend && cardItem.minSpend.startsWith('월') ? cardItem.minSpend : `월 ${cardItem.minSpend}`);
+                                deducted !== cleanExpected;
                               if (!isDeducted) return null;
                               return (
                                 <div style={{ fontSize: '0.72rem', color: '#38bdf8', marginTop: '0.24rem', fontWeight: 600 }}>
