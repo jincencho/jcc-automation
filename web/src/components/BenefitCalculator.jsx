@@ -861,17 +861,18 @@ export default function BenefitCalculator({ onBack }) {
     ? subSegments.map((seg, idx) => {
         const segSpendDesc = getSegmentSpendDesc(seg, idx);
         const segPrefix = idx === 0 ? `${seg.duration}개월간` : `잔여 ${seg.duration}개월`;
-        const segDiscountText = seg.appliedCard > 0 ? `월 ${formatWon(seg.appliedCard)}` : '';
-        const parts = [segPrefix, segSpendDesc, segDiscountText].filter(Boolean);
+        const segDiscountText = seg.appliedCard > 0 ? `(-${formatWon(seg.appliedCard)} X ${seg.duration}개월)` : '';
+        const spendWithDiscount = [segSpendDesc, segDiscountText].filter(Boolean).join(' ');
+        const parts = [segPrefix, spendWithDiscount].filter(Boolean);
         return parts.join(' · ');
       })
     : [
-        [
-          getSegmentSpendDesc(subSegments[0], 0),
-          hasAnyCardDiscount ? `월 ${formatWon(subCardMonthly || uniqueAppliedCards[0])} × ${subMonths}개월` : ''
-        ]
-          .filter(Boolean)
-          .join(' · ')
+        (() => {
+          const spendDesc = getSegmentSpendDesc(subSegments[0], 0);
+          const monthly = subCardMonthly || uniqueAppliedCards[0] || 0;
+          const discountText = monthly > 0 ? `(-${formatWon(monthly)} X ${subMonths}개월)` : '';
+          return [spendDesc, discountText].filter(Boolean).join(' ');
+        })()
       ].filter(Boolean);
 
   const cardSubLineText = cardSubLines.join(' / ');
@@ -995,9 +996,8 @@ export default function BenefitCalculator({ onBack }) {
 
     const spendDesc = getDeductedSpendDesc(c.minSpend, planMonthlyFee, trimmedName);
 
-    const discountText = monthlyNum > 0 ? `월 ${formatWon(monthlyNum)} × ${cardMonths}개월` : '';
-    const lineParts = [spendDesc, discountText].filter(Boolean);
-    const lineText = lineParts.join(' · ');
+    const discountText = monthlyNum > 0 ? `(-${formatWon(monthlyNum)} X ${cardMonths}개월)` : '';
+    const lineText = [spendDesc, discountText].filter(Boolean).join(' ');
 
     return {
       card: c,
