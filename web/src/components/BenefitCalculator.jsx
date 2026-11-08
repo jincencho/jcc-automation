@@ -1833,7 +1833,7 @@ export default function BenefitCalculator({ onBack }) {
               </div>
             </div>
 
-            {/* 4. 제휴카드 실적인정 기준 안내 & 핵심 체크포인트 & 메모 */}
+            {/* 4. 제휴카드 실적인정 기준 안내 & 메모 */}
             <div className="a4-info-box">
               {/* 고객이 선택한 제휴카드에 대한 실적인정 기준 가이드 카드 (카드 설정 시 자동 노출) */}
               {(() => {
@@ -1842,7 +1842,7 @@ export default function BenefitCalculator({ onBack }) {
                 return (
                   <div className="a4-card-policy-box">
                     {uniquePolicies.slice(0, 2).map((pol, pIdx) => (
-                      <div key={pol.key} style={pIdx > 0 ? { marginTop: '0.28rem', paddingTop: '0.22rem', borderTop: '1px dashed #bbf7d0' } : undefined}>
+                      <div key={pol.key} style={pIdx > 0 ? { marginTop: '0.45rem', paddingTop: '0.36rem', borderTop: '1px dashed #86efac' } : undefined}>
                         <div className="a4-card-policy-header">
                           <div className="a4-card-policy-title">
                             <span className="a4-card-policy-badge">실적인정 기준</span>
@@ -1874,17 +1874,6 @@ export default function BenefitCalculator({ onBack }) {
                   </div>
                 );
               })()}
-
-              {checkedPoints.length > 0 && (
-                <div className="a4-checkpoints-grid">
-                  {checkedPoints.map((cp) => (
-                    <div key={cp.id} className="a4-checkpoint-item">
-                      <CheckCircle2 size={13} style={{ color: '#1d4ed8', flexShrink: 0 }} />
-                      <span>{cp.text}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               {memo.trim() && (
                 <div className="a4-memo-box">
@@ -3286,43 +3275,12 @@ export default function BenefitCalculator({ onBack }) {
       {/* 3) 출력 옵션 & 상담 메모 영역 */}
       <div className="glass-panel calc-no-hover" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-          {/* 체크 포인트 & 추천 배지 */}
+          {/* 추천 플랜 강조 방식 */}
           <div>
             <label style={{ ...labelStyle, fontSize: '0.95rem', color: 'white', marginBottom: '0.65rem' }}>
               <Sparkles size={15} style={{ verticalAlign: 'middle', marginRight: '0.35rem', color: 'var(--accent-gold)' }} />
-              비교 결과지 강조 포인트 선택
+              비교 결과 상단 추천 플랜 강조 방식
             </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-              {checkpoints.map((cp) => (
-                <label
-                  key={cp.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.6rem',
-                    padding: '0.55rem 0.8rem',
-                    borderRadius: '8px',
-                    background: cp.checked ? 'rgba(59, 130, 246, 0.14)' : 'rgba(255,255,255,0.03)',
-                    border: cp.checked ? '1px solid rgba(96, 165, 250, 0.4)' : '1px solid var(--glass-border)',
-                    cursor: 'pointer',
-                    fontSize: '0.88rem',
-                    opacity: cp.id === 'cp3' && !hasCareService ? 0.5 : 1
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={cp.checked}
-                    onChange={() => toggleCheckpoint(cp.id)}
-                  />
-                  <span>
-                    {cp.text}
-                    {cp.id === 'cp3' && !hasCareService ? ' (케어서비스 미입력 시 출력 제외)' : ''}
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            <label style={labelStyle}>비교 결과 상단 추천 플랜 강조 방식</label>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {[
                 { id: 'auto', label: '자동 분석 (유리한 쪽 강조)' },
