@@ -1813,7 +1813,7 @@ export default function BenefitCalculator({ onBack }) {
                       <span className="a4-minus-blue">- {formatWon(subPurchaseBenefit)}</span>
                     </div>
                     <div className="a4-benefit-row">
-                      <span>무상수리 혜택(약정기간 동안)</span>
+                      <span>무상 A/S 보증 이용료(약정기간)</span>
                       <span className="a4-minus-blue">
                         {subFreeServiceAmount > 0
                           ? includeServiceInFinal
@@ -3280,7 +3280,7 @@ export default function BenefitCalculator({ onBack }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                 <div>
                   <label style={{ ...labelStyle, color: '#d1fae5', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <ShieldCheck size={14} style={{ color: '#34d399' }} /> 무상서비스 금액 합계
+                    <ShieldCheck size={14} style={{ color: '#34d399' }} /> 무상 A/S 보증 이용료(약정기간) 합계
                   </label>
                   <MoneyInput value={subFreeServiceAmount} onChange={setSubFreeServiceAmount} compact accentColor="#6ee7b7" />
                 </div>
