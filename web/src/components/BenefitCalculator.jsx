@@ -1973,7 +1973,7 @@ export default function BenefitCalculator({ onBack }) {
                   rel="noopener noreferrer"
                   title="JCC 진센조 공식 홈페이지 바로가기"
                 >
-                  <CardEventQrSvg url="https://jcc-band.vercel.app" size={44} label="JCC 진센조 공식 홈페이지 QR코드" />
+                  <CardEventQrSvg url="https://jcc-band.vercel.app" size={38} label="JCC 진센조 공식 홈페이지 QR코드" />
                   <span className="a4-manager-qr-label">
                     홈페이지 QR
                   </span>
