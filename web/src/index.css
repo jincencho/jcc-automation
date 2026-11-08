@@ -1139,8 +1139,7 @@ html {
     grid-template-rows: auto auto 1fr auto !important;
     column-gap: 0.65rem !important;
     row-gap: 0 !important;
-    flex: 1 1 auto !important;
-    max-height: 112mm !important;
+    flex: 0 0 auto !important;
   }
 
   .a4-plan-card {
