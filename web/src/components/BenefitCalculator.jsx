@@ -24,7 +24,11 @@ import {
   Save,
   FolderOpen,
   Download,
-  Upload
+  Upload,
+  Share2,
+  X,
+  Smartphone,
+  Maximize2
 } from 'lucide-react';
 
 // 숫자를 한국어 단위(억/만/원) 보조 텍스트로 변환
@@ -571,6 +575,17 @@ export default function BenefitCalculator({ onBack }) {
   useEffect(() => {
     localStorage.setItem('jcc_calc_card_rate', cardLowestRate);
   }, [cardLowestRate]);
+
+  // 반응형 화면 너비 감지 (모바일 화면 맞춤/스크롤 뷰 최적화)
+  const [windowWidth, setWindowWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024));
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isSmallScreen = windowWidth <= 860;
+  const mobileSheetScale = Math.min(1, Math.max(0.38, (windowWidth - 32) / 820));
 
   // 1) 일반구매 (일시불/할부) 상태 — 세부 내역 없이 핵심 금액만 간결 입력
   const [lumpBasePrice, setLumpBasePrice] = useState(0);
@@ -1342,6 +1357,8 @@ export default function BenefitCalculator({ onBack }) {
   };
 
   const [isExportingImage, setIsExportingImage] = useState(false);
+  const [imageModalData, setImageModalData] = useState(null);
+  const [mobileFitMode, setMobileFitMode] = useState(false);
 
   const handleExportAsImage = async () => {
     const node = document.querySelector('.a4-print-sheet');
@@ -1350,6 +1367,7 @@ export default function BenefitCalculator({ onBack }) {
     try {
       // 100% 오프라인 동작 보장: skipFonts: true 로 외부 웹폰트 네트워크 재요청 방지
       // Retina 2x 화질로 모바일/카톡 전송 시 글자가 또렷하게 보이도록 설정
+      // 모바일 화면 맞춤 배율이 적용되어 있어도 캡처 시에는 transform: none 으로 원본 1640px 해상도 보장
       const dataUrl = await htmlToImage.toPng(node, {
         quality: 0.98,
         pixelRatio: 2,
@@ -1357,7 +1375,9 @@ export default function BenefitCalculator({ onBack }) {
         skipFonts: true,
         style: {
           margin: '0',
-          boxShadow: 'none'
+          boxShadow: 'none',
+          transform: 'none',
+          transformOrigin: 'top left'
         }
       });
 
@@ -1365,18 +1385,44 @@ export default function BenefitCalculator({ onBack }) {
       const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
       const filename = `JCC_견적서_${safeCustomer}_${safeDate}.png`;
 
-      // 파일 다운로드
-      const link = document.createElement('a');
-      link.download = filename;
-      link.href = dataUrl;
-      link.click();
+      // Blob 및 File 객체 생성 (Web Share & 클립보드용)
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      let file = null;
+      try {
+        file = new File([blob], filename, { type: 'image/png' });
+      } catch (_) {}
+
+      // 모바일 브라우저인 경우 Web Share API(카카오톡/사진 저장 등 시스템 공유창) 우선 시도
+      let shared = false;
+      const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+      if (isMobile && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `JCC 맞춤 견적서 (${safeCustomer} 고객님)`,
+            text: `[JCC 진센조] ${safeCustomer} 고객님 맞춤 가전 혜택 견적서입니다.`
+          });
+          shared = true;
+        } catch (shareErr) {
+          if (shareErr.name === 'AbortError') {
+            shared = true;
+          }
+        }
+      }
+
+      // Web Share가 지원되지 않거나 PC 환경인 경우 파일 다운로드 실행
+      if (!shared) {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = dataUrl;
+        link.click();
+      }
 
       // 클립보드 이미지 복사 시도 (카카오톡 PC 등에 즉시 Ctrl+V 가능)
       let copied = false;
       if (navigator.clipboard && window.ClipboardItem) {
         try {
-          const res = await fetch(dataUrl);
-          const blob = await res.blob();
           await navigator.clipboard.write([
             new ClipboardItem({ 'image/png': blob })
           ]);
@@ -1386,10 +1432,20 @@ export default function BenefitCalculator({ onBack }) {
         }
       }
 
+      // 모바일 기기에서도 손쉽게 갤러리에 저장(꾹 터치)할 수 있도록 미리보기 모달 오픈
+      setImageModalData({
+        dataUrl,
+        filename,
+        file,
+        customer: safeCustomer
+      });
+
       if (copied) {
-        showTempNotice(`📷 견적서 사진 파일이 저장되었으며 클립보드에도 복사되었습니다. (카카오톡에 바로 Ctrl+V 가능)`);
+        showTempNotice(`📷 견적서 사진이 저장되었으며 클립보드에도 복사되었습니다. (카카오톡에 바로 Ctrl+V 가능)`);
+      } else if (shared) {
+        showTempNotice(`📷 견적서 사진이 성공적으로 생성되었습니다.`);
       } else {
-        showTempNotice(`📷 견적서 사진 파일(${filename})이 저장되었습니다. 카카오톡/문자로 바로 전송하실 수 있습니다.`);
+        showTempNotice(`📷 견적서 사진 파일(${filename})이 저장되었습니다.`);
       }
     } catch (err) {
       console.error('견적서 사진 생성 오류:', err);
@@ -1634,9 +1690,84 @@ export default function BenefitCalculator({ onBack }) {
           </div>
         </div>
 
+        {/* 모바일 화면 맞춤/원본 크기 토글 바 */}
+        {isSmallScreen && (
+          <div
+            className="container no-print"
+            style={{
+              maxWidth: '920px',
+              marginBottom: '0.75rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '0.6rem',
+              flexWrap: 'wrap',
+              background: 'rgba(15, 23, 42, 0.75)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: '10px',
+              padding: '0.55rem 0.85rem'
+            }}
+          >
+            <div style={{ fontSize: '0.8rem', color: '#93c5fd' }}>
+              📱 {mobileFitMode ? 'A4 화면 맞춤 보기' : '좌우 스크롤 원본 보기'}
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileFitMode((prev) => !prev)}
+              style={{
+                background: mobileFitMode ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255,255,255,0.08)',
+                border: mobileFitMode ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.2)',
+                color: mobileFitMode ? '#bfdbfe' : '#e2e8f0',
+                padding: '0.35rem 0.75rem',
+                borderRadius: '8px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
+            >
+              {mobileFitMode ? (
+                <>
+                  <Maximize2 size={13} /> 🔍 100% 원본 크기 (좌우 스크롤)
+                </>
+              ) : (
+                <>
+                  <Smartphone size={13} /> 📱 한눈에 보기 (화면 맞춤)
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* ==================== A4 출력 시트 ==================== */}
-        <div className="a4-sheet-wrapper">
-          <div className="a4-print-sheet">
+        <div
+          className="a4-sheet-wrapper"
+          style={
+            mobileFitMode && isSmallScreen
+              ? {
+                  overflow: 'hidden',
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  padding: '0 0.5rem'
+                }
+              : undefined
+          }
+        >
+          <div
+            className="a4-print-sheet"
+            style={
+              mobileFitMode && isSmallScreen
+                ? {
+                    transform: `scale(${mobileSheetScale})`,
+                    transformOrigin: 'top center',
+                    marginBottom: `calc(-1 * (1 - ${mobileSheetScale}) * 800px)`
+                  }
+                : undefined
+            }
+          >
             {/* 1. 상단 리포트 헤더 */}
             <header className="a4-header">
               <div className="a4-header-left">
@@ -2110,6 +2241,201 @@ export default function BenefitCalculator({ onBack }) {
             <Printer size={19} /> A4 용지로 인쇄 / PDF 저장
           </button>
         </div>
+
+        {/* 견적서 사진 미리보기 & 모바일 저장 모달 */}
+        {imageModalData && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="no-print"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.82)',
+              zIndex: 9999,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              backdropFilter: 'blur(6px)'
+            }}
+            onClick={() => setImageModalData(null)}
+          >
+            <div
+              style={{
+                background: '#0f172a',
+                border: '1px solid rgba(212, 175, 55, 0.45)',
+                borderRadius: '16px',
+                maxWidth: '680px',
+                width: '100%',
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                boxShadow: '0 25px 60px rgba(0,0,0,0.85)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 모달 헤더 */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.85rem 1.25rem',
+                  borderBottom: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.03)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Camera size={18} style={{ color: '#34d399' }} />
+                  <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#f8fafc' }}>
+                    견적서 사진 생성 완료
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setImageModalData(null)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* 모달 이미지 뷰어 */}
+              <div
+                style={{
+                  padding: '1rem',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  background: '#020617'
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                    borderRadius: '10px',
+                    padding: '0.65rem 0.9rem',
+                    fontSize: '0.82rem',
+                    color: '#a7f3d0',
+                    marginBottom: '0.85rem',
+                    lineHeight: 1.45
+                  }}
+                >
+                  💡 <strong>스마트폰 갤러리 저장 안내:</strong> 아래 사진을 <strong>1~2초간 꾹(길게) 터치</strong>하신 후 <strong>[사진 앱에 저장]</strong> 또는 <strong>[공유]</strong>를 선택하시면 스마트폰에 즉시 저장됩니다.
+                </div>
+
+                <img
+                  src={imageModalData.dataUrl}
+                  alt="견적서 사진"
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    borderRadius: '8px',
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
+                    border: '1px solid #334155'
+                  }}
+                />
+              </div>
+
+              {/* 모달 액션 버튼들 */}
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.6rem',
+                  padding: '0.85rem 1.25rem',
+                  borderTop: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.03)',
+                  flexWrap: 'wrap',
+                  justifyContent: 'flex-end'
+                }}
+              >
+                {typeof navigator !== 'undefined' &&
+                  navigator.canShare &&
+                  imageModalData.file &&
+                  navigator.canShare({ files: [imageModalData.file] }) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.share({
+                            files: [imageModalData.file],
+                            title: `JCC 맞춤 견적서 (${imageModalData.customer} 고객님)`,
+                            text: `[JCC 진센조] ${imageModalData.customer} 고객님 맞춤 가전 혜택 견적서입니다.`
+                          });
+                        } catch (_) {}
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '0.6rem 1.1rem',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        fontSize: '0.88rem',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem'
+                      }}
+                    >
+                      <Share2 size={15} /> 카카오톡 / 앱으로 공유
+                    </button>
+                  )}
+
+                <a
+                  href={imageModalData.dataUrl}
+                  download={imageModalData.filename}
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    border: '1px solid rgba(59, 130, 246, 0.45)',
+                    color: '#93c5fd',
+                    padding: '0.6rem 1.1rem',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    textDecoration: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <Download size={15} /> 파일 다운로드
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => setImageModalData(null)}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#cbd5e1',
+                    padding: '0.6rem 1rem',
+                    borderRadius: '10px',
+                    fontWeight: 600,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     );
   }
