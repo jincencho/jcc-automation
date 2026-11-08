@@ -560,9 +560,71 @@ export default function BenefitCalculator({ onBack }) {
   const [subCareServiceAmount, setSubCareServiceAmount] = useState(0); // 케어서비스 합계 금액
   const [includeServiceInFinal, setIncludeServiceInFinal] = useState(true); // 무상·케어 금액을 최종 체감가에 반영
 
+  // 복수 제휴카드 목록 상태 (구독 품목 증가 시 제휴카드 복수 등록 및 중복할인 지원)
+  const [subCards, setSubCards] = useState([
+    {
+      id: 1,
+      cardName: '',
+      minSpend: '',
+      monthly: 0,
+      months: null,
+      segmentCardOverrides: {},
+      segmentSpendOverrides: {}
+    }
+  ]);
+
+  const handleUpdateCard = (cardId, patch) => {
+    setSubCards((prev) => {
+      const next = prev.map((c) => (c.id === cardId ? { ...c, ...patch } : c));
+      if (cardId === next[0]?.id) {
+        if (patch.cardName !== undefined) setSubCardName(patch.cardName);
+        if (patch.minSpend !== undefined) setSubCardMinSpend(patch.minSpend);
+        if (patch.monthly !== undefined) setSubCardMonthly(patch.monthly);
+      }
+      return next;
+    });
+  };
+
+  const handleAddCard = (defaultMonths) => {
+    setSubCards((prev) => {
+      const nextId = prev.reduce((maxId, c) => Math.max(maxId, c.id), 0) + 1;
+      const m = defaultMonths || subPlans[prev.length]?.months || 72;
+      const firstIsSamsung = checkIsSamsungCard(prev[0]?.cardName || subCardName || '');
+      const newCardName = firstIsSamsung ? '구독엔로카 AMEX' : '삼성전자 AI구독 삼성카드';
+      const newSpend = firstIsSamsung ? '50만' : '70만';
+      const newMonthly = firstIsSamsung ? 16000 : 26000;
+      return [
+        ...prev,
+        {
+          id: nextId,
+          cardName: newCardName,
+          minSpend: newSpend,
+          monthly: newMonthly,
+          months: m,
+          segmentCardOverrides: {},
+          segmentSpendOverrides: {}
+        }
+      ];
+    });
+  };
+
+  const handleRemoveCard = (cardId) => {
+    setSubCards((prev) => {
+      if (prev.length <= 1) return prev;
+      const filtered = prev.filter((c) => c.id !== cardId);
+      if (filtered[0]) {
+        setSubCardName(filtered[0].cardName);
+        setSubCardMinSpend(filtered[0].minSpend);
+        setSubCardMonthly(filtered[0].monthly);
+      }
+      return filtered;
+    });
+  };
+
   const handleDirectSingleCardChange = (val) => {
     setSubCardMonthly(val);
     setSubSegmentCardOverrides({});
+    handleUpdateCard(subCards[0]?.id || 1, { monthly: val });
   };
 
   const handleSegmentCardOverride = (endMonth, val, isFirstSegment = false) => {
@@ -578,6 +640,7 @@ export default function BenefitCalculator({ onBack }) {
   const handleDirectSingleSpendChange = (val) => {
     setSubCardMinSpend(val);
     setSubSegmentSpendOverrides({});
+    handleUpdateCard(subCards[0]?.id || 1, { minSpend: val });
   };
 
   const handleSegmentSpendOverride = (endMonth, val, isFirstSegment = false) => {
@@ -591,9 +654,10 @@ export default function BenefitCalculator({ onBack }) {
   };
 
   const handleAddSubPlan = () => {
+    let nextDefaultMonths = 60;
     setSubPlans((prev) => {
       const usedMonths = prev.map((p) => p.months);
-      const nextDefaultMonths = !usedMonths.includes(60)
+      nextDefaultMonths = !usedMonths.includes(60)
         ? 60
         : !usedMonths.includes(72)
           ? 72
@@ -603,6 +667,9 @@ export default function BenefitCalculator({ onBack }) {
       const nextId = prev.reduce((maxId, p) => Math.max(maxId, p.id), 0) + 1;
       return [...prev, { id: nextId, months: nextDefaultMonths, monthlyFee: 0, totalAmount: 0 }];
     });
+
+    // 구독료 칸 추가 시: 제휴카드도 추가반영될 수 있도록 슬롯 자동 추가!
+    handleAddCard(nextDefaultMonths);
   };
 
   const handleUpdateSubPlan = (id, patch) => {
@@ -849,11 +916,142 @@ export default function BenefitCalculator({ onBack }) {
       setSubCardMonthly(16000);
     }
   };
+
+  const handleSelectCardPresetForCard = (cardId, cardFullName) => {
+    const isSamsung = checkIsSamsungCard(cardFullName);
+    const isLotte = cardFullName.includes('롯데') || cardFullName.includes('로카');
+    const defaultSpend = isSamsung ? '70만' : isLotte ? '50만' : '30만';
+    const defaultMonthly = isSamsung ? 26000 : 16000;
+
+    handleUpdateCard(cardId, {
+      cardName: cardFullName,
+      minSpend: defaultSpend,
+      monthly: defaultMonthly,
+      segmentSpendOverrides: {},
+      segmentCardOverrides: {}
+    });
+
+    if (subCards[0]?.id === cardId && subCards.length === 1) {
+      handleSelectCardPreset(cardFullName);
+    }
+  };
   const subGrossTotal =
     normalizedPlans.reduce((sum, p) => sum + p.rowGross, 0) + (Number(subPrepay) || 0);
 
-  const subCardTotalDiscount = subSegments.reduce((sum, seg) => sum + seg.appliedCard * seg.duration, 0);
-  const subMonthlyAfterCard = subSegments[0]?.netMonthly || 0;
+  // 복수 제휴카드 연산 (카드명이 입력되었거나 월 청구할인 금액 > 0)
+  const activeCards = subCards.filter(
+    (c) => (c.cardName && c.cardName.trim()) || (Number(c.monthly) || 0) > 0
+  );
+  const effectiveCards = activeCards.length > 0 ? activeCards : [subCards[0]];
+  const isSingleCardMode = effectiveCards.length === 1;
+
+  // 복수 제휴카드 세부 정보 및 혜택 계산
+  const cardDetails = effectiveCards.map((c, cardIdx) => {
+    const trimmedName = (c.cardName || '').trim();
+    const isSamsung = checkIsSamsungCard(trimmedName);
+    const company = getCardCompanyShort(trimmedName);
+    const policy = getAffiliateCardPolicy(trimmedName);
+    const matchedPlan = activePlans[cardIdx] || activePlans[activePlans.length - 1];
+    const planMonthlyFee = matchedPlan?.rowMonthly || effectiveMonthlyBase;
+    const cardMonths = Number(c.months) || (matchedPlan ? matchedPlan.months : subMonths);
+    const monthlyNum = Number(c.monthly) || 0;
+
+    const isEligible = Boolean(
+      (policy && policy.features.some((f) => f.label.includes('구독료') && f.status === 'O')) ||
+      isSamsung ||
+      trimmedName.includes('롯데') ||
+      trimmedName.includes('로카')
+    );
+
+    if (isSingleCardMode && isSamsung && isMultiPeriod) {
+      const segDiscounts = subSegments.reduce((sum, seg) => sum + seg.appliedCard * seg.duration, 0);
+      return {
+        card: c,
+        company,
+        isSamsung,
+        isNonSamsung: Boolean(trimmedName && !isSamsung),
+        policy,
+        totalDiscount: segDiscounts,
+        lines: cardSubLines,
+        isMultiLine: true
+      };
+    }
+
+    const totalDiscount = monthlyNum * cardMonths;
+
+    let cleanBase = (c.minSpend || '').trim();
+    if (cleanBase && !cleanBase.startsWith('월')) {
+      cleanBase = `월 ${cleanBase}`;
+    }
+    const recFee = Math.floor((planMonthlyFee || 0) / 1000) * 1000;
+    let spendDesc = cleanBase;
+
+    if (cleanBase && isEligible && recFee > 0) {
+      const manMatch = cleanBase.match(/(\d+(?:\.\d+)?)\s*만/);
+      const rawNumberMatch = cleanBase.replace(/[^0-9]/g, '');
+      let targetSpendWon = 0;
+      if (manMatch) {
+        targetSpendWon = parseFloat(manMatch[1]) * 10000;
+      } else if (rawNumberMatch && parseInt(rawNumberMatch, 10) >= 10000) {
+        targetSpendWon = parseInt(rawNumberMatch, 10);
+      } else if (rawNumberMatch && parseInt(rawNumberMatch, 10) > 0) {
+        targetSpendWon = parseInt(rawNumberMatch, 10) * 10000;
+      }
+
+      if (targetSpendWon > recFee) {
+        const remainWon = targetSpendWon - recFee;
+        const remainThousand = Math.floor(remainWon / 1000);
+        const remainManNum = remainThousand / 10;
+        const remainStr =
+          remainThousand % 10 === 0
+            ? `${remainManNum}만원`
+            : `${remainManNum.toFixed(1)}만원`;
+        spendDesc = `${cleanBase}(구독료 제외 ${remainStr})`;
+      } else if (targetSpendWon > 0) {
+        spendDesc = `${cleanBase}(구독료 제외 0원)`;
+      }
+    }
+
+    const discountText = monthlyNum > 0 ? `월 ${formatWon(monthlyNum)} × ${cardMonths}개월` : '';
+    const lineParts = [spendDesc, discountText].filter(Boolean);
+    const lineText = lineParts.join(' · ');
+
+    return {
+      card: c,
+      company,
+      isSamsung,
+      isNonSamsung: Boolean(trimmedName && !isSamsung),
+      policy,
+      totalDiscount,
+      lines: lineText ? [lineText] : [],
+      isMultiLine: false
+    };
+  });
+
+  const subCardTotalDiscount = isSingleCardMode && isSamsungCard && isMultiPeriod
+    ? subSegments.reduce((sum, seg) => sum + seg.appliedCard * seg.duration, 0)
+    : cardDetails.reduce((sum, d) => sum + d.totalDiscount, 0);
+
+  const cardCompanySummary = cardDetails
+    .map((d) => d.company)
+    .filter(Boolean)
+    .join(' + ');
+
+  const allCardSubLines = isSingleCardMode
+    ? cardDetails[0]?.lines || cardSubLines
+    : cardDetails.map((d, i) => {
+        const line = d.lines[0] || '';
+        const symbol = ['①', '②', '③', '④', '⑤'][i] || `[${i + 1}]`;
+        return `${symbol} ${d.company ? `${d.company} · ` : ''}${line}`;
+      });
+
+  const hasAnyNonSamsungCard = cardDetails.some((d) => d.isNonSamsung);
+
+  const startingTotalCardMonthly = isSingleCardMode
+    ? subSegments[0]?.appliedCard || cardMonthlyNum
+    : cardDetails.reduce((sum, d) => sum + (Number(d.card.monthly) || 0), 0);
+
+  const subMonthlyAfterCard = Math.max(0, effectiveMonthlyBase - startingTotalCardMonthly);
 
   const hasCareService = (Number(subCareServiceAmount) || 0) > 0;
   const subServiceTotal = (Number(subFreeServiceAmount) || 0) + (Number(subCareServiceAmount) || 0);
@@ -894,6 +1092,17 @@ export default function BenefitCalculator({ onBack }) {
     setSubCardName('');
     setSubCardMinSpend('');
     setSubCardMonthly(0);
+    setSubCards([
+      {
+        id: 1,
+        cardName: '',
+        minSpend: '',
+        monthly: 0,
+        months: 72,
+        segmentCardOverrides: {},
+        segmentSpendOverrides: {}
+      }
+    ]);
     setSubCardAuto70k(true);
     setSubSegmentCardOverrides({});
     setSubSegmentSpendOverrides({});
@@ -968,6 +1177,7 @@ export default function BenefitCalculator({ onBack }) {
         subInputMode,
         subPrepay,
         subPlans,
+        subCards,
         subCardName,
         subCardMinSpend,
         subCardMonthly,
@@ -1006,6 +1216,21 @@ export default function BenefitCalculator({ onBack }) {
     setSubCardName(d.subCardName ?? '');
     setSubCardMinSpend(d.subCardMinSpend ?? '');
     setSubCardMonthly(Number(d.subCardMonthly) || 0);
+    if (Array.isArray(d.subCards) && d.subCards.length > 0) {
+      setSubCards(d.subCards);
+    } else {
+      setSubCards([
+        {
+          id: 1,
+          cardName: d.subCardName ?? '',
+          minSpend: d.subCardMinSpend ?? '',
+          monthly: Number(d.subCardMonthly) || 0,
+          months: d.subPlans?.[0]?.months || 72,
+          segmentCardOverrides: d.subSegmentCardOverrides || {},
+          segmentSpendOverrides: d.subSegmentSpendOverrides || {}
+        }
+      ]);
+    }
     setSubCardAuto70k(d.subCardAuto70k !== undefined ? Boolean(d.subCardAuto70k) : true);
     setSubSegmentCardOverrides(
       d.subSegmentCardOverrides && typeof d.subSegmentCardOverrides === 'object'
@@ -1542,13 +1767,13 @@ export default function BenefitCalculator({ onBack }) {
                       <div className="a4-benefit-row">
                         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           제휴카드 혜택
-                          {cardCompanyLabel ? ` (${cardCompanyLabel})` : !hasAnyCardDiscount ? ' (미적용)' : ''}
+                          {cardCompanySummary ? ` (${cardCompanySummary})` : !hasAnyCardDiscount ? ' (미적용)' : ''}
                         </span>
                         <span className="a4-minus-blue" style={{ flexShrink: 0, marginLeft: '0.4rem' }}>
                           - {formatWon(subCardTotalDiscount)}
                         </span>
                       </div>
-                      {cardSubLines.length > 0 && (
+                      {allCardSubLines.length > 0 && (
                         <div
                           style={{
                             fontSize: '0.64rem',
@@ -1559,12 +1784,12 @@ export default function BenefitCalculator({ onBack }) {
                             wordBreak: 'keep-all'
                           }}
                         >
-                          {cardSubLines.map((line, lIdx) => (
+                          {allCardSubLines.map((line, lIdx) => (
                             <div key={lIdx}>{line}</div>
                           ))}
                         </div>
                       )}
-                      {isNonSamsungCard && (
+                      {hasAnyNonSamsungCard && (
                         <div
                           style={{
                             fontSize: '0.62rem',
@@ -1651,36 +1876,44 @@ export default function BenefitCalculator({ onBack }) {
             {/* 4. 제휴카드 실적인정 기준 안내 & 핵심 체크포인트 & 메모 */}
             <div className="a4-info-box">
               {/* 고객이 선택한 제휴카드에 대한 실적인정 기준 가이드 카드 (카드 설정 시 자동 노출) */}
-              {currentCardPolicy && (
-                <div className="a4-card-policy-box">
-                  <div className="a4-card-policy-header">
-                    <div className="a4-card-policy-title">
-                      <span className="a4-card-policy-badge">실적인정 기준</span>
-                      <strong>{currentCardPolicy.displayName}</strong>
-                    </div>
-                    <div className="a4-card-policy-meta">
-                      <span>프로모션: <strong>{currentCardPolicy.promoPeriod}</strong></span>
-                      <span>카드문의: <strong>{currentCardPolicy.csPhone}</strong></span>
-                    </div>
-                  </div>
+              {(() => {
+                const uniquePolicies = [...new Set(cardDetails.map((d) => d.policy).filter(Boolean))];
+                if (uniquePolicies.length === 0) return null;
+                return (
+                  <div className="a4-card-policy-box">
+                    {uniquePolicies.slice(0, 2).map((pol, pIdx) => (
+                      <div key={pol.key} style={pIdx > 0 ? { marginTop: '0.28rem', paddingTop: '0.22rem', borderTop: '1px dashed #bbf7d0' } : undefined}>
+                        <div className="a4-card-policy-header">
+                          <div className="a4-card-policy-title">
+                            <span className="a4-card-policy-badge">실적인정 기준</span>
+                            <strong>{pol.displayName}</strong>
+                          </div>
+                          <div className="a4-card-policy-meta">
+                            <span>프로모션: <strong>{pol.promoPeriod}</strong></span>
+                            <span>카드문의: <strong>{pol.csPhone}</strong></span>
+                          </div>
+                        </div>
 
-                  <div className="a4-card-policy-grid">
-                    {currentCardPolicy.features.map((f, i) => (
-                      <div key={i} className="a4-card-policy-item">
-                        <span
-                          className={`a4-status-tag ${
-                            f.status === 'O' ? 'tag-o' : f.status === 'X' ? 'tag-x' : 'tag-tri'
-                          }`}
-                        >
-                          {f.status}
-                        </span>
-                        <span className="a4-card-feature-label">{f.label}</span>
-                        <span className="a4-card-feature-text">{f.text}</span>
+                        <div className="a4-card-policy-grid">
+                          {pol.features.map((f, i) => (
+                            <div key={i} className="a4-card-policy-item">
+                              <span
+                                className={`a4-status-tag ${
+                                  f.status === 'O' ? 'tag-o' : f.status === 'X' ? 'tag-x' : 'tag-tri'
+                                }`}
+                              >
+                                {f.status}
+                              </span>
+                              <span className="a4-card-feature-label">{f.label}</span>
+                              <span className="a4-card-feature-text">{f.text}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {checkedPoints.length > 0 && (
                 <div className="a4-checkpoints-grid">
@@ -2498,284 +2731,310 @@ export default function BenefitCalculator({ onBack }) {
               </button>
             </div>
 
-            {/* 제휴카드 할인 상세 설정 (1. 카드이름 / 2. 필요실적 / 3. 청구할인 직접 입력) */}
+            {/* 제휴카드 할인 상세 설정 (복수 카드 추가 및 중복 혜택 지원) */}
             <div style={{ marginBottom: '0.95rem', padding: '0.9rem', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.28)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.3rem' }}>
-                <label style={{ ...labelStyle, marginBottom: 0, color: '#93c5fd', fontSize: '0.88rem' }}>
-                  💳 제휴카드 할인 상세 설정
-                </label>
-                <span style={{ fontSize: '0.78rem', color: '#93c5fd', fontWeight: 700 }}>
-                  {isMultiPeriod ? `최대 ${subMonths}개월` : `${subMonths}개월`} 총 할인: - {formatWon(subCardTotalDiscount)}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.3rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <label style={{ ...labelStyle, marginBottom: 0, color: '#93c5fd', fontSize: '0.88rem', fontWeight: 800 }}>
+                    💳 제휴카드 할인 상세 설정 {subCards.length > 1 && `(총 ${subCards.length}개 카드 중복할인)`}
+                  </label>
+                </div>
+                <span style={{ fontSize: '0.78rem', color: '#93c5fd', fontWeight: 800 }}>
+                  총 할인 합계: - {formatWon(subCardTotalDiscount)}
                 </span>
               </div>
 
-              {/* 1번째: 카드 이름 직접 입력 */}
-              <div style={{ marginBottom: '0.65rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.28rem', flexWrap: 'wrap', gap: '0.3rem' }}>
-                  <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>1. 카드 이름</span>
-                  <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                    {[
-                      { label: '삼성카드', fullName: '삼성전자 AI구독 삼성카드' },
-                      { label: 'KB카드', fullName: '삼성전자 AI구독 KB카드' },
-                      { label: '우리카드', fullName: '삼성전자 AI구독 우리카드' },
-                      { label: '하나카드', fullName: '삼성전자 AI구독 하나카드' },
-                      { label: '롯데카드', fullName: '구독엔로카 AMEX' }
-                    ].map((card) => (
-                      <button
-                        key={card.label}
-                        type="button"
-                        onClick={() => handleSelectCardPreset(card.fullName)}
-                        style={{
-                          padding: '0.16rem 0.42rem',
-                          borderRadius: '5px',
-                          border: subCardName === card.fullName ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.12)',
-                          background: subCardName === card.fullName ? 'rgba(59, 130, 246, 0.35)' : 'rgba(255,255,255,0.04)',
-                          color: '#e2e8f0',
-                          fontSize: '0.68rem',
-                          fontWeight: 600,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {card.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <input
-                  type="text"
-                  value={subCardName}
-                  onChange={(e) => setSubCardName(e.target.value)}
-                  placeholder="카드 이름 직접 입력 (예: 삼성전자 AI구독 삼성카드 / 구독엔로카 AMEX)"
-                  style={{
-                    ...textInputStyle,
-                    padding: '0.54rem 0.75rem',
-                    fontSize: '0.88rem',
-                    background: 'rgba(15, 23, 42, 0.75)'
-                  }}
-                />
-                <div
-                  style={{
-                    marginTop: '0.4rem',
-                    padding: '0.55rem 0.7rem',
-                    borderRadius: '9px',
-                    background: isNonSamsungCard ? 'rgba(245, 158, 11, 0.14)' : 'rgba(255, 255, 255, 0.04)',
-                    border: isNonSamsungCard
-                      ? '1px solid rgba(251, 191, 36, 0.45)'
-                      : '1px solid rgba(255, 255, 255, 0.08)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.55rem'
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: '0.74rem',
-                      color: isNonSamsungCard ? '#fde68a' : '#94a3b8',
-                      fontWeight: isNonSamsungCard ? 700 : 600,
-                      lineHeight: 1.45
-                    }}
-                  >
-                    <div>⚠️ <strong>카드 선택 시 주의사항:</strong> 삼성카드 외 타 카드사는 기존 카드 보유회원 혜택 제외</div>
-                    <div style={{ color: isNonSamsungCard ? '#fef08a' : '#cbd5e1', marginTop: '2px', textDecoration: 'underline' }}>
-                      (비회원 또는 최근 6개월간 결제이력이 없는 고객에 한함)
-                    </div>
-                  </div>
+              {/* 제휴카드 목록 렌더링 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {subCards.map((cardItem, cardIdx) => {
+                  const cardTrimmed = (cardItem.cardName || '').trim();
+                  const isSamsung = checkIsSamsungCard(cardTrimmed);
+                  const isNonSamsung = Boolean(cardTrimmed && !isSamsung);
+                  const cardCompanyShort = getCardCompanyShort(cardTrimmed);
+                  const matchedPlan = subPlans[cardIdx];
 
-                  {/* 선택된 제휴카드(KB, 우리, 롯데) 이벤트 대상 확인 QR코드 — 해당 카드 선택 시에만 노출 */}
-                  {(() => {
-                    const matchedItem = CARD_EVENT_QR_ITEMS.find((item) =>
-                      trimmedCardName.includes(item.matchKeyword)
-                    );
-                    if (!matchedItem) return null;
-                    return (
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '0.65rem',
-                          padding: '0.55rem 0.75rem',
-                          borderRadius: '8px',
-                          background: 'rgba(59, 130, 246, 0.18)',
-                          border: '1px solid rgba(96, 165, 250, 0.75)'
-                        }}
-                      >
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#93c5fd' }}>
-                            📱 {matchedItem.title}
-                          </div>
-                          <div style={{ fontSize: '0.71rem', color: '#cbd5e1', marginTop: '0.2rem', lineHeight: 1.35 }}>
-                            우측 QR코드를 스캔하시면 해당 카드의 프로모션 이벤트 대상 여부를 즉시 확인하실 수 있습니다.
-                          </div>
-                          <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              onClick={() => setActiveQrModalItem(matchedItem)}
-                              style={{
-                                padding: '0.22rem 0.55rem',
-                                borderRadius: '5px',
-                                border: '1px solid rgba(96, 165, 250, 0.5)',
-                                background: 'rgba(59, 130, 246, 0.28)',
-                                color: '#dbeafe',
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                cursor: 'pointer'
-                              }}
-                            >
-                              🔍 QR 크게보기
-                            </button>
-                            <a
-                              href={matchedItem.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                padding: '0.22rem 0.5rem',
-                                fontSize: '0.72rem',
-                                color: '#60a5fa',
-                                fontWeight: 700,
-                                textDecoration: 'underline',
-                                display: 'inline-flex',
-                                alignItems: 'center'
-                              }}
-                            >
-                              링크 직접 열기 ↗
-                            </a>
-                          </div>
-                        </div>
-
-                        <div
-                          onClick={() => setActiveQrModalItem(matchedItem)}
-                          title="클릭하면 QR코드를 크게 볼 수 있습니다"
-                          style={{
-                            cursor: 'pointer',
-                            flexShrink: 0,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '0.2rem'
-                          }}
-                        >
-                          <CardEventQrSvg url={matchedItem.url} size={70} label={matchedItem.title} />
-                          <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 600 }}>클릭 시 확대</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* 카드사 이벤트 대상 확인 QR 확대 모달 */}
-                {activeQrModalItem && (
-                  <div
-                    onClick={() => setActiveQrModalItem(null)}
-                    style={{
-                      position: 'fixed',
-                      inset: 0,
-                      zIndex: 9999,
-                      background: 'rgba(2, 6, 23, 0.82)',
-                      backdropFilter: 'blur(4px)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '1.5rem'
-                    }}
-                  >
+                  return (
                     <div
-                      onClick={(e) => e.stopPropagation()}
+                      key={cardItem.id}
+                      className="card-item-box"
                       style={{
-                        background: '#0f172a',
-                        border: '2px solid #60a5fa',
-                        borderRadius: '18px',
-                        padding: '1.6rem 1.8rem',
-                        maxWidth: '360px',
-                        width: '100%',
-                        textAlign: 'center',
-                        boxShadow: '0 20px 50px rgba(0,0,0,0.6)'
+                        padding: '0.75rem 0.85rem',
+                        borderRadius: '10px',
+                        background: 'rgba(15, 23, 42, 0.65)',
+                        border: '1px solid rgba(96, 165, 250, 0.35)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.65rem'
                       }}
                     >
-                      <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#60a5fa', marginBottom: '0.3rem' }}>
-                        {activeQrModalItem.badge}
-                      </div>
-                      <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'white', marginBottom: '0.4rem' }}>
-                        {activeQrModalItem.title}
-                      </h4>
-                      <p style={{ fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '1rem', lineHeight: 1.45 }}>
-                        스마트폰 카메라로 아래 QR코드를 스캔하시면<br />
-                        <strong style={{ color: '#fde68a' }}>프로모션 이벤트 대상 여부</strong>를 즉시 확인하실 수 있습니다.
-                      </p>
-                      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
-                        <CardEventQrSvg url={activeQrModalItem.url} size={210} label={activeQrModalItem.title} />
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: '1rem' }}>
-                        ※ 비회원 또는 최근 6개월간 해당 카드 결제이력이 없는 고객 한함
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                        <a
-                          href={activeQrModalItem.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            padding: '0.55rem 1rem',
-                            borderRadius: '8px',
-                            background: 'rgba(59, 130, 246, 0.2)',
-                            border: '1px solid #60a5fa',
-                            color: '#93c5fd',
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            textDecoration: 'none'
-                          }}
-                        >
-                          페이지 직접 열기 ↗
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => setActiveQrModalItem(null)}
-                          style={{
-                            padding: '0.55rem 1.2rem',
-                            borderRadius: '8px',
-                            background: '#3b82f6',
-                            border: 'none',
-                            color: 'white',
-                            fontSize: '0.82rem',
-                            fontWeight: 800,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          닫기
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                      {/* 제휴카드 카드 헤더 (카드 순번, 품목 연동, 적용 약정기간, 삭제 버튼) */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#93c5fd' }}>
+                            💳 제휴카드 {cardIdx + 1}
+                          </span>
+                          {cardCompanyShort && (
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.25)', border: '1px solid #60a5fa', color: '#dbeafe' }}>
+                              {cardCompanyShort}
+                            </span>
+                          )}
+                          {matchedPlan && (
+                            <span style={{ fontSize: '0.69rem', color: '#94a3b8' }}>
+                              (품목 {cardIdx + 1}: {matchedPlan.months}개월 · {formatWon(matchedPlan.rowMonthly)})
+                            </span>
+                          )}
+                        </div>
 
-              {/* 2번째: 필요 실적 직접 입력 */}
-              <div style={{ marginBottom: '0.65rem' }}>
-                <div style={{ marginBottom: '0.28rem' }}>
-                  <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>2. 필요 실적 (전월 실적)</span>
-                </div>
-                {isMultiPeriod && isSamsungCard ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {subSegments.map((seg, idx) => {
-                      const segVal =
-                        subSegmentSpendOverrides[seg.endMonth] !== undefined
-                          ? subSegmentSpendOverrides[seg.endMonth]
-                          : idx === 0
-                          ? subCardMinSpend
-                          : isSamsungCard && seg.baseMonthly < 70000
-                          ? '30만'
-                          : subCardMinSpend;
-                      return (
-                        <div key={seg.endMonth}>
-                          <div style={{ fontSize: '0.76rem', marginBottom: '0.22rem', color: '#cbd5e1' }}>
-                            {idx === 0
-                              ? `${seg.duration}개월간 (1~${seg.endMonth}개월 · 구독료 ${formatWon(seg.baseMonthly)})`
-                              : `나머지 ${seg.duration}개월 (${seg.startMonth}~${seg.endMonth}개월 · 구독료 ${formatWon(seg.baseMonthly)})`}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>적용 약정:</span>
+                          <select
+                            value={cardItem.months || (matchedPlan ? matchedPlan.months : subMonths)}
+                            onChange={(e) => handleUpdateCard(cardItem.id, { months: Number(e.target.value) })}
+                            style={{
+                              padding: '0.18rem 0.4rem',
+                              borderRadius: '6px',
+                              background: '#0f172a',
+                              border: '1px solid #60a5fa',
+                              color: 'white',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {[72, 60, 48, 36].map((m) => (
+                              <option key={m} value={m}>{m}개월</option>
+                            ))}
+                          </select>
+
+                          {subCards.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCard(cardItem.id)}
+                              title="해당 제휴카드 삭제"
+                              style={{
+                                padding: '0.2rem 0.45rem',
+                                borderRadius: '6px',
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                border: '1px solid rgba(248, 113, 113, 0.4)',
+                                color: '#fca5a5',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.2rem',
+                                fontSize: '0.7rem',
+                                fontWeight: 700
+                              }}
+                            >
+                              <Trash2 size={12} /> 삭제
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 1번째: 카드 이름 직접 입력 및 프리셋 */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.28rem', flexWrap: 'wrap', gap: '0.3rem' }}>
+                          <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>1. 카드 이름</span>
+                          <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                            {[
+                              { label: '삼성카드', fullName: '삼성전자 AI구독 삼성카드' },
+                              { label: 'KB카드', fullName: '삼성전자 AI구독 KB카드' },
+                              { label: '우리카드', fullName: '삼성전자 AI구독 우리카드' },
+                              { label: '하나카드', fullName: '삼성전자 AI구독 하나카드' },
+                              { label: '롯데카드', fullName: '구독엔로카 AMEX' }
+                            ].map((card) => (
+                              <button
+                                key={card.label}
+                                type="button"
+                                onClick={() => handleSelectCardPresetForCard(cardItem.id, card.fullName)}
+                                style={{
+                                  padding: '0.16rem 0.42rem',
+                                  borderRadius: '5px',
+                                  border: cardItem.cardName === card.fullName ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.12)',
+                                  background: cardItem.cardName === card.fullName ? 'rgba(59, 130, 246, 0.35)' : 'rgba(255,255,255,0.04)',
+                                  color: '#e2e8f0',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                {card.label}
+                              </button>
+                            ))}
                           </div>
+                        </div>
+                        <input
+                          type="text"
+                          value={cardItem.cardName}
+                          onChange={(e) => handleUpdateCard(cardItem.id, { cardName: e.target.value })}
+                          placeholder="카드 이름 직접 입력 (예: 삼성전자 AI구독 삼성카드 / 구독엔로카 AMEX)"
+                          style={{
+                            ...textInputStyle,
+                            padding: '0.54rem 0.75rem',
+                            fontSize: '0.88rem',
+                            background: 'rgba(15, 23, 42, 0.75)'
+                          }}
+                        />
+
+                        {isNonSamsung && (
+                          <div
+                            style={{
+                              marginTop: '0.4rem',
+                              padding: '0.55rem 0.7rem',
+                              borderRadius: '9px',
+                              background: 'rgba(245, 158, 11, 0.14)',
+                              border: '1px solid rgba(251, 191, 36, 0.45)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.55rem'
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: '0.74rem',
+                                color: '#fde68a',
+                                fontWeight: 700,
+                                lineHeight: 1.45
+                              }}
+                            >
+                              <div>⚠️ <strong>카드 선택 시 주의사항:</strong> 삼성카드 외 타 카드사는 기존 카드 보유회원 혜택 제외</div>
+                              <div style={{ color: '#fef08a', marginTop: '2px', textDecoration: 'underline' }}>
+                                (비회원 또는 최근 6개월간 결제이력이 없는 고객에 한함)
+                              </div>
+                            </div>
+
+                            {/* QR 이벤트 대상 확인 */}
+                            {(() => {
+                              const matchedItem = CARD_EVENT_QR_ITEMS.find((item) =>
+                                cardTrimmed.includes(item.matchKeyword)
+                              );
+                              if (!matchedItem) return null;
+                              return (
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '0.65rem',
+                                    padding: '0.55rem 0.75rem',
+                                    borderRadius: '8px',
+                                    background: 'rgba(59, 130, 246, 0.18)',
+                                    border: '1px solid rgba(96, 165, 250, 0.75)'
+                                  }}
+                                >
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#93c5fd' }}>
+                                      📱 {matchedItem.title}
+                                    </div>
+                                    <div style={{ fontSize: '0.71rem', color: '#cbd5e1', marginTop: '0.2rem', lineHeight: 1.35 }}>
+                                      우측 QR코드를 스캔하시면 해당 카드의 프로모션 이벤트 대상 여부를 즉시 확인하실 수 있습니다.
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveQrModalItem(matchedItem)}
+                                        style={{
+                                          padding: '0.22rem 0.55rem',
+                                          borderRadius: '5px',
+                                          border: '1px solid rgba(96, 165, 250, 0.5)',
+                                          background: 'rgba(59, 130, 246, 0.28)',
+                                          color: '#dbeafe',
+                                          fontSize: '0.72rem',
+                                          fontWeight: 700,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        🔍 QR 크게보기
+                                      </button>
+                                      <a
+                                        href={matchedItem.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                          padding: '0.22rem 0.5rem',
+                                          fontSize: '0.72rem',
+                                          color: '#60a5fa',
+                                          fontWeight: 700,
+                                          textDecoration: 'underline',
+                                          display: 'inline-flex',
+                                          alignItems: 'center'
+                                        }}
+                                      >
+                                        링크 직접 열기 ↗
+                                      </a>
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    onClick={() => setActiveQrModalItem(matchedItem)}
+                                    title="클릭하면 QR코드를 크게 볼 수 있습니다"
+                                    style={{
+                                      cursor: 'pointer',
+                                      flexShrink: 0,
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: 'center',
+                                      gap: '0.2rem'
+                                    }}
+                                  >
+                                    <CardEventQrSvg url={matchedItem.url} size={70} label={matchedItem.title} />
+                                    <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 600 }}>클릭 시 확대</span>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2번째: 필요 실적 직접 입력 */}
+                      <div>
+                        <div style={{ marginBottom: '0.28rem' }}>
+                          <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>2. 필요 실적 (전월 실적)</span>
+                        </div>
+                        {subCards.length === 1 && isMultiPeriod && isSamsung ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {subSegments.map((seg, idx) => {
+                              const segVal =
+                                subSegmentSpendOverrides[seg.endMonth] !== undefined
+                                  ? subSegmentSpendOverrides[seg.endMonth]
+                                  : idx === 0
+                                  ? cardItem.minSpend
+                                  : isSamsung && seg.baseMonthly < 70000
+                                  ? '30만'
+                                  : cardItem.minSpend;
+                              return (
+                                <div key={seg.endMonth}>
+                                  <div style={{ fontSize: '0.76rem', marginBottom: '0.22rem', color: '#cbd5e1' }}>
+                                    {idx === 0
+                                      ? `${seg.duration}개월간 (1~${seg.endMonth}개월 · 구독료 ${formatWon(seg.baseMonthly)})`
+                                      : `나머지 ${seg.duration}개월 (${seg.startMonth}~${seg.endMonth}개월 · 구독료 ${formatWon(seg.baseMonthly)})`}
+                                  </div>
+                                  <input
+                                    type="text"
+                                    value={segVal}
+                                    onChange={(e) => handleSegmentSpendOverride(seg.endMonth, e.target.value, idx === 0)}
+                                    placeholder={idx === 0 ? '필요 실적 직접 입력 (예: 70만 / 50만)' : '필요 실적 직접 입력 (예: 30만 / 50만)'}
+                                    style={{
+                                      ...textInputStyle,
+                                      padding: '0.54rem 0.75rem',
+                                      fontSize: '0.88rem',
+                                      background: 'rgba(15, 23, 42, 0.75)'
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
                           <input
                             type="text"
-                            value={segVal}
-                            onChange={(e) => handleSegmentSpendOverride(seg.endMonth, e.target.value, idx === 0)}
-                            placeholder={idx === 0 ? '필요 실적 직접 입력 (예: 70만 / 50만)' : '필요 실적 직접 입력 (예: 30만 / 50만)'}
+                            value={cardItem.minSpend}
+                            onChange={(e) => {
+                              handleUpdateCard(cardItem.id, { minSpend: e.target.value });
+                              if (cardIdx === 0) setSubSegmentSpendOverrides({});
+                            }}
+                            placeholder="필요 실적 직접 입력 (예: 50만 / 30만원)"
                             style={{
                               ...textInputStyle,
                               padding: '0.54rem 0.75rem',
@@ -2783,56 +3042,66 @@ export default function BenefitCalculator({ onBack }) {
                               background: 'rgba(15, 23, 42, 0.75)'
                             }}
                           />
+                        )}
+                      </div>
+
+                      {/* 3번째: 월 청구할인 금액 직접 입력 */}
+                      <div>
+                        <div style={{ marginBottom: '0.28rem' }}>
+                          <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>3. 월 청구할인 금액</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={subCardMinSpend}
-                    onChange={(e) => handleDirectSingleSpendChange(e.target.value)}
-                    placeholder="필요 실적 직접 입력 (예: 50만 / 30만원)"
-                    style={{
-                      ...textInputStyle,
-                      padding: '0.54rem 0.75rem',
-                      fontSize: '0.88rem',
-                      background: 'rgba(15, 23, 42, 0.75)'
-                    }}
-                  />
-                )}
-              </div>
 
-              {/* 3번째: 월 청구할인 금액 직접 입력 */}
-              <div>
-                <div style={{ marginBottom: '0.28rem' }}>
-                  <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>3. 월 청구할인 금액</span>
-                </div>
-
-                {isMultiPeriod && isSamsungCard ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {subSegments.map((seg, idx) => {
-                      const segVal = Number(seg.targetCard) || 0;
-                      return (
-                        <div key={seg.endMonth}>
-                          <div
-                            style={{
-                              fontSize: '0.76rem',
-                              marginBottom: '0.22rem',
-                              color: '#cbd5e1'
-                            }}
-                          >
-                            {idx === 0
-                              ? `${seg.duration}개월간 (1~${seg.endMonth}개월 · 구독료 ${formatWon(seg.baseMonthly)})`
-                              : `나머지 ${seg.duration}개월 (${seg.startMonth}~${seg.endMonth}개월 · 구독료 ${formatWon(seg.baseMonthly)})`}
+                        {subCards.length === 1 && isMultiPeriod && isSamsung ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {subSegments.map((seg, idx) => {
+                              const segVal = Number(seg.targetCard) || 0;
+                              return (
+                                <div key={seg.endMonth}>
+                                  <div
+                                    style={{
+                                      fontSize: '0.76rem',
+                                      marginBottom: '0.22rem',
+                                      color: '#cbd5e1'
+                                    }}
+                                  >
+                                    {idx === 0
+                                      ? `${seg.duration}개월간 (1~${seg.endMonth}개월 · 구독료 ${formatWon(seg.baseMonthly)})`
+                                      : `나머지 ${seg.duration}개월 (${seg.startMonth}~${seg.endMonth}개월 · 구독료 ${formatWon(seg.baseMonthly)})`}
+                                  </div>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={segVal === 0 ? '' : segVal.toLocaleString('ko-KR')}
+                                    onChange={(e) => {
+                                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                                      handleSegmentCardOverride(seg.endMonth, raw ? parseInt(raw, 10) : 0, idx === 0);
+                                    }}
+                                    placeholder="월 청구할인 금액 직접 입력 (예: 26,000 / 16,000)"
+                                    style={{
+                                      ...textInputStyle,
+                                      padding: '0.54rem 0.75rem',
+                                      fontSize: '0.88rem',
+                                      background: 'rgba(15, 23, 42, 0.75)'
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
                           </div>
+                        ) : (
                           <input
                             type="text"
                             inputMode="numeric"
-                            value={segVal === 0 ? '' : segVal.toLocaleString('ko-KR')}
+                            value={
+                              (Number(cardItem.monthly) || 0) === 0
+                                ? ''
+                                : (Number(cardItem.monthly) || 0).toLocaleString('ko-KR')
+                            }
                             onChange={(e) => {
                               const raw = e.target.value.replace(/[^0-9]/g, '');
-                              handleSegmentCardOverride(seg.endMonth, raw ? parseInt(raw, 10) : 0, idx === 0);
+                              const val = raw ? parseInt(raw, 10) : 0;
+                              handleUpdateCard(cardItem.id, { monthly: val });
+                              if (cardIdx === 0) setSubSegmentCardOverrides({});
                             }}
                             placeholder="월 청구할인 금액 직접 입력 (예: 26,000 / 16,000)"
                             style={{
@@ -2842,33 +3111,120 @@ export default function BenefitCalculator({ onBack }) {
                               background: 'rgba(15, 23, 42, 0.75)'
                             }}
                           />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={
-                      (Number(subSegments[0]?.targetCard ?? subCardMonthly) || 0) === 0
-                        ? ''
-                        : (Number(subSegments[0]?.targetCard ?? subCardMonthly) || 0).toLocaleString('ko-KR')
-                    }
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^0-9]/g, '');
-                      handleDirectSingleCardChange(raw ? parseInt(raw, 10) : 0);
-                    }}
-                    placeholder="월 청구할인 금액 직접 입력 (예: 26,000 / 16,000)"
-                    style={{
-                      ...textInputStyle,
-                      padding: '0.54rem 0.75rem',
-                      fontSize: '0.88rem',
-                      background: 'rgba(15, 23, 42, 0.75)'
-                    }}
-                  />
-                )}
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* 제휴카드 수동 추가 버튼 */}
+              <button
+                type="button"
+                onClick={() => handleAddCard()}
+                style={{
+                  marginTop: '0.65rem',
+                  width: '100%',
+                  padding: '0.52rem 0.8rem',
+                  borderRadius: '9px',
+                  border: '1px dashed rgba(96, 165, 250, 0.55)',
+                  background: 'rgba(59, 130, 246, 0.12)',
+                  color: '#93c5fd',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <Plus size={15} /> 제휴카드 추가 (품목별 제휴카드 중복할인 적용 시)
+              </button>
+
+              {/* 카드사 이벤트 대상 확인 QR 확대 모달 (전역 공통) */}
+              {activeQrModalItem && (
+                <div
+                  onClick={() => setActiveQrModalItem(null)}
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 9999,
+                    background: 'rgba(2, 6, 23, 0.82)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1.5rem'
+                  }}
+                >
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      background: '#0f172a',
+                      border: '2px solid #60a5fa',
+                      borderRadius: '18px',
+                      padding: '1.6rem 1.8rem',
+                      maxWidth: '360px',
+                      width: '100%',
+                      textAlign: 'center',
+                      boxShadow: '0 20px 50px rgba(0,0,0,0.6)'
+                    }}
+                  >
+                    <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#60a5fa', marginBottom: '0.3rem' }}>
+                      {activeQrModalItem.badge}
+                    </div>
+                    <h4 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'white', marginBottom: '0.4rem' }}>
+                      {activeQrModalItem.title}
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '1rem', lineHeight: 1.45 }}>
+                      스마트폰 카메라로 아래 QR코드를 스캔하시면<br />
+                      <strong style={{ color: '#fde68a' }}>프로모션 이벤트 대상 여부</strong>를 즉시 확인하실 수 있습니다.
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                      <CardEventQrSvg url={activeQrModalItem.url} size={210} label={activeQrModalItem.title} />
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: '1rem' }}>
+                      ※ 비회원 또는 최근 6개월간 해당 카드 결제이력이 없는 고객 한함
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                      <a
+                        href={activeQrModalItem.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: '0.55rem 1rem',
+                          borderRadius: '8px',
+                          background: 'rgba(59, 130, 246, 0.2)',
+                          border: '1px solid #60a5fa',
+                          color: '#93c5fd',
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          textDecoration: 'none'
+                        }}
+                      >
+                        페이지 직접 열기 ↗
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setActiveQrModalItem(null)}
+                        style={{
+                          padding: '0.55rem 1.2rem',
+                          borderRadius: '8px',
+                          background: '#3b82f6',
+                          border: 'none',
+                          color: 'white',
+                          fontSize: '0.82rem',
+                          fontWeight: 800,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        닫기
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 삼성AI구독 혜택(캐시백) */}
