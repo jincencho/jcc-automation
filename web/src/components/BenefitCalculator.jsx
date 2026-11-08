@@ -622,8 +622,15 @@ export default function BenefitCalculator({ onBack }) {
   const [subSegmentCardOverrides, setSubSegmentCardOverrides] = useState({}); // 구간별 청구할인 수동 조정값
   const [subSegmentSpendOverrides, setSubSegmentSpendOverrides] = useState({}); // 구간별 필요실적 수동 조정값
   const [subPurchaseBenefit, setSubPurchaseBenefit] = useState(0); // 통합 구독 구매 혜택 금액
-  const [subFreeServiceAmount, setSubFreeServiceAmount] = useState(0); // 무상서비스 금액 합계
-  const [subCareServiceAmount, setSubCareServiceAmount] = useState(0); // 케어서비스 합계 금액
+  // 무상 A/S 연장 이용료 (복수 품목 지원: 1번 2900원 72개월, 2번 1900원 60개월 ...)
+  const [subFreeServiceItems, setSubFreeServiceItems] = useState([
+    { id: 1, monthlyFee: 0, months: 72 }
+  ]);
+  // 케어서비스 혜택 (세부 설정: 1번 소모품비용 갯수, 2번 방문케어 횟수 ...)
+  const [subCareServiceItems, setSubCareServiceItems] = useState([
+    { id: 1, name: '소모품비용', amount: 0, count: 1, unit: '개' },
+    { id: 2, name: '방문케어', amount: 0, count: 1, unit: '회' }
+  ]);
   const [includeServiceInFinal, setIncludeServiceInFinal] = useState(true); // 무상·케어 금액을 최종 체감가에 반영
 
   // 복수 제휴카드 목록 상태 (구독 품목 증가 시 제휴카드 복수 등록 및 중복할인 지원)
@@ -1049,7 +1056,21 @@ export default function BenefitCalculator({ onBack }) {
 
   const subMonthlyAfterCard = Math.max(0, effectiveMonthlyBase - startingTotalCardMonthly);
 
-  const hasCareService = (Number(subCareServiceAmount) || 0) > 0;
+  // 무상 A/S 연장 이용료 총액: 각 품목별 (월 이용료 × 개월수) 합산
+  const subFreeServiceAmount = subFreeServiceItems.reduce(
+    (sum, it) => sum + (Number(it.monthlyFee) || 0) * (Number(it.months) || 72),
+    0
+  );
+  const validFreeServiceCount = subFreeServiceItems.filter((it) => (Number(it.monthlyFee) || 0) > 0).length;
+
+  // 케어서비스 혜택 총액: 각 항목별 (금액 × 갯수/횟수) 합산 (1번 소모품비용 갯수, 2번 방문케어 횟수 ...)
+  const subCareServiceAmount = subCareServiceItems.reduce(
+    (sum, it) => sum + (Number(it.amount) || 0) * (Number(it.count) || 1),
+    0
+  );
+  const validCareServiceItems = subCareServiceItems.filter((it) => (Number(it.amount) || 0) > 0);
+  const validCareServiceCount = validCareServiceItems.length;
+  const hasCareService = subCareServiceAmount > 0;
   const subServiceTotal = (Number(subFreeServiceAmount) || 0) + (Number(subCareServiceAmount) || 0);
   const subCashBenefitTotal = subCardTotalDiscount + (Number(subPurchaseBenefit) || 0);
   const subTotalBenefitSum = subCashBenefitTotal + (includeServiceInFinal ? subServiceTotal : 0);
@@ -1103,14 +1124,63 @@ export default function BenefitCalculator({ onBack }) {
     setSubSegmentCardOverrides({});
     setSubSegmentSpendOverrides({});
     setSubPurchaseBenefit(0);
-    setSubFreeServiceAmount(0);
-    setSubCareServiceAmount(0);
+    setSubFreeServiceItems([{ id: 1, monthlyFee: 0, months: 72 }]);
+    setSubCareServiceItems([
+      { id: 1, name: '소모품비용', amount: 0, count: 1, unit: '개' },
+      { id: 2, name: '방문케어', amount: 0, count: 1, unit: '회' }
+    ]);
     setIncludeServiceInFinal(true);
     setRecommendMode('auto');
     setCheckpoints(DEFAULT_CHECKPOINTS);
     setActiveQuoteId(null);
     setQuoteTitleInput('');
     setStep('input');
+  };
+
+  // 무상 A/S 연장 품목 관리
+  const handleAddFreeServiceItem = () => {
+    setSubFreeServiceItems((prev) => {
+      const nextId = prev.length > 0 ? Math.max(...prev.map((it) => it.id)) + 1 : 1;
+      const lastMonths = prev[prev.length - 1]?.months;
+      const nextMonths = lastMonths === 72 ? 60 : lastMonths === 60 ? 72 : subMonths || 72;
+      return [...prev, { id: nextId, monthlyFee: 0, months: nextMonths }];
+    });
+  };
+
+  const handleRemoveFreeServiceItem = (id) => {
+    setSubFreeServiceItems((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((it) => it.id !== id);
+    });
+  };
+
+  const handleUpdateFreeServiceItem = (id, field, value) => {
+    setSubFreeServiceItems((prev) => {
+      return prev.map((it) => (it.id === id ? { ...it, [field]: value } : it));
+    });
+  };
+
+  // 케어서비스 혜택 항목 관리 (1번 소모품비용 갯수, 2번 방문케어 횟수 ...)
+  const handleAddCareServiceItem = () => {
+    setSubCareServiceItems((prev) => {
+      const nextId = prev.length > 0 ? Math.max(...prev.map((it) => it.id)) + 1 : 1;
+      const defaultName = nextId === 1 ? '소모품비용' : nextId === 2 ? '방문케어' : `추가 케어서비스 ${nextId}`;
+      const defaultUnit = defaultName.includes('소모품') ? '개' : '회';
+      return [...prev, { id: nextId, name: defaultName, amount: 0, count: 1, unit: defaultUnit }];
+    });
+  };
+
+  const handleRemoveCareServiceItem = (id) => {
+    setSubCareServiceItems((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((it) => it.id !== id);
+    });
+  };
+
+  const handleUpdateCareServiceItem = (id, field, value) => {
+    setSubCareServiceItems((prev) => {
+      return prev.map((it) => (it.id === id ? { ...it, [field]: value } : it));
+    });
   };
 
   // ---------------- 견적 보관함 (저장 / 불러오기 / 파일 내보내기·가져오기) ----------------
@@ -1181,7 +1251,8 @@ export default function BenefitCalculator({ onBack }) {
         subSegmentCardOverrides,
         subSegmentSpendOverrides,
         subPurchaseBenefit,
-        subFreeServiceAmount,
+        subFreeServiceItems,
+        subCareServiceItems,
         subCareServiceAmount,
         includeServiceInFinal,
         recommendMode,
@@ -1239,8 +1310,36 @@ export default function BenefitCalculator({ onBack }) {
         : {}
     );
     setSubPurchaseBenefit(Number(d.subPurchaseBenefit) || 0);
-    setSubFreeServiceAmount(Number(d.subFreeServiceAmount) || 0);
-    setSubCareServiceAmount(Number(d.subCareServiceAmount) || 0);
+    if (Array.isArray(d.subFreeServiceItems) && d.subFreeServiceItems.length > 0) {
+      setSubFreeServiceItems(d.subFreeServiceItems);
+    } else if (Number(d.subFreeServiceAmount) > 0) {
+      setSubFreeServiceItems([
+        { id: 1, monthlyFee: Math.round(Number(d.subFreeServiceAmount) / 72), months: 72 }
+      ]);
+    } else {
+      setSubFreeServiceItems([{ id: 1, monthlyFee: 0, months: 72 }]);
+    }
+    if (Array.isArray(d.subCareServiceItems) && d.subCareServiceItems.length > 0) {
+      setSubCareServiceItems(
+        d.subCareServiceItems.map((it, idx) => ({
+          id: it.id || idx + 1,
+          name: it.name || (idx === 0 ? '소모품비용' : '방문케어'),
+          amount: Number(it.amount) || 0,
+          count: it.count !== undefined ? Number(it.count) : 1,
+          unit: it.unit || (it.name?.includes('소모품') ? '개' : '회')
+        }))
+      );
+    } else if (Number(d.subCareServiceAmount) > 0) {
+      setSubCareServiceItems([
+        { id: 1, name: '소모품비용', amount: 0, count: 1, unit: '개' },
+        { id: 2, name: '방문케어', amount: Number(d.subCareServiceAmount), count: 1, unit: '회' }
+      ]);
+    } else {
+      setSubCareServiceItems([
+        { id: 1, name: '소모품비용', amount: 0, count: 1, unit: '개' },
+        { id: 2, name: '방문케어', amount: 0, count: 1, unit: '회' }
+      ]);
+    }
     setIncludeServiceInFinal(d.includeServiceInFinal !== undefined ? Boolean(d.includeServiceInFinal) : true);
     setRecommendMode(d.recommendMode || 'auto');
     setCheckpoints(
@@ -1864,16 +1963,25 @@ export default function BenefitCalculator({ onBack }) {
                   <div className="a4-divider-label">적용 혜택 및 서비스</div>
                   <div className="a4-benefit-list">
                     <div className="a4-benefit-row">
-                      <span>일반구매 총 할인·혜택</span>
+                      <span>
+                        <span style={{ color: '#d97706', marginRight: '4px', fontWeight: 800 }}>•</span>
+                        일반구매 총 할인·혜택
+                      </span>
                       <span className="a4-minus">- {formatWon(lumpTotalBenefit)}</span>
                     </div>
                     <div className="a4-benefit-row">
-                      <span>무상 A/S 보증</span>
+                      <span>
+                        <span style={{ color: '#d97706', marginRight: '4px', fontWeight: 800 }}>•</span>
+                        무상 A/S 보증
+                      </span>
                       <span className="a4-benefit-note">기본 보증만 적용</span>
                     </div>
                     {hasCareService && (
                       <div className="a4-benefit-row">
-                        <span>전문 케어서비스</span>
+                        <span>
+                          <span style={{ color: '#d97706', marginRight: '4px', fontWeight: 800 }}>•</span>
+                          전문 케어서비스
+                        </span>
                         <span className="a4-benefit-note">미포함 (별도 비용)</span>
                       </div>
                     )}
@@ -1973,6 +2081,7 @@ export default function BenefitCalculator({ onBack }) {
                             flex: 1
                           }}
                         >
+                          <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
                           제휴카드 혜택
                           {cardCompanySummary ? ` (${cardCompanySummary})` : !hasAnyCardDiscount ? ' (미적용)' : ''}
                         </span>
@@ -1995,6 +2104,7 @@ export default function BenefitCalculator({ onBack }) {
                             color: '#475569',
                             fontWeight: 600,
                             marginTop: '2px',
+                            marginLeft: '9px',
                             lineHeight: 1.32,
                             wordBreak: 'keep-all'
                           }}
@@ -2011,6 +2121,7 @@ export default function BenefitCalculator({ onBack }) {
                             color: '#dc2626',
                             fontWeight: 700,
                             marginTop: '2px',
+                            marginLeft: '9px',
                             lineHeight: 1.25,
                             wordBreak: 'keep-all'
                           }}
@@ -2023,12 +2134,25 @@ export default function BenefitCalculator({ onBack }) {
                       )}
                     </div>
                     <div className="a4-benefit-row">
-                      <span>삼성AI구독 혜택(캐시백)</span>
+                      <span>
+                        <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                        삼성AI구독 혜택(캐시백)
+                      </span>
                       <span className="a4-minus-blue">- {formatWon(subPurchaseBenefit)}</span>
                     </div>
-                    <div className="a4-benefit-row">
-                      <span>무상 A/S 보증 이용료(약정기간)</span>
-                      <span className="a4-minus-blue">
+                    <div className="a4-benefit-row" style={{ alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.25 }}>
+                        <span style={{ whiteSpace: 'nowrap' }}>
+                          <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                          무상 A/S 연장 이용료(혜택)
+                        </span>
+                        {validFreeServiceCount > 0 && (
+                          <span style={{ fontSize: '0.67rem', color: '#64748b', marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
+                            (총 {validFreeServiceCount}개 품목)
+                          </span>
+                        )}
+                      </div>
+                      <span className="a4-minus-blue" style={{ flexShrink: 0, marginTop: '1px' }}>
                         {subFreeServiceAmount > 0
                           ? includeServiceInFinal
                             ? `- ${formatWon(subFreeServiceAmount)}`
@@ -2037,9 +2161,23 @@ export default function BenefitCalculator({ onBack }) {
                       </span>
                     </div>
                     {hasCareService && (
-                      <div className="a4-benefit-row">
-                        <span>케어서비스 혜택(방문관리·소모품)</span>
-                        <span className="a4-minus-blue">
+                      <div className="a4-benefit-row" style={{ alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.25 }}>
+                          <span style={{ whiteSpace: 'nowrap' }}>
+                            <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                            케어서비스 혜택(방문관리·소모품)
+                          </span>
+                          {validCareServiceCount > 0 && (
+                            <span style={{ fontSize: '0.67rem', color: '#64748b', marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
+                              ({validCareServiceCount <= 2
+                                ? validCareServiceItems
+                                    .map((it) => `${it.name?.trim() || '케어서비스'} ${it.count || 1}${it.unit || (it.name?.includes('소모품') ? '개' : '회')}`)
+                                    .join(' · ')
+                                : `총 ${validCareServiceCount}개 항목`})
+                            </span>
+                          )}
+                        </div>
+                        <span className="a4-minus-blue" style={{ flexShrink: 0, marginTop: '1px' }}>
                           {includeServiceInFinal
                             ? `- ${formatWon(subCareServiceAmount)}`
                             : `+ ${formatWon(subCareServiceAmount)} 상당`}
@@ -3741,17 +3879,367 @@ export default function BenefitCalculator({ onBack }) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                <div>
-                  <label style={{ ...labelStyle, color: '#d1fae5', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <ShieldCheck size={14} style={{ color: '#34d399' }} /> 무상 A/S 보증 이용료(약정기간) 합계
-                  </label>
-                  <MoneyInput value={subFreeServiceAmount} onChange={setSubFreeServiceAmount} compact accentColor="#6ee7b7" />
+                {/* 1) 무상 A/S 연장 이용료(혜택) - 1번 2900원 72개월, 2번 1900원 60개월 ... 간소화 입력 */}
+                <div
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.65)',
+                    border: '1px solid rgba(52, 211, 153, 0.35)',
+                    borderRadius: '12px',
+                    padding: '0.85rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    <label style={{ ...labelStyle, color: '#d1fae5', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0, fontWeight: 700, fontSize: '0.88rem' }}>
+                      <ShieldCheck size={15} style={{ color: '#34d399' }} /> 무상 A/S 연장 이용료(혜택)
+                    </label>
+                    <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#6ee7b7' }}>
+                      총 혜택 합계: - {formatWon(subFreeServiceAmount)}
+                      {validFreeServiceCount > 0 && ` (총 ${validFreeServiceCount}개 품목)`}
+                    </span>
+                  </div>
+
+                  {/* 품목별 목록 (1번, 2번, 3번 ...) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {subFreeServiceItems.map((item, idx) => {
+                      const itemTotal = (Number(item.monthlyFee) || 0) * (Number(item.months) || 72);
+                      return (
+                        <div
+                          key={item.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            border: '1px solid rgba(52, 211, 153, 0.2)',
+                            borderRadius: '8px',
+                            padding: '0.45rem 0.65rem',
+                            flexWrap: 'wrap'
+                          }}
+                        >
+                          {/* 품목 번호 배지 */}
+                          <span
+                            style={{
+                              background: 'rgba(52, 211, 153, 0.2)',
+                              border: '1px solid rgba(52, 211, 153, 0.45)',
+                              color: '#6ee7b7',
+                              fontSize: '0.76rem',
+                              fontWeight: 800,
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '6px',
+                              flexShrink: 0
+                            }}
+                          >
+                            {idx + 1}번
+                          </span>
+
+                          {/* 월 이용료 입력 */}
+                          <div style={{ flex: '1 1 120px', minWidth: '110px' }}>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={item.monthlyFee ? Number(item.monthlyFee).toLocaleString() : ''}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/[^0-9]/g, '');
+                                  handleUpdateFreeServiceItem(item.id, 'monthlyFee', raw ? parseInt(raw, 10) : 0);
+                                }}
+                                placeholder="월 금액 (예: 2,900)"
+                                style={{
+                                  ...textInputStyle,
+                                  padding: '0.45rem 1.6rem 0.45rem 0.65rem',
+                                  fontSize: '0.86rem',
+                                  textAlign: 'right'
+                                }}
+                              />
+                              <span style={{ position: 'absolute', right: '0.55rem', color: '#94a3b8', fontSize: '0.76rem', pointerEvents: 'none' }}>
+                                원
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 약정 개월수 선택/입력 */}
+                          <div style={{ width: '105px', flexShrink: 0 }}>
+                            <select
+                              value={item.months || 72}
+                              onChange={(e) => handleUpdateFreeServiceItem(item.id, 'months', parseInt(e.target.value, 10))}
+                              style={{
+                                ...textInputStyle,
+                                padding: '0.45rem 0.5rem',
+                                fontSize: '0.86rem',
+                                background: '#0f172a',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <option value="72">72개월</option>
+                              <option value="60">60개월</option>
+                              <option value="48">48개월</option>
+                              <option value="36">36개월</option>
+                            </select>
+                          </div>
+
+                          {/* 계산 금액 라벨 */}
+                          <div style={{ minWidth: '100px', textAlign: 'right', fontSize: '0.8rem', color: '#a7f3d0', fontWeight: 700, flexShrink: 0 }}>
+                            = {formatWon(itemTotal)}
+                          </div>
+
+                          {/* 삭제 버튼 */}
+                          {subFreeServiceItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFreeServiceItem(item.id)}
+                              title="이 품목 삭제"
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.12)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                color: '#fca5a5',
+                                borderRadius: '6px',
+                                padding: '0.35rem 0.45rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 품목 추가 버튼 */}
+                  <button
+                    type="button"
+                    onClick={handleAddFreeServiceItem}
+                    style={{
+                      marginTop: '0.55rem',
+                      width: '100%',
+                      padding: '0.45rem 0.75rem',
+                      borderRadius: '8px',
+                      border: '1px dashed rgba(52, 211, 153, 0.55)',
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      color: '#6ee7b7',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <Plus size={14} /> 무상 A/S 연장 품목 추가 (2번, 3번...)
+                  </button>
                 </div>
-                <div>
-                  <label style={{ ...labelStyle, color: '#d1fae5', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <Wrench size={14} style={{ color: '#34d399' }} /> 케어서비스 합계 금액 (미입력 시 출력 제외)
-                  </label>
-                  <MoneyInput value={subCareServiceAmount} onChange={setSubCareServiceAmount} compact accentColor="#6ee7b7" />
+                {/* 2) 케어서비스 혜택(방문관리·소모품) - 1번 소모품비용, 2번 방문케어 세부설정 */}
+                <div
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.65)',
+                    border: '1px solid rgba(52, 211, 153, 0.35)',
+                    borderRadius: '12px',
+                    padding: '0.85rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    <label style={{ ...labelStyle, color: '#d1fae5', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0, fontWeight: 700, fontSize: '0.88rem' }}>
+                      <Wrench size={15} style={{ color: '#34d399' }} /> 케어서비스 혜택(방문관리·소모품)
+                    </label>
+                    <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#6ee7b7' }}>
+                      총 혜택 합계: - {formatWon(subCareServiceAmount)}
+                      {validCareServiceCount > 0 && ` (총 ${validCareServiceCount}개 항목)`}
+                    </span>
+                  </div>
+
+                  {/* 케어서비스 항목 목록 (1번 소모품비용 갯수, 2번 방문케어 횟수 ...) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {subCareServiceItems.map((item, idx) => {
+                      const itemUnit = item.unit || (item.name?.includes('소모품') ? '개' : '회');
+                      const itemTotal = (Number(item.amount) || 0) * (Number(item.count) || 1);
+                      return (
+                        <div
+                          key={item.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.45rem',
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            border: '1px solid rgba(52, 211, 153, 0.2)',
+                            borderRadius: '8px',
+                            padding: '0.45rem 0.65rem',
+                            flexWrap: 'wrap'
+                          }}
+                        >
+                          {/* 번호 배지 */}
+                          <span
+                            style={{
+                              background: 'rgba(52, 211, 153, 0.2)',
+                              border: '1px solid rgba(52, 211, 153, 0.45)',
+                              color: '#6ee7b7',
+                              fontSize: '0.76rem',
+                              fontWeight: 800,
+                              padding: '0.2rem 0.55rem',
+                              borderRadius: '6px',
+                              flexShrink: 0
+                            }}
+                          >
+                            {idx + 1}번
+                          </span>
+
+                          {/* 항목명 입력 (기본: 소모품비용, 방문케어) */}
+                          <div style={{ flex: '1 1 100px', minWidth: '90px' }}>
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => handleUpdateCareServiceItem(item.id, 'name', e.target.value)}
+                              placeholder="항목명"
+                              style={{
+                                ...textInputStyle,
+                                padding: '0.45rem 0.65rem',
+                                fontSize: '0.85rem',
+                                color: '#e2e8f0',
+                                fontWeight: 600
+                              }}
+                            />
+                          </div>
+
+                          {/* 금액 (단가) 입력 */}
+                          <div style={{ flex: '1.2 1 115px', minWidth: '105px' }}>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={item.amount ? Number(item.amount).toLocaleString() : ''}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/[^0-9]/g, '');
+                                  handleUpdateCareServiceItem(item.id, 'amount', raw ? parseInt(raw, 10) : 0);
+                                }}
+                                placeholder="금액 (예: 50,000)"
+                                style={{
+                                  ...textInputStyle,
+                                  padding: '0.45rem 1.6rem 0.45rem 0.65rem',
+                                  fontSize: '0.85rem',
+                                  textAlign: 'right',
+                                  color: '#a7f3d0',
+                                  fontWeight: 700
+                                }}
+                              />
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  right: '0.55rem',
+                                  fontSize: '0.78rem',
+                                  color: '#94a3b8',
+                                  pointerEvents: 'none'
+                                }}
+                              >
+                                원
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 갯수 / 횟수 입력 */}
+                          <div style={{ width: '82px', flexShrink: 0 }}>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={item.count !== undefined ? item.count : 1}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/[^0-9]/g, '');
+                                  handleUpdateCareServiceItem(item.id, 'count', raw ? parseInt(raw, 10) : '');
+                                }}
+                                placeholder="1"
+                                title={itemUnit === '개' ? '소모품 갯수' : '방문케어 횟수'}
+                                style={{
+                                  ...textInputStyle,
+                                  padding: '0.45rem 1.6rem 0.45rem 0.5rem',
+                                  fontSize: '0.85rem',
+                                  textAlign: 'center',
+                                  color: '#e2e8f0',
+                                  fontWeight: 700
+                                }}
+                              />
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  right: '0.5rem',
+                                  fontSize: '0.78rem',
+                                  color: '#34d399',
+                                  fontWeight: 700,
+                                  pointerEvents: 'none'
+                                }}
+                              >
+                                {itemUnit}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 계산 금액 라벨 */}
+                          <div
+                            style={{
+                              minWidth: '95px',
+                              textAlign: 'right',
+                              fontSize: '0.82rem',
+                              color: '#a7f3d0',
+                              fontWeight: 700,
+                              flexShrink: 0
+                            }}
+                          >
+                            = {formatWon(itemTotal)}
+                          </div>
+
+                          {/* 삭제 버튼 */}
+                          {subCareServiceItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCareServiceItem(item.id)}
+                              title="이 항목 삭제"
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.12)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                color: '#fca5a5',
+                                borderRadius: '6px',
+                                padding: '0.35rem 0.45rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 항목 추가 버튼 */}
+                  <button
+                    type="button"
+                    onClick={handleAddCareServiceItem}
+                    style={{
+                      marginTop: '0.55rem',
+                      width: '100%',
+                      padding: '0.45rem 0.75rem',
+                      borderRadius: '8px',
+                      border: '1px dashed rgba(52, 211, 153, 0.55)',
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      color: '#6ee7b7',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <Plus size={14} /> 케어서비스 항목 추가 (3번, 4번...)
+                  </button>
                 </div>
               </div>
             </div>
