@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import * as htmlToImage from 'html-to-image';
 import {
   Lock,
   Unlock,
   Calculator,
   Printer,
+  Camera,
   ArrowLeft,
   RotateCcw,
   CheckCircle2,
@@ -1339,6 +1341,64 @@ export default function BenefitCalculator({ onBack }) {
     e.target.value = '';
   };
 
+  const [isExportingImage, setIsExportingImage] = useState(false);
+
+  const handleExportAsImage = async () => {
+    const node = document.querySelector('.a4-print-sheet');
+    if (!node || isExportingImage) return;
+    setIsExportingImage(true);
+    try {
+      // 100% 오프라인 동작 보장: skipFonts: true 로 외부 웹폰트 네트워크 재요청 방지
+      // Retina 2x 화질로 모바일/카톡 전송 시 글자가 또렷하게 보이도록 설정
+      const dataUrl = await htmlToImage.toPng(node, {
+        quality: 0.98,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        skipFonts: true,
+        style: {
+          margin: '0',
+          boxShadow: 'none'
+        }
+      });
+
+      const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
+      const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
+      const filename = `JCC_견적서_${safeCustomer}_${safeDate}.png`;
+
+      // 파일 다운로드
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = dataUrl;
+      link.click();
+
+      // 클립보드 이미지 복사 시도 (카카오톡 PC 등에 즉시 Ctrl+V 가능)
+      let copied = false;
+      if (navigator.clipboard && window.ClipboardItem) {
+        try {
+          const res = await fetch(dataUrl);
+          const blob = await res.blob();
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          copied = true;
+        } catch (clipErr) {
+          console.warn('클립보드 자동 복사 스킵:', clipErr);
+        }
+      }
+
+      if (copied) {
+        showTempNotice(`📷 견적서 사진 파일이 저장되었으며 클립보드에도 복사되었습니다. (카카오톡에 바로 Ctrl+V 가능)`);
+      } else {
+        showTempNotice(`📷 견적서 사진 파일(${filename})이 저장되었습니다. 카카오톡/문자로 바로 전송하실 수 있습니다.`);
+      }
+    } catch (err) {
+      console.error('견적서 사진 생성 오류:', err);
+      alert('견적서 사진 생성 중 오류가 발생했습니다. 브라우저 인쇄(PDF 저장)를 이용해 주세요.');
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -1504,14 +1564,38 @@ export default function BenefitCalculator({ onBack }) {
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="btn-primary pulse"
-            style={{ padding: '0.85rem 1.8rem', fontSize: '1rem' }}
-          >
-            <Printer size={19} /> A4 용지로 인쇄 / PDF 저장
-          </button>
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={handleExportAsImage}
+              disabled={isExportingImage}
+              style={{
+                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(5, 150, 105, 0.35))',
+                border: '1px solid rgba(52, 211, 153, 0.55)',
+                color: '#6ee7b7',
+                padding: '0.85rem 1.45rem',
+                borderRadius: '12px',
+                cursor: isExportingImage ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                fontWeight: 700,
+                fontSize: '0.98rem',
+                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.22)'
+              }}
+            >
+              <Camera size={19} /> {isExportingImage ? '사진 생성 중...' : '견적서 사진(이미지) 저장'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="btn-primary pulse"
+              style={{ padding: '0.85rem 1.8rem', fontSize: '1rem' }}
+            >
+              <Printer size={19} /> A4 용지로 인쇄 / PDF 저장
+            </button>
+          </div>
         </div>
 
         {saveNotice && (
@@ -1981,6 +2065,50 @@ export default function BenefitCalculator({ onBack }) {
               </div>
             </footer>
           </div>
+        </div>
+
+        {/* 하단 빠른 실행 버튼 바 */}
+        <div
+          className="container no-print"
+          style={{
+            maxWidth: '920px',
+            marginTop: '1.25rem',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '0.75rem',
+            flexWrap: 'wrap'
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleExportAsImage}
+            disabled={isExportingImage}
+            style={{
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(5, 150, 105, 0.35))',
+              border: '1px solid rgba(52, 211, 153, 0.55)',
+              color: '#6ee7b7',
+              padding: '0.85rem 1.55rem',
+              borderRadius: '12px',
+              cursor: isExportingImage ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              fontWeight: 700,
+              fontSize: '1rem',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.22)'
+            }}
+          >
+            <Camera size={19} /> {isExportingImage ? '사진 생성 중...' : '견적서 사진(이미지) 저장'}
+          </button>
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="btn-primary pulse"
+            style={{ padding: '0.85rem 1.8rem', fontSize: '1rem' }}
+          >
+            <Printer size={19} /> A4 용지로 인쇄 / PDF 저장
+          </button>
         </div>
       </section>
     );
