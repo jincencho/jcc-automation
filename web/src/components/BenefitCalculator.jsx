@@ -304,6 +304,56 @@ function getCardCompanyShort(cardName) {
   return name.length > 6 ? name.slice(0, 6) : name;
 }
 
+// 구독료 실적 인정 대상 제휴카드 판별 (삼성카드, 롯데카드 2개사만 실적 인정)
+function checkIsSubFeeRecognizedCard(cardName) {
+  if (!cardName || typeof cardName !== 'string') return false;
+  const lower = cardName.trim().toLowerCase();
+  if (lower.includes('롯데') || lower.includes('로카') || lower.includes('amex')) return true;
+  return checkIsSamsungCard(cardName);
+}
+
+// 필요실적 텍스트(예: '70만', '50만원', '월 70만', '700000', '70')를 원 단위 숫자로 변환
+function parseSpendToWon(spendStr) {
+  if (!spendStr) return 0;
+  const s = String(spendStr).replace(/^월\s*/, '').replace(/^필요실적\s*/, '').trim();
+  const manMatch = s.match(/([\d.]+)\s*만/);
+  if (manMatch) {
+    return Math.round(parseFloat(manMatch[1]) * 10000);
+  }
+  const cleanNumStr = s.replace(/,/g, '').replace(/원/g, '').trim();
+  const numMatch = cleanNumStr.match(/^[\d.]+/);
+  if (!numMatch) return 0;
+  const val = parseFloat(numMatch[0]);
+  if (isNaN(val)) return 0;
+  if (val < 1000) {
+    return Math.round(val * 10000);
+  }
+  return Math.round(val);
+}
+
+// 카드 필요실적 및 월 구독료를 바탕으로 실질 필요실적 안내 문구 생성
+// 구독료 실적 인정 카드(삼성/롯데)는 천원 단위 절사된 구독료를 차감하여 노출 (예: 70만원 - 75,000원 = 62.5만원)
+function getDeductedSpendDesc(rawSpendStr, monthlyFeeWon, cardName) {
+  let cleanBase = rawSpendStr ? String(rawSpendStr).replace(/^필요실적\s*/, '').trim() : '';
+  if (!cleanBase) return '';
+  if (!cleanBase.startsWith('월')) {
+    cleanBase = `월 ${cleanBase}`;
+  }
+  if (!checkIsSubFeeRecognizedCard(cardName)) {
+    return cleanBase;
+  }
+  const targetWon = parseSpendToWon(cleanBase);
+  const recFee = Math.floor((Number(monthlyFeeWon) || 0) / 1000) * 1000;
+  // 공식 카드 기준실적(30만, 50만, 70만, 100만 등 10만원 단위)인 경우 구독료 차감 적용
+  if (targetWon > 0 && recFee > 0 && targetWon % 100000 === 0) {
+    const remainWon = Math.max(0, targetWon - recFee);
+    const remainMan = remainWon / 10000;
+    const remainStr = remainMan % 1 === 0 ? `${remainMan}만원` : `${Number(remainMan.toFixed(2))}만원`;
+    return `월 ${remainStr}`;
+  }
+  return cleanBase;
+}
+
 // 100% 오프라인 작동 순수 JS QR코드(Version 5-L, 37x37) SVG Path 생성기
 const QR_PATH_CACHE = {};
 function getOfflineQrSvgPath(text) {
@@ -784,15 +834,15 @@ export default function BenefitCalculator({ onBack }) {
 
   const effectiveMonthlyBase = subSegments[0]?.baseMonthly || 0;
 
-  // 각 구간별 필요 실적 및 구독료 제외금액 계산
+  // 각 구간별 필요 실적 및 구독료 차감 실질 실적 계산
   const getSegmentSpendDesc = (seg, segIdx) => {
-    let rawSpend = subSegmentSpendOverrides[seg.endMonth];
+    let rawSpend = subSegmentSpendOverrides[seg?.endMonth];
     if (rawSpend === undefined || rawSpend === '') {
       if (segIdx === 0) {
         rawSpend = trimmedCardSpend;
       } else {
         // 삼성카드의 경우 2구간 이후 구독료가 7만원 미만이면 30만원 구간 자동 반영
-        if (isSamsungCard && seg.baseMonthly < 70000) {
+        if (isSamsungCard && seg?.baseMonthly < 70000) {
           rawSpend = '30만';
         } else {
           rawSpend = trimmedCardSpend;
@@ -800,12 +850,7 @@ export default function BenefitCalculator({ onBack }) {
       }
     }
 
-    let cleanBase = rawSpend ? rawSpend.replace(/^필요실적\s*/, '') : '';
-    if (cleanBase && !cleanBase.startsWith('월')) {
-      cleanBase = `월 ${cleanBase}`;
-    }
-
-    return cleanBase;
+    return getDeductedSpendDesc(rawSpend, seg?.baseMonthly, subCardName);
   };
 
   // 삼성카드만 구독료 7만원 이상일 때 70만원에 26,000원, 미만일 때 30만원에 16,000원 적용되므로 멀티라인 노출
@@ -948,11 +993,7 @@ export default function BenefitCalculator({ onBack }) {
 
     const totalDiscount = monthlyNum * cardMonths;
 
-    let cleanBase = (c.minSpend || '').trim();
-    if (cleanBase && !cleanBase.startsWith('월')) {
-      cleanBase = `월 ${cleanBase}`;
-    }
-    const spendDesc = cleanBase;
+    const spendDesc = getDeductedSpendDesc(c.minSpend, planMonthlyFee, trimmedName);
 
     const discountText = monthlyNum > 0 ? `월 ${formatWon(monthlyNum)} × ${cardMonths}개월` : '';
     const lineParts = [spendDesc, discountText].filter(Boolean);
@@ -2952,6 +2993,11 @@ export default function BenefitCalculator({ onBack }) {
                                   : isSamsung && seg.baseMonthly < 70000
                                   ? '30만'
                                   : cardItem.minSpend;
+                              const deducted = getDeductedSpendDesc(segVal, seg.baseMonthly, cardItem.cardName);
+                              const isDeducted =
+                                checkIsSubFeeRecognizedCard(cardItem.cardName) &&
+                                deducted &&
+                                deducted !== (segVal && segVal.startsWith('월') ? segVal : `월 ${segVal}`);
                               return (
                                 <div key={seg.endMonth}>
                                   <div style={{ fontSize: '0.76rem', marginBottom: '0.22rem', color: '#cbd5e1' }}>
@@ -2971,26 +3017,48 @@ export default function BenefitCalculator({ onBack }) {
                                       background: 'rgba(15, 23, 42, 0.75)'
                                     }}
                                   />
+                                  {isDeducted && (
+                                    <div style={{ fontSize: '0.72rem', color: '#38bdf8', marginTop: '0.24rem', fontWeight: 600 }}>
+                                      ✓ 구독료 실적 인정 반영(견적서 노출): {deducted}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
                           </div>
                         ) : (
-                          <input
-                            type="text"
-                            value={cardItem.minSpend}
-                            onChange={(e) => {
-                              handleUpdateCard(cardItem.id, { minSpend: e.target.value });
-                              if (cardIdx === 0) setSubSegmentSpendOverrides({});
-                            }}
-                            placeholder="필요 실적 직접 입력 (예: 50만 / 30만원)"
-                            style={{
-                              ...textInputStyle,
-                              padding: '0.54rem 0.75rem',
-                              fontSize: '0.88rem',
-                              background: 'rgba(15, 23, 42, 0.75)'
-                            }}
-                          />
+                          <div>
+                            <input
+                              type="text"
+                              value={cardItem.minSpend}
+                              onChange={(e) => {
+                                handleUpdateCard(cardItem.id, { minSpend: e.target.value });
+                                if (cardIdx === 0) setSubSegmentSpendOverrides({});
+                              }}
+                              placeholder="필요 실적 직접 입력 (예: 50만 / 30만원)"
+                              style={{
+                                ...textInputStyle,
+                                padding: '0.54rem 0.75rem',
+                                fontSize: '0.88rem',
+                                background: 'rgba(15, 23, 42, 0.75)'
+                              }}
+                            />
+                            {(() => {
+                              const matchedPlan = activePlans[cardIdx] || activePlans[activePlans.length - 1];
+                              const pFee = matchedPlan?.rowMonthly || effectiveMonthlyBase;
+                              const deducted = getDeductedSpendDesc(cardItem.minSpend, pFee, cardItem.cardName);
+                              const isDeducted =
+                                checkIsSubFeeRecognizedCard(cardItem.cardName) &&
+                                deducted &&
+                                deducted !== (cardItem.minSpend && cardItem.minSpend.startsWith('월') ? cardItem.minSpend : `월 ${cardItem.minSpend}`);
+                              if (!isDeducted) return null;
+                              return (
+                                <div style={{ fontSize: '0.72rem', color: '#38bdf8', marginTop: '0.24rem', fontWeight: 600 }}>
+                                  ✓ 구독료 실적 인정 반영(견적서 노출): {deducted}
+                                </div>
+                              );
+                            })()}
+                          </div>
                         )}
                       </div>
 
