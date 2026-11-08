@@ -12,7 +12,6 @@ import {
   Phone,
   MapPin,
   MessageCircle,
-  Globe,
   FileCheck2,
   ChevronRight,
   ShieldCheck,
@@ -1964,10 +1963,6 @@ export default function BenefitCalculator({ onBack }) {
                 <div className="a4-contact-item">
                   <MessageCircle size={12} />
                   <span>카카오톡 채널: <strong>진센조</strong></span>
-                </div>
-                <div className="a4-contact-item">
-                  <Globe size={12} />
-                  <span>홈페이지: jcc-band.vercel.app</span>
                 </div>
               </div>
 
