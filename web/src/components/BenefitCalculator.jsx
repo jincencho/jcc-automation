@@ -292,7 +292,7 @@ function getCardCompanyShort(cardName) {
   if (!name) return '';
   const lower = name.toLowerCase();
   // 타 제휴카드사를 먼저 체크해야 '삼성전자 AI구독 KB카드' 등이 삼성카드로 잘못 출력되지 않음
-  if (lower.includes('kb') || lower.includes('국민')) return 'KB국민카드';
+  if (lower.includes('kb') || lower.includes('국민')) return 'KB카드';
   if (lower.includes('우리')) return '우리카드';
   if (lower.includes('하나')) return '하나카드';
   if (lower.includes('롯데') || lower.includes('로카') || lower.includes('amex')) return '롯데카드';
@@ -805,37 +805,6 @@ export default function BenefitCalculator({ onBack }) {
       cleanBase = `월 ${cleanBase}`;
     }
 
-    // 구독료 천원 단위까지 인식 (천원 미만 990원 등 전액 무시)
-    const recSubFee = Math.floor((seg.baseMonthly || 0) / 1000) * 1000;
-
-    if (!cleanBase) return '';
-    if (!isCardEligibleForSubFee || recSubFee <= 0) {
-      return cleanBase;
-    }
-
-    const manMatch = cleanBase.match(/(\d+(?:\.\d+)?)\s*만/);
-    const rawNumberMatch = cleanBase.replace(/[^0-9]/g, '');
-    let targetSpendWon = 0;
-    if (manMatch) {
-      targetSpendWon = parseFloat(manMatch[1]) * 10000;
-    } else if (rawNumberMatch && parseInt(rawNumberMatch, 10) >= 10000) {
-      targetSpendWon = parseInt(rawNumberMatch, 10);
-    } else if (rawNumberMatch && parseInt(rawNumberMatch, 10) > 0) {
-      targetSpendWon = parseInt(rawNumberMatch, 10) * 10000;
-    }
-
-    if (targetSpendWon > recSubFee) {
-      const remainWon = targetSpendWon - recSubFee;
-      const remainThousand = Math.floor(remainWon / 1000);
-      const remainManNum = remainThousand / 10;
-      const remainStr =
-        remainThousand % 10 === 0
-          ? `${remainManNum}만원`
-          : `${remainManNum.toFixed(1)}만원`;
-      return `${cleanBase}(구독료 제외 ${remainStr})`;
-    } else if (targetSpendWon > 0) {
-      return `${cleanBase}(구독료 제외 0원)`;
-    }
     return cleanBase;
   };
 
@@ -983,34 +952,7 @@ export default function BenefitCalculator({ onBack }) {
     if (cleanBase && !cleanBase.startsWith('월')) {
       cleanBase = `월 ${cleanBase}`;
     }
-    const recFee = Math.floor((planMonthlyFee || 0) / 1000) * 1000;
-    let spendDesc = cleanBase;
-
-    if (cleanBase && isEligible && recFee > 0) {
-      const manMatch = cleanBase.match(/(\d+(?:\.\d+)?)\s*만/);
-      const rawNumberMatch = cleanBase.replace(/[^0-9]/g, '');
-      let targetSpendWon = 0;
-      if (manMatch) {
-        targetSpendWon = parseFloat(manMatch[1]) * 10000;
-      } else if (rawNumberMatch && parseInt(rawNumberMatch, 10) >= 10000) {
-        targetSpendWon = parseInt(rawNumberMatch, 10);
-      } else if (rawNumberMatch && parseInt(rawNumberMatch, 10) > 0) {
-        targetSpendWon = parseInt(rawNumberMatch, 10) * 10000;
-      }
-
-      if (targetSpendWon > recFee) {
-        const remainWon = targetSpendWon - recFee;
-        const remainThousand = Math.floor(remainWon / 1000);
-        const remainManNum = remainThousand / 10;
-        const remainStr =
-          remainThousand % 10 === 0
-            ? `${remainManNum}만원`
-            : `${remainManNum.toFixed(1)}만원`;
-        spendDesc = `${cleanBase}(구독료 제외 ${remainStr})`;
-      } else if (targetSpendWon > 0) {
-        spendDesc = `${cleanBase}(구독료 제외 0원)`;
-      }
-    }
+    const spendDesc = cleanBase;
 
     const discountText = monthlyNum > 0 ? `월 ${formatWon(monthlyNum)} × ${cardMonths}개월` : '';
     const lineParts = [spendDesc, discountText].filter(Boolean);
@@ -1032,10 +974,7 @@ export default function BenefitCalculator({ onBack }) {
     ? subSegments.reduce((sum, seg) => sum + seg.appliedCard * seg.duration, 0)
     : cardDetails.reduce((sum, d) => sum + d.totalDiscount, 0);
 
-  const cardCompanySummary = cardDetails
-    .map((d) => d.company)
-    .filter(Boolean)
-    .join(' + ');
+  const cardCompanySummary = [...new Set(cardDetails.map((d) => d.company).filter(Boolean))].join(' + ');
 
   const allCardSubLines = isSingleCardMode
     ? cardDetails[0]?.lines || cardSubLines
@@ -1764,12 +1703,33 @@ export default function BenefitCalculator({ onBack }) {
                   <div className="a4-divider-label">적용 혜택 및 서비스</div>
                   <div className="a4-benefit-list">
                     <div>
-                      <div className="a4-benefit-row">
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div
+                        className="a4-benefit-row"
+                        style={{
+                          alignItems: 'flex-start',
+                          lineHeight: 1.28
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: cardCompanySummary && cardCompanySummary.length > 8 ? '0.70rem' : '0.76rem',
+                            wordBreak: 'keep-all',
+                            lineHeight: 1.25,
+                            flex: 1
+                          }}
+                        >
                           제휴카드 혜택
                           {cardCompanySummary ? ` (${cardCompanySummary})` : !hasAnyCardDiscount ? ' (미적용)' : ''}
                         </span>
-                        <span className="a4-minus-blue" style={{ flexShrink: 0, marginLeft: '0.4rem' }}>
+                        <span
+                          className="a4-minus-blue"
+                          style={{
+                            flexShrink: 0,
+                            marginLeft: '0.35rem',
+                            whiteSpace: 'nowrap',
+                            fontSize: '0.78rem'
+                          }}
+                        >
                           - {formatWon(subCardTotalDiscount)}
                         </span>
                       </div>
