@@ -922,12 +922,17 @@ html {
 }
 
 /* ============================================================================
-   @media print — A4 용지 1장 최적화 출력 스타일
+   @media print — A4 용지 1장 최적화 출력 스타일 (상·하·좌·우 여백 균형)
    ============================================================================ */
+@page {
+  size: A4 portrait;
+  margin: 12mm 12mm;
+}
+
 @media print {
   @page {
     size: A4 portrait;
-    margin: 11mm 10mm;
+    margin: 12mm 12mm;
   }
 
   * {
@@ -965,14 +970,15 @@ html {
   .a4-print-sheet {
     width: 100% !important;
     max-width: none !important;
-    min-height: 272mm !important;
+    min-height: 266mm !important;
+    box-sizing: border-box !important;
     box-shadow: none !important;
     border-radius: 0 !important;
-    padding: 0 !important;
+    padding: 6mm 7mm !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    gap: 0.62rem !important;
+    gap: 0.55rem !important;
     page-break-inside: avoid;
     break-inside: avoid;
   }
@@ -1020,10 +1026,10 @@ html {
   .a4-compare-grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
     grid-template-rows: auto auto 1fr auto !important;
-    column-gap: 0.82rem !important;
+    column-gap: 0.78rem !important;
     row-gap: 0 !important;
     flex: 1 1 auto !important;
-    max-height: 132mm !important;
+    max-height: 124mm !important;
   }
 
   .a4-plan-card {
@@ -1135,8 +1141,8 @@ html {
   }
 
   .a4-disclaimer {
-    font-size: 0.64rem !important;
-    line-height: 1.38 !important;
+    font-size: 0.59rem !important;
+    line-height: 1.35 !important;
   }
 
   .a4-manager-card {

@@ -754,17 +754,10 @@ export default function BenefitCalculator({ onBack }) {
                   <div className="a4-benefit-list">
                     <div>
                       <div className="a4-benefit-row">
-                        <span>
-                          제휴카드 청구할인{' '}
-                          {!hasAnyCardDiscount
-                            ? '(미적용)'
-                            : !isSteppedCardDiscount
-                              ? `(월 ${formatWon(uniqueAppliedCards[0])}×${subMonths}개월)`
-                              : ''}
-                        </span>
+                        <span>제휴카드 청구할인 {!hasAnyCardDiscount ? '(미적용)' : ''}</span>
                         <span className="a4-minus-blue">- {formatWon(subCardTotalDiscount)}</span>
                       </div>
-                      {hasAnyCardDiscount && isSteppedCardDiscount && (
+                      {hasAnyCardDiscount && (
                         <div
                           style={{
                             fontSize: '0.68rem',
@@ -774,13 +767,15 @@ export default function BenefitCalculator({ onBack }) {
                             lineHeight: 1.3
                           }}
                         >
-                          {subSegments
-                            .map((seg, idx) =>
-                              idx === 0
-                                ? `${seg.duration}개월 월 ${formatWon(seg.appliedCard)}`
-                                : `잔여 ${seg.duration}개월 월 ${formatWon(seg.appliedCard)}`
-                            )
-                            .join(' · ')}
+                          {isSteppedCardDiscount
+                            ? subSegments
+                                .map((seg, idx) =>
+                                  idx === 0
+                                    ? `${seg.duration}개월 월 ${formatWon(seg.appliedCard)}`
+                                    : `잔여 ${seg.duration}개월 월 ${formatWon(seg.appliedCard)}`
+                                )
+                                .join(' · ')
+                            : `월 ${formatWon(uniqueAppliedCards[0])} × ${subMonths}개월 적용`}
                         </div>
                       )}
                     </div>
