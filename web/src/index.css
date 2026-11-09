@@ -1360,3 +1360,103 @@ html {
     white-space: nowrap !important;
   }
 }
+
+/* ==========================================================================
+   복합 견적서 전용 단일 수직 카드 스타일 (좌우 분리 X, 상단 구독 / 하단 일반)
+   ========================================================================== */
+.a4-mixed-unified-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.a4-mixed-sec {
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.a4-mixed-sec-sub {
+  border-color: #93c5fd;
+}
+
+.a4-mixed-sec-lump {
+  border-color: #fcd34d;
+}
+
+.a4-mixed-sec-grand {
+  border: 2px solid #1e3a8a;
+  background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%);
+}
+
+.a4-mixed-sec-header {
+  padding: 0.42rem 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: #ffffff;
+}
+
+.a4-mixed-sec-header.header-sub {
+  background: #1e3a8a;
+}
+
+.a4-mixed-sec-header.header-lump {
+  background: #1e293b;
+  border-bottom: 2px solid #d97706;
+}
+
+.a4-mixed-sec-header.header-grand {
+  background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
+  border-bottom: 2px solid #3b82f6;
+}
+
+.a4-mixed-sec-body {
+  padding: 0.5rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+}
+
+.a4-mixed-subtotal-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.42rem 0.75rem;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.subtotal-bar-sub {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+}
+
+.subtotal-bar-lump {
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  color: #92400e;
+}
+
+.a4-proof-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #047857;
+  background: #d1fae5;
+  border: 1px solid #6ee7b7;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 5px;
+  vertical-align: middle;
+  line-height: 1.25;
+}
+
+
