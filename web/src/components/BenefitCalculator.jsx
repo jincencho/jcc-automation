@@ -2951,31 +2951,23 @@ export default function BenefitCalculator({ onBack }) {
                         const { qty, unitPrice, unitNetPrice, unitDiscount, gross, totalDiscount, net } = getMixedLumpItemCalc(it);
 
                         return (
-                          <div key={it.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.06rem' }}>
-                            <div className="a4-row">
-                              <span>
-                                {idx + 1}. <strong>{(it.name || '').trim() || '일반구매 모델'}</strong>
-                                {qty > 1 ? ` × ${qty}대` : ''}
-                              </span>
-                              <strong>
-                                {totalDiscount > 0 ? (
-                                  <>
-                                    <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, textDecoration: 'line-through', marginRight: '5px' }}>
-                                      {formatWon(gross)}
-                                    </span>
-                                    <span style={{ color: '#b45309' }}>{formatWon(net)}</span>
-                                  </>
-                                ) : (
-                                  formatWon(gross)
-                                )}
-                              </strong>
-                            </div>
-                            {totalDiscount > 0 && (
-                              <div style={{ fontSize: '0.66rem', color: '#b45309', paddingLeft: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                <span>↳ 모델 할인: -{formatWon(totalDiscount)}</span>
-                                {qty > 1 && <span style={{ color: '#78350f' }}>(대당 -{formatWon(unitDiscount)})</span>}
-                              </div>
-                            )}
+                          <div key={it.id} className="a4-row">
+                            <span>
+                              {idx + 1}. <strong>{(it.name || '').trim() || '일반구매 모델'}</strong>
+                              {qty > 1 ? ` × ${qty}대` : ''}
+                            </span>
+                            <strong>
+                              {totalDiscount > 0 ? (
+                                <>
+                                  <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, textDecoration: 'line-through', marginRight: '5px' }}>
+                                    {formatWon(gross)}
+                                  </span>
+                                  <span style={{ color: '#b45309' }}>{formatWon(net)}</span>
+                                </>
+                              ) : (
+                                formatWon(gross)
+                              )}
+                            </strong>
                           </div>
                         );
                       })}
@@ -2987,15 +2979,39 @@ export default function BenefitCalculator({ onBack }) {
 
                     {/* 일반구매 적용 혜택 & 특정 조건 할인 */}
                     <div className="a4-benefit-list" style={{ minHeight: 'auto', padding: '0.45rem 0.65rem' }}>
-                      {mixedLumpModelDiscountTotal > 0 && (
-                        <div className="a4-benefit-row">
-                          <span>
-                            <span style={{ color: '#d97706', marginRight: '4px', fontWeight: 800 }}>•</span>
-                            모델별 할인 합계
-                          </span>
-                          <span className="a4-minus">- {formatWon(mixedLumpModelDiscountTotal)}</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const discountedLumpItems = validMixedLumpItems
+                          .map((it, idx) => ({ it, idx, calc: getMixedLumpItemCalc(it) }))
+                          .filter(({ calc }) => calc.totalDiscount > 0);
+
+                        if (mixedLumpModelDiscountTotal <= 0) return null;
+
+                        const detailsStr = discountedLumpItems
+                          .map(({ it, idx, calc }) => {
+                            const name = (it.name || '').trim() || `모델 ${idx + 1}`;
+                            const qtyText = calc.qty > 1 ? ` × ${calc.qty}대` : '';
+                            const perUnitText = calc.qty > 1 ? ` · 대당 -${formatWon(calc.unitDiscount)}` : '';
+                            return `${name}${qtyText}: -${formatWon(calc.totalDiscount)}${perUnitText}`;
+                          })
+                          .join(', ');
+
+                        return (
+                          <div className="a4-benefit-row" style={{ alignItems: 'baseline' }}>
+                            <span style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem', wordBreak: 'keep-all' }}>
+                              <span style={{ color: '#d97706', marginRight: '4px', fontWeight: 800 }}>•</span>
+                              <strong>모델별 할인</strong>
+                              {detailsStr && (
+                                <span style={{ color: '#78350f', fontSize: '0.73rem', fontWeight: 600, marginLeft: '6px' }}>
+                                  ({detailsStr})
+                                </span>
+                              )}
+                            </span>
+                            <span className="a4-minus" style={{ whiteSpace: 'nowrap' }}>
+                              - {formatWon(mixedLumpModelDiscountTotal)}
+                            </span>
+                          </div>
+                        );
+                      })()}
                       {mixedLumpSpecificDiscount > 0 ? (
                         <div className="a4-benefit-row">
                           <span>
