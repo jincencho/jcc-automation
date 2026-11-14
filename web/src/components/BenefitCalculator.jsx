@@ -875,7 +875,27 @@ export default function BenefitCalculator({ onBack }) {
 
   const handleAddCard = (defaultMonths) => {
     setSubCards((prev) => {
-      const nextId = prev.reduce((maxId, c) => Math.max(maxId, c.id), 0) + 1;
+      const nextId = (prev.reduce((maxId, c) => Math.max(maxId, c.id), 0) || 0) + 1;
+      if (prev.length === 0) {
+        const defaultCardName = '삼성전자 AI구독 삼성카드';
+        const defaultSpend = '30만';
+        const defaultMonthly = 16000;
+        setSubCardName(defaultCardName);
+        setSubCardMinSpend(defaultSpend);
+        setSubCardMonthly(defaultMonthly);
+        return [
+          {
+            id: nextId,
+            cardName: defaultCardName,
+            minSpend: defaultSpend,
+            monthly: defaultMonthly,
+            months: defaultMonths || null,
+            targetModelIndex: -1,
+            segmentCardOverrides: {},
+            segmentSpendOverrides: {}
+          }
+        ];
+      }
       const targetIdx = prev.length;
       const targetModel = isMixedMode ? mixedSubItems[targetIdx] : subPlans[targetIdx];
       const m = defaultMonths || (targetModel ? Number(targetModel.months) || 72 : (subPlans[prev.length]?.months || 72));
@@ -912,14 +932,20 @@ export default function BenefitCalculator({ onBack }) {
 
   const handleRemoveCard = (cardId) => {
     setSubCards((prev) => {
-      if (prev.length <= 1) return prev;
       const filtered = prev.filter((c) => c.id !== cardId);
+      if (filtered.length === 0) {
+        setSubCardName('');
+        setSubCardMinSpend('');
+        setSubCardMonthly(0);
+        setSubSegmentCardOverrides({});
+        return [];
+      }
       if (filtered.length === 1) {
         // 단일 카드로 복귀 시 전체 모델 자동 연동(-1)으로 복귀
         filtered[0] = {
           ...filtered[0],
           targetModelIndex: -1,
-          months: subMonths
+          months: filtered[0].months || subMonths
         };
       }
       if (filtered[0]) {
@@ -1166,12 +1192,14 @@ export default function BenefitCalculator({ onBack }) {
           .reduce((sum, p) => sum + p.rowMonthly, 0);
 
     const hasManualCardOverride = Object.prototype.hasOwnProperty.call(subSegmentCardOverrides, endMonth);
-    let targetCard = hasManualCardOverride
-      ? Number(subSegmentCardOverrides[endMonth]) || 0
-      : cardMonthlyNum;
+    let targetCard = subCards.length === 0
+      ? 0
+      : (hasManualCardOverride
+          ? Number(subSegmentCardOverrides[endMonth]) || 0
+          : cardMonthlyNum);
 
     // 삼성카드의 경우: 구독료 7만원 이상일 때 70만원 실적에 26,000원, 7만원 미만이면 30만원 구간에 16,000원 자동 반영 (70만원 구간 제한)
-    if (isSamsungCard) {
+    if (isSamsungCard && subCards.length > 0) {
       if (baseMonthly < 70000) {
         if (targetCard > 16000) targetCard = 16000;
         if (!hasManualCardOverride && (targetCard === 0 || targetCard > 16000)) targetCard = 16000;
@@ -1355,9 +1383,9 @@ export default function BenefitCalculator({ onBack }) {
 
   // 복수 제휴카드 연산 (카드명이 입력되었거나 월 청구할인 금액 > 0)
   const activeCards = subCards.filter(
-    (c) => (c.cardName && c.cardName.trim()) || (Number(c.monthly) || 0) > 0
+    (c) => Boolean(c && ((c.cardName && c.cardName.trim()) || (Number(c.monthly) || 0) > 0))
   );
-  const effectiveCards = activeCards.length > 0 ? activeCards : [subCards[0]];
+  const effectiveCards = activeCards;
   const isSingleCardMode = effectiveCards.length === 1;
 
   // 복수 제휴카드 세부 정보 및 혜택 계산
@@ -1463,40 +1491,48 @@ export default function BenefitCalculator({ onBack }) {
     };
   });
 
-  const subCardTotalDiscount = (isSingleCardMode && isSamsungCard && isMultiPeriod)
-    ? (cardDetails[0]?.totalDiscount ?? subSegments.reduce((sum, seg) => sum + seg.appliedCard * seg.duration, 0))
-    : cardDetails.reduce((sum, d) => sum + d.totalDiscount, 0);
+  const subCardTotalDiscount = effectiveCards.length === 0
+    ? 0
+    : (isSingleCardMode && isSamsungCard && isMultiPeriod)
+      ? (cardDetails[0]?.totalDiscount ?? subSegments.reduce((sum, seg) => sum + seg.appliedCard * seg.duration, 0))
+      : cardDetails.reduce((sum, d) => sum + d.totalDiscount, 0);
 
-  const cardCompanySummary = [...new Set(cardDetails.map((d) => d.company).filter(Boolean))].join(' + ');
+  const cardCompanySummary = effectiveCards.length === 0
+    ? ''
+    : [...new Set(cardDetails.map((d) => d.company).filter(Boolean))].join(' + ');
 
-  const allCardSubLines = isSingleCardMode
-    ? (cardDetails[0]?.isMultiLine
-        ? cardDetails[0].lines
-        : (isMixedMode && cardDetails[0]?.lines?.length > 0
-            ? [
-                `${cardDetails[0].company ? `${cardDetails[0].company} · ` : ''}${cardDetails[0].lines[0]}${
-                  cardDetails[0].targetModelTitle && mixedSubItems.length > 1
-                    ? ` [적용: ${cardDetails[0].targetModelTitle}]`
-                    : ''
-                }`
-              ]
-            : cardDetails[0]?.lines || cardSubLines))
-    : cardDetails.map((d, i) => {
-        const line = d.lines[0] || '';
-        const symbol = ['①', '②', '③', '④', '⑤'][i] || `[${i + 1}]`;
-        const targetTag = d.targetModelTitle ? ` [적용: ${d.targetModelTitle}]` : '';
-        return `${symbol} ${d.company ? `${d.company} · ` : ''}${line}${targetTag}`;
-      });
+  const allCardSubLines = effectiveCards.length === 0
+    ? []
+    : isSingleCardMode
+      ? (cardDetails[0]?.isMultiLine
+          ? cardDetails[0].lines
+          : (isMixedMode && cardDetails[0]?.lines?.length > 0
+              ? [
+                  `${cardDetails[0].company ? `${cardDetails[0].company} · ` : ''}${cardDetails[0].lines[0]}${
+                    cardDetails[0].targetModelTitle && mixedSubItems.length > 1
+                      ? ` [적용: ${cardDetails[0].targetModelTitle}]`
+                      : ''
+                  }`
+                ]
+              : cardDetails[0]?.lines || cardSubLines))
+      : cardDetails.map((d, i) => {
+          const line = d.lines[0] || '';
+          const symbol = ['①', '②', '③', '④', '⑤'][i] || `[${i + 1}]`;
+          const targetTag = d.targetModelTitle ? ` [적용: ${d.targetModelTitle}]` : '';
+          return `${symbol} ${d.company ? `${d.company} · ` : ''}${line}${targetTag}`;
+        });
 
-  const hasAnyNonSamsungCard = cardDetails.some((d) => d.isNonSamsung);
+  const hasAnyNonSamsungCard = effectiveCards.length > 0 && cardDetails.some((d) => d.isNonSamsung);
 
-  const startingTotalCardMonthly = isSingleCardMode
-    ? (isMixedMode
-        ? (cardDetails[0]?.isSamsung && (!subCards[0]?.monthly || Number(subCards[0]?.monthly) === 0 || Number(subCards[0]?.monthly) === 16000 || Number(subCards[0]?.monthly) === 26000)
-            ? (subSegments[0]?.appliedCard || (cardDetails[0]?.planMonthlyFee >= 70000 ? 26000 : 16000))
-            : (Number(subCards[0]?.monthly) || cardMonthlyNum))
-        : (subSegments[0]?.appliedCard || cardMonthlyNum))
-    : cardDetails.reduce((sum, d) => sum + (Number(d.card.monthly) || (d.isSamsung ? (d.planMonthlyFee >= 70000 ? 26000 : 16000) : 0)), 0);
+  const startingTotalCardMonthly = effectiveCards.length === 0
+    ? 0
+    : isSingleCardMode
+      ? (isMixedMode
+          ? (cardDetails[0]?.isSamsung && (!subCards[0]?.monthly || Number(subCards[0]?.monthly) === 0 || Number(subCards[0]?.monthly) === 16000 || Number(subCards[0]?.monthly) === 26000)
+              ? (subSegments[0]?.appliedCard || (cardDetails[0]?.planMonthlyFee >= 70000 ? 26000 : 16000))
+              : (Number(subCards[0]?.monthly) || cardMonthlyNum))
+          : (subSegments[0]?.appliedCard || cardMonthlyNum))
+      : cardDetails.reduce((sum, d) => sum + (Number(d.card.monthly) || (d.isSamsung ? (d.planMonthlyFee >= 70000 ? 26000 : 16000) : 0)), 0);
 
   const subMonthlyAfterCard = Math.max(0, effectiveMonthlyBase - startingTotalCardMonthly);
 
@@ -4541,7 +4577,9 @@ export default function BenefitCalculator({ onBack }) {
           );
 
           const renderPage2ExtraInfo = () => {
-            const uniquePolicies = [...new Set(cardDetails.map((d) => d.policy).filter(Boolean))];
+            const uniquePolicies = subCardTotalDiscount > 0
+              ? [...new Set(cardDetails.map((d) => d.policy).filter(Boolean))]
+              : [];
             const hasCardPolicies = uniquePolicies.length > 0;
             const hasMemo = Boolean(memo.trim());
 
@@ -4596,8 +4634,12 @@ export default function BenefitCalculator({ onBack }) {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', fontSize: '0.72rem', color: '#64748b' }}>
                       <div style={{ background: '#ffffff', padding: '0.45rem', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
-                        <strong style={{ color: '#0f172a', display: 'block', marginBottom: '2px' }}>① 제휴카드 청구할인</strong>
-                        매월 실적 충족 시 결제일에 자동 청구 할인 반영
+                        <strong style={{ color: '#0f172a', display: 'block', marginBottom: '2px' }}>
+                          {subCardTotalDiscount > 0 ? '① 제휴카드 청구할인' : '① 정기 구독 결제'}
+                        </strong>
+                        {subCardTotalDiscount > 0
+                          ? '매월 실적 충족 시 결제일에 자동 청구 할인 반영'
+                          : '약정 기간 등록된 결제수단으로 정기 자동이체 청구'}
                       </div>
                       <div style={{ background: '#ffffff', padding: '0.45rem', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
                         <strong style={{ color: '#0f172a', display: 'block', marginBottom: '2px' }}>② 캐시백·상품권 지급</strong>
@@ -4791,28 +4833,31 @@ export default function BenefitCalculator({ onBack }) {
                         </div>
                       )}
 
-                      {/* 내부 구분선 */}
-                      <div style={{ borderTop: '1px dashed rgba(37, 99, 235, 0.18)', margin: '0.12rem 0 0.08rem 0' }} />
-
                       {/* 제휴카드 혜택 */}
-                      <div className="a4-benefit-row" style={{ alignItems: 'center', lineHeight: 1.28 }}>
-                        <span style={{ fontSize: '0.78rem', flex: 1, wordBreak: 'keep-all' }}>
-                          <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                          <strong style={{ fontWeight: 900, color: '#0f172a' }}>제휴카드 청구할인</strong>
-                          {cardCompanySummary && (
-                            <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>
-                              ({cardCompanySummary})
+                      {subCardTotalDiscount > 0 && (
+                        <>
+                          {/* 내부 구분선 */}
+                          <div style={{ borderTop: '1px dashed rgba(37, 99, 235, 0.18)', margin: '0.12rem 0 0.08rem 0' }} />
+                          <div className="a4-benefit-row" style={{ alignItems: 'center', lineHeight: 1.28 }}>
+                            <span style={{ fontSize: '0.78rem', flex: 1, wordBreak: 'keep-all' }}>
+                              <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                              <strong style={{ fontWeight: 900, color: '#0f172a' }}>제휴카드 청구할인</strong>
+                              {cardCompanySummary && (
+                                <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>
+                                  ({cardCompanySummary})
+                                </span>
+                              )}
                             </span>
+                            <strong className="a4-minus-blue" style={{ fontSize: '0.84rem', fontWeight: 900 }}>- {formatWon(subCardTotalDiscount)}</strong>
+                          </div>
+                          {allCardSubLines.length > 0 && (
+                            <div style={{ fontSize: '0.63rem', color: '#64748b', fontWeight: 500, marginLeft: '9px', lineHeight: 1.35 }}>
+                              {allCardSubLines.map((line, lIdx) => (
+                                <div key={lIdx}>{line}</div>
+                              ))}
+                            </div>
                           )}
-                        </span>
-                        <strong className="a4-minus-blue" style={{ fontSize: '0.84rem', fontWeight: 900 }}>- {formatWon(subCardTotalDiscount)}</strong>
-                      </div>
-                      {allCardSubLines.length > 0 && (
-                        <div style={{ fontSize: '0.63rem', color: '#64748b', fontWeight: 500, marginLeft: '9px', lineHeight: 1.35 }}>
-                          {allCardSubLines.map((line, lIdx) => (
-                            <div key={lIdx}>{line}</div>
-                          ))}
-                        </div>
+                        </>
                       )}
 
                       {/* 무상수리 연장 혜택 (가전/모바일 복합 시 분리 표시) */}
@@ -4886,7 +4931,7 @@ export default function BenefitCalculator({ onBack }) {
                       {/* 우측: 월납입금 강조 */}
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginLeft: 'auto' }}>
                         <span style={{ fontSize: '0.78rem', color: '#1e3a8a', fontWeight: 700 }}>
-                          제휴카드 적용 월 실납부액:
+                          {subCardTotalDiscount > 0 ? '제휴카드 적용 월 실납부액:' : '월 납부액:'}
                         </span>
                         <strong
                           style={{
@@ -5388,79 +5433,81 @@ export default function BenefitCalculator({ onBack }) {
                 <div className="a4-plan-middle">
                   <div className="a4-divider-label">적용 혜택 및 서비스</div>
                   <div className="a4-benefit-list">
-                    <div>
-                      <div
-                        className="a4-benefit-row"
-                        style={{
-                          alignItems: 'center',
-                          lineHeight: 1.28
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: '0.78rem',
-                            wordBreak: 'keep-all',
-                            lineHeight: 1.25,
-                            flex: 1
-                          }}
-                        >
-                          <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                          <strong style={{ fontWeight: 900, color: '#0f172a' }}>제휴카드 청구할인</strong>
-                          {cardCompanySummary && (
-                            <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>
-                              ({cardCompanySummary})
-                            </span>
-                          )}
-                        </span>
-                        <strong
-                          className="a4-minus-blue"
-                          style={{
-                            flexShrink: 0,
-                            marginLeft: '0.35rem',
-                            whiteSpace: 'nowrap',
-                            fontSize: '0.84rem',
-                            fontWeight: 900
-                          }}
-                        >
-                          - {formatWon(subCardTotalDiscount)}
-                        </strong>
-                      </div>
-                      {allCardSubLines.length > 0 && (
+                    {subCardTotalDiscount > 0 && (
+                      <div>
                         <div
+                          className="a4-benefit-row"
                           style={{
-                            fontSize: '0.63rem',
-                            color: '#64748b',
-                            fontWeight: 500,
-                            marginTop: '2px',
-                            marginLeft: '9px',
-                            lineHeight: 1.35,
-                            wordBreak: 'keep-all'
+                            alignItems: 'center',
+                            lineHeight: 1.28
                           }}
                         >
-                          {allCardSubLines.map((line, lIdx) => (
-                            <div key={lIdx}>{line}</div>
-                          ))}
+                          <span
+                            style={{
+                              fontSize: '0.78rem',
+                              wordBreak: 'keep-all',
+                              lineHeight: 1.25,
+                              flex: 1
+                            }}
+                          >
+                            <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>제휴카드 청구할인</strong>
+                            {cardCompanySummary && (
+                              <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>
+                                ({cardCompanySummary})
+                              </span>
+                            )}
+                          </span>
+                          <strong
+                            className="a4-minus-blue"
+                            style={{
+                              flexShrink: 0,
+                              marginLeft: '0.35rem',
+                              whiteSpace: 'nowrap',
+                              fontSize: '0.84rem',
+                              fontWeight: 900
+                            }}
+                          >
+                            - {formatWon(subCardTotalDiscount)}
+                          </strong>
                         </div>
-                      )}
-                      {hasAnyNonSamsungCard && (
-                        <div
-                          style={{
-                            fontSize: '0.60rem',
-                            color: '#dc2626',
-                            fontWeight: 600,
-                            marginTop: '2px',
-                            marginLeft: '9px',
-                            lineHeight: 1.25,
-                            wordBreak: 'keep-all'
-                          }}
-                        >
-                          <div>※ 주의: 기존 카드 보유회원 적용 제외</div>
-                          <div style={{ color: '#b91c1c', fontWeight: 500 }}>
-                            (비회원 또는 최근 6개월간 결제이력 없는 고객 한함)
+                        {allCardSubLines.length > 0 && (
+                          <div
+                            style={{
+                              fontSize: '0.63rem',
+                              color: '#64748b',
+                              fontWeight: 500,
+                              marginTop: '2px',
+                              marginLeft: '9px',
+                              lineHeight: 1.35,
+                              wordBreak: 'keep-all'
+                            }}
+                          >
+                            {allCardSubLines.map((line, lIdx) => (
+                              <div key={lIdx}>{line}</div>
+                            ))}
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                        {hasAnyNonSamsungCard && (
+                          <div
+                            style={{
+                              fontSize: '0.60rem',
+                              color: '#dc2626',
+                              fontWeight: 600,
+                              marginTop: '2px',
+                              marginLeft: '9px',
+                              lineHeight: 1.25,
+                              wordBreak: 'keep-all'
+                            }}
+                          >
+                            <div>※ 주의: 기존 카드 보유회원 적용 제외</div>
+                            <div style={{ color: '#b91c1c', fontWeight: 500 }}>
+                              (비회원 또는 최근 6개월간 결제이력 없는 고객 한함)
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {!isMixedMode && (
                       <div className="a4-benefit-row" style={{ alignItems: 'center' }}>
                         <span style={{ fontSize: '0.78rem' }}>
@@ -5631,7 +5678,9 @@ export default function BenefitCalculator({ onBack }) {
                       ))
                     ) : (
                       <div className="a4-footer-sub-main" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e3a8a' }}>제휴카드 적용 월 실납부액</strong>
+                        <strong style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e3a8a' }}>
+                          {subCardTotalDiscount > 0 ? '제휴카드 적용 월 실납부액' : '월 실납부액'}
+                        </strong>
                         <strong className="sub-strong-blue" style={{ fontSize: '1.02rem', fontWeight: 900 }}>월 {formatWon(subMonthlyAfterCard)}</strong>
                       </div>
                     )}
@@ -9001,7 +9050,7 @@ export default function BenefitCalculator({ onBack }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.3rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                   <label style={{ ...labelStyle, marginBottom: 0, color: '#93c5fd', fontSize: '0.88rem', fontWeight: 800 }}>
-                    💳 제휴카드 할인 상세 설정 {subCards.length > 1 && `(총 ${subCards.length}개 카드 중복할인)`}
+                    💳 제휴카드 할인 상세 설정 {subCards.length > 1 ? `(총 ${subCards.length}개 카드 중복할인)` : subCards.length === 0 ? '(미적용/제외)' : ''}
                   </label>
                 </div>
                 <span style={{ fontSize: '0.78rem', color: '#93c5fd', fontWeight: 800 }}>
@@ -9011,45 +9060,82 @@ export default function BenefitCalculator({ onBack }) {
 
               {/* 제휴카드 목록 렌더링 */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                {subCards.map((cardItem, cardIdx) => {
-                  const cardTrimmed = (cardItem.cardName || '').trim();
-                  const isSamsung = checkIsSamsungCard(cardTrimmed);
-                  const isNonSamsung = Boolean(cardTrimmed && !isSamsung);
-                  const cardCompanyShort = getCardCompanyShort(cardTrimmed);
-                  const matchedPlan = isMixedMode ? mixedSubItems[cardIdx] : subPlans[cardIdx];
-
-                  return (
-                    <div
-                      key={cardItem.id}
-                      className="card-item-box"
+                {subCards.length === 0 ? (
+                  <div
+                    style={{
+                      padding: '1.2rem',
+                      borderRadius: '10px',
+                      background: 'rgba(15, 23, 42, 0.55)',
+                      border: '1px dashed rgba(148, 163, 184, 0.35)',
+                      textAlign: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '0.6rem'
+                    }}
+                  >
+                    <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 600 }}>
+                      제휴카드가 삭제되었습니다 (견적서 및 계산에서 카드 청구할인 제외)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleAddCard()}
                       style={{
-                        padding: '0.75rem 0.85rem',
-                        borderRadius: '10px',
-                        background: 'rgba(15, 23, 42, 0.65)',
-                        border: '1px solid rgba(96, 165, 250, 0.35)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.65rem'
+                        padding: '0.35rem 0.85rem',
+                        borderRadius: '6px',
+                        background: 'rgba(59, 130, 246, 0.22)',
+                        border: '1px solid rgba(96, 165, 250, 0.55)',
+                        color: '#93c5fd',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
                       }}
                     >
-                      {/* 제휴카드 카드 헤더 (카드 순번, 회사 배지, 삭제 버튼) */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#93c5fd' }}>
-                            💳 제휴카드 {cardIdx + 1}
-                          </span>
-                          {cardCompanyShort && (
-                            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.25)', border: '1px solid #60a5fa', color: '#dbeafe' }}>
-                              {cardCompanyShort}
-                            </span>
-                          )}
-                        </div>
+                      <Plus size={14} /> + 제휴카드 추가
+                    </button>
+                  </div>
+                ) : (
+                  subCards.map((cardItem, cardIdx) => {
+                    const cardTrimmed = (cardItem.cardName || '').trim();
+                    const isSamsung = checkIsSamsungCard(cardTrimmed);
+                    const isNonSamsung = Boolean(cardTrimmed && !isSamsung);
+                    const cardCompanyShort = getCardCompanyShort(cardTrimmed);
+                    const matchedPlan = isMixedMode ? mixedSubItems[cardIdx] : subPlans[cardIdx];
 
-                        {subCards.length > 1 && (
+                    return (
+                      <div
+                        key={cardItem.id}
+                        className="card-item-box"
+                        style={{
+                          padding: '0.75rem 0.85rem',
+                          borderRadius: '10px',
+                          background: 'rgba(15, 23, 42, 0.65)',
+                          border: '1px solid rgba(96, 165, 250, 0.35)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.65rem'
+                        }}
+                      >
+                        {/* 제휴카드 카드 헤더 (카드 순번, 회사 배지, 삭제 버튼) */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.4rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#93c5fd' }}>
+                              💳 제휴카드 {cardIdx + 1}
+                            </span>
+                            {cardCompanyShort && (
+                              <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.25)', border: '1px solid #60a5fa', color: '#dbeafe' }}>
+                                {cardCompanyShort}
+                              </span>
+                            )}
+                          </div>
+
                           <button
                             type="button"
                             onClick={() => handleRemoveCard(cardItem.id)}
-                            title="해당 제휴카드 삭제"
+                            title="해당 제휴카드 삭제 (카드 할인 제외)"
                             style={{
                               padding: '0.2rem 0.45rem',
                               borderRadius: '6px',
@@ -9066,8 +9152,7 @@ export default function BenefitCalculator({ onBack }) {
                           >
                             <Trash2 size={12} /> 삭제
                           </button>
-                        )}
-                      </div>
+                        </div>
 
                       {/* 적용 대상 구독 모델: 카드가 1개만 활성화되었을 때는 전체 모델 자동 반영 */}
                       {subCards.length === 1 ? (
@@ -9726,32 +9811,34 @@ export default function BenefitCalculator({ onBack }) {
                       )}
                     </div>
                   );
-                })}
+                }))}
               </div>
 
-              {/* 제휴카드 수동 추가 버튼 */}
-              <button
-                type="button"
-                onClick={() => handleAddCard()}
-                style={{
-                  marginTop: '0.65rem',
-                  width: '100%',
-                  padding: '0.52rem 0.8rem',
-                  borderRadius: '9px',
-                  border: '1px dashed rgba(96, 165, 250, 0.55)',
-                  background: 'rgba(59, 130, 246, 0.12)',
-                  color: '#93c5fd',
-                  fontSize: '0.82rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.35rem'
-                }}
-              >
-                <Plus size={15} /> 제휴카드 추가 (품목별 제휴카드 중복할인 적용 시)
-              </button>
+              {/* 제휴카드 수동 추가 버튼 (카드가 존재할 때 복수 카드 추가) */}
+              {subCards.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleAddCard()}
+                  style={{
+                    marginTop: '0.65rem',
+                    width: '100%',
+                    padding: '0.52rem 0.8rem',
+                    borderRadius: '9px',
+                    border: '1px dashed rgba(96, 165, 250, 0.55)',
+                    background: 'rgba(59, 130, 246, 0.12)',
+                    color: '#93c5fd',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.35rem'
+                  }}
+                >
+                  <Plus size={15} /> 제휴카드 추가 (품목별 제휴카드 중복할인 적용 시)
+                </button>
+              )}
 
               {/* 카드사 이벤트 대상 확인 QR 확대 모달 (전역 공통) */}
               {activeQrModalItem && (
@@ -9943,7 +10030,7 @@ export default function BenefitCalculator({ onBack }) {
             {isMixedMode ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.28rem', color: '#cbd5e1' }}>
-                  <span>제휴카드 적용 월 실납부액</span>
+                  <span>{subCardTotalDiscount > 0 ? '제휴카드 적용 월 실납부액' : '월 실납부액'}</span>
                   <strong style={{ color: 'white' }}>월 {formatWon(mixedSubMonthlyAfterCard)}</strong>
                 </div>
                 {mixedSubPrepayTotal > 0 && (
@@ -10003,7 +10090,7 @@ export default function BenefitCalculator({ onBack }) {
               ))
             ) : (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.86rem', marginBottom: '0.28rem' }}>
-                <strong style={{ color: '#f8fafc', fontWeight: 800 }}>제휴카드 적용 월 실납부액</strong>
+                <strong style={{ color: '#f8fafc', fontWeight: 800 }}>{subCardTotalDiscount > 0 ? '제휴카드 적용 월 실납부액' : '월 실납부액'}</strong>
                 <strong style={{ color: 'white', fontSize: '0.94rem', fontWeight: 900 }}>월 {formatWon(subMonthlyAfterCard)}</strong>
               </div>
             )}
