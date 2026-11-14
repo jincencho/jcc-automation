@@ -1037,31 +1037,45 @@ html {
 
 
 /* ============================================================================
-   @media print — A4 용지 1장 최적화 출력 스타일 (상·하·좌·우 여백 균형)
+   @media print — A4 용지 최적화 출력 스타일 (PDF 검은색 여백 완전 제거 및 100% 순백색 보장)
    ============================================================================ */
 @page {
   size: A4 portrait;
-  margin: 12mm 12mm;
+  margin: 0 !important;
+  background: #ffffff !important;
 }
 
 @media print {
+  :root {
+    color-scheme: light !important;
+    --bg-color: #ffffff !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+  }
+
   @page {
     size: A4 portrait;
-    margin: 12mm 12mm;
+    margin: 0 !important;
+    background: #ffffff !important;
   }
 
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
   }
 
-  html, body {
+  html, body, #root, .app-container, main, section, .calc-result-section, .a4-sheet-wrapper {
     background: #ffffff !important;
+    background-color: #ffffff !important;
     color: #0f172a !important;
-    min-height: auto !important;
+    min-height: 0 !important;
     height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
     overflow: visible !important;
   }
 
@@ -1074,37 +1088,52 @@ html {
   .calc-result-section {
     padding: 0 !important;
     margin: 0 !important;
+    background: #ffffff !important;
   }
 
   .a4-sheet-wrapper {
     padding: 0 !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     display: block !important;
     gap: 0 !important;
+    width: 210mm !important;
+    background: #ffffff !important;
   }
 
   .a4-print-sheet {
-    width: 100% !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    min-height: 268mm !important;
-    max-height: 272mm !important;
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
+    border: none !important;
     border-radius: 0 !important;
-    padding: 3.5mm 5mm !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    padding: 9mm 12mm 9mm 12mm !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    gap: 0.35rem !important;
-    page-break-inside: avoid;
-    break-inside: avoid;
+    gap: 0.3rem !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
     overflow: hidden !important;
+    transform: none !important;
+    margin: 0 auto !important;
   }
 
   .a4-page-break {
     page-break-after: always !important;
     break-after: page !important;
+  }
+
+  .a4-page-2 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
 
   .a4-header {

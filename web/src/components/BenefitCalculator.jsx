@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as htmlToImage from 'html-to-image';
+import { DEPT_POS_BARCODES } from '../constants/deptBarcodes';
+import { BRAND_LOGO_B64, MANAGER_PROFILE_B64 } from '../constants/brandAssets';
 import {
   Lock,
   Unlock,
@@ -31,7 +33,9 @@ import {
   Maximize2,
   Scale,
   Layers,
-  ShoppingBag
+  ShoppingBag,
+  Receipt,
+  Sliders
 } from 'lucide-react';
 
 // 숫자를 한국어 단위(억/만/원) 보조 텍스트로 변환
@@ -76,6 +80,33 @@ function calculateCardInstallment(principal, annualRatePercent, months) {
   const totalInterest = Math.max(0, totalPayment - P);
 
   return { monthly, totalPayment, totalInterest };
+}
+
+// 바코드 SVG 생성 컴포넌트 (캐셔 POS 전달용 백업)
+function BarcodeSvg({ value = '1041315089', width = 230, height = 44 }) {
+  const pattern = [
+    2, 1, 1, 2, 3, 1, 1, 2, 1, 3, 1, 1, 2, 1, 2, 2, 1, 3, 2, 1, 1, 2, 1, 1, 3, 2, 1, 1, 2, 2,
+    1, 2, 3, 1, 1, 2, 1, 1, 2, 3, 1, 2, 2, 1, 1, 3, 1, 1, 2, 2, 1, 3, 1, 1, 2, 1, 2, 2, 1, 3
+  ];
+  let x = 8;
+  const bars = [];
+  pattern.forEach((w, i) => {
+    if (i % 2 === 0) {
+      bars.push(<rect key={i} x={x} y="0" width={w * 2.1} height={height} fill="#0f172a" />);
+    }
+    x += w * 2.1;
+  });
+
+  return (
+    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', background: '#ffffff', padding: '6px 14px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+      <svg width={width} height={height} viewBox={`0 0 ${x + 8} ${height}`}>
+        {bars}
+      </svg>
+      <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 800, letterSpacing: '4px', color: '#0f172a', marginTop: '3px' }}>
+        * {value} *
+      </span>
+    </div>
+  );
 }
 
 // 금액 입력 컴포넌트 (콤마 자동 포맷 + 원화 단위 보조 텍스트)
@@ -123,11 +154,6 @@ function MoneyInput({ value, onChange, placeholder = '0', accentColor = 'var(--a
         />
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600, flexShrink: 0 }}>원</span>
       </div>
-      {numericValue > 0 && (
-        <div style={{ textAlign: 'right', fontSize: '0.75rem', color: accentColor, marginTop: '0.22rem', fontWeight: 600 }}>
-          {formatKoreanCurrencyHint(numericValue)}
-        </div>
-      )}
     </div>
   );
 }
@@ -160,7 +186,7 @@ const EVENT_TYPE_INFO = {
 };
 
 const DEFAULT_CHECKPOINTS = [
-  { id: 'cp1', text: '계약 기간 전 품목 무상 A/S 서비스 보장', checked: true },
+  { id: 'cp1', text: '계약 기간 전 품목 무상수리 서비스 보장', checked: true },
   { id: 'cp2', text: '초기 목돈 지출 및 장기 할부이자 부담 ZERO', checked: true },
   { id: 'cp3', text: '전문 엔지니어 정기 케어서비스 및 소모품 관리', checked: true },
   { id: 'cp4', text: '진주 백화점·로드샵 통합매장 최대 혜택 적용', checked: true }
@@ -638,6 +664,17 @@ export default function BenefitCalculator({ onBack }) {
   const [mixedRoadDiscountNote, setMixedRoadDiscountNote] = useState('');
   const [mixedRoadDiscountProof, setMixedRoadDiscountProof] = useState(true);
 
+  // 갤러리아 백화점 직원 전용 스마트 결제 설계기 상태
+  const [deptCalcOpen, setDeptCalcOpen] = useState(true);
+  const [deptCustomGross, setDeptCustomGross] = useState(null); // null이면 mixedLumpGross 연동
+  const [deptRewardRate, setDeptRewardRate] = useState(10.0); // 제휴카드 우대 사은율 (기본 10.0%)
+  const [deptStrategy, setDeptStrategy] = useState('reward'); // 'reward': 전액 증정 | 'instant': 안전 선차감
+  const [deptCardCount, setDeptCardCount] = useState(1); // 1: 1인 카드 (3분할) | 2: 2인 2카드 (신랑+신부)
+  const [deptSplitSlider, setDeptSplitSlider] = useState(60.7); // 2인 분할 비율 (%)
+  const [deptHasPhone, setDeptHasPhone] = useState(false);
+  const [deptPhoneAmount, setDeptPhoneAmount] = useState(0);
+  const [showPosCashierModal, setShowPosCashierModal] = useState(false);
+
   const handleAddMixedLumpItem = () => {
     setMixedLumpItems((prev) => {
       const nextId = prev.length > 0 ? Math.max(...prev.map((it) => it.id)) + 1 : 1;
@@ -777,7 +814,19 @@ export default function BenefitCalculator({ onBack }) {
   const [subInputMode, setSubInputMode] = useState('monthly'); // 'monthly' | 'total'
   const [subPrepay, setSubPrepay] = useState(0);
   const [subPlans, setSubPlans] = useState([
-    { id: 1, name: '', quantity: 1, months: 72, monthlyFee: 0, totalAmount: 0, policyNote: '', policyDiscount: 0 }
+    {
+      id: 1,
+      name: '',
+      quantity: 1,
+      months: 72,
+      monthlyFee: 0,
+      totalAmount: 0,
+      policyNote: '',
+      policyDiscount: 0,
+      isMobile: false,
+      freeRepairFee: 0,
+      careItems: []
+    }
   ]);
   const [subCardName, setSubCardName] = useState(''); // 제휴카드 이름 (직접 입력)
   const [subCardMinSpend, setSubCardMinSpend] = useState(''); // 제휴카드 필요 전월실적 (직접 입력)
@@ -789,7 +838,7 @@ export default function BenefitCalculator({ onBack }) {
   const [subPurchaseBenefit, setSubPurchaseBenefit] = useState(0); // 통합 구독 구매 혜택 금액
   // 무상 A/S 연장 이용료 (복수 품목 지원: 1번 금액 x 대수 x 개월수, 2번 ...)
   const [subFreeServiceItems, setSubFreeServiceItems] = useState([
-    { id: 1, monthlyFee: 0, quantity: 1, months: 72 }
+    { id: 1, monthlyFee: 0, quantity: 1, months: 72, isMobile: false }
   ]);
   // 케어서비스 혜택 (세부 설정: 1번 소모품비용 갯수, 2번 방문케어 횟수 ...)
   const [subCareServiceItems, setSubCareServiceItems] = useState([
@@ -926,15 +975,92 @@ export default function BenefitCalculator({ onBack }) {
             ? 48
             : 36;
       const nextId = prev.reduce((maxId, p) => Math.max(maxId, p.id), 0) + 1;
-      return [...prev, { id: nextId, name: '', quantity: 1, months: nextDefaultMonths, monthlyFee: 0, totalAmount: 0, policyNote: '', policyDiscount: 0 }];
+      return [
+        ...prev,
+        {
+          id: nextId,
+          name: '',
+          quantity: 1,
+          months: nextDefaultMonths,
+          monthlyFee: 0,
+          totalAmount: 0,
+          policyNote: '',
+          policyDiscount: 0,
+          isMobile: false,
+          freeRepairFee: 0,
+          careItems: []
+        }
+      ];
     });
+  };
 
-    // 구독료 칸 추가 시: 제휴카드도 추가반영될 수 있도록 슬롯 자동 추가!
-    handleAddCard(nextDefaultMonths);
+  // 품목별 케어서비스 행 추가/수정/삭제 헬퍼
+  const handleAddPlanCareItem = (planId) => {
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const currentItems = Array.isArray(p.careItems) ? p.careItems : [];
+        const nextId = currentItems.reduce((maxId, it) => Math.max(maxId, it.id || 0), 0) + 1;
+        const defaultType = !currentItems.some((it) => it.type === 'visit')
+          ? 'visit'
+          : !currentItems.some((it) => it.type === 'self')
+            ? 'self'
+            : 'consumable';
+        return {
+          ...p,
+          careItems: [...currentItems, { id: nextId, type: defaultType, cycle: 12, count: 1, amount: 0, customName: '' }]
+        };
+      })
+    );
+  };
+
+  const handleUpdatePlanCareItem = (planId, careId, patch) => {
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const currentItems = Array.isArray(p.careItems) ? p.careItems : [];
+        return {
+          ...p,
+          careItems: currentItems.map((c) => (c.id === careId ? { ...c, ...patch } : c))
+        };
+      })
+    );
+  };
+
+  const handleRemovePlanCareItem = (planId, careId) => {
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const currentItems = Array.isArray(p.careItems) ? p.careItems : [];
+        return {
+          ...p,
+          careItems: currentItems.filter((c) => c.id !== careId)
+        };
+      })
+    );
   };
 
   const handleUpdateSubPlan = (id, patch) => {
-    setSubPlans((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    setSubPlans((prev) => {
+      const isFirst = prev[0]?.id === id;
+      const updated = prev.map((p) => (p.id === id ? { ...p, ...patch } : p));
+      if (patch.months && (isFirst || prev.length === 1)) {
+        // 1번 구독 약정기간이 변경되면, 제휴 무상서비스의 약정기간도 동일하게 기본 연동!
+        setSubFreeServiceItems((prevFree) =>
+          prevFree.map((it, idx) => (idx === 0 || prevFree.length === 1 ? { ...it, months: patch.months } : it))
+        );
+        // 제휴카드 1번도 기본 연동 (동일하게 자동 동기화)
+        setSubCards((prevCards) =>
+          prevCards.map((c, idx) => {
+            if (idx === 0) {
+              return { ...c, months: patch.months };
+            }
+            return c;
+          })
+        );
+      }
+      return updated;
+    });
   };
 
   const handleRemoveSubPlan = (id) => {
@@ -1288,9 +1414,14 @@ export default function BenefitCalculator({ onBack }) {
       }
     }
 
-    // 단일 삼성카드 다구간 모드일 때 (모드 1 및 모드 2 공통 지원!)
+    // 단일 삼성카드 다구간 모드일 때 (구독 약정기간이 복수일 때 구간별 구독료 기준 자동 연산)
     if (isSingleCardMode && isSamsung && isMultiPeriod) {
-      const segDiscounts = subSegments.reduce((sum, seg) => sum + seg.appliedCard * seg.duration, 0);
+      const cardLimitMonths = Number(c.months) > 0 ? Number(c.months) : subMonths;
+      const segDiscounts = subSegments.reduce((sum, seg) => {
+        if (seg.startMonth > cardLimitMonths) return sum;
+        const activeDuration = Math.max(0, Math.min(seg.endMonth, cardLimitMonths) - seg.startMonth + 1);
+        return sum + seg.appliedCard * activeDuration;
+      }, 0);
       return {
         card: c,
         company,
@@ -1299,7 +1430,7 @@ export default function BenefitCalculator({ onBack }) {
         policy,
         totalDiscount: segDiscounts,
         planMonthlyFee: isMixedMode ? mixedSubMonthlyFeeTotal : effectiveMonthlyBase,
-        cardMonths: subMonths,
+        cardMonths: cardLimitMonths,
         targetModelTitle: '',
         lines: cardSubLines,
         isMultiLine: true
@@ -1332,8 +1463,8 @@ export default function BenefitCalculator({ onBack }) {
     };
   });
 
-  const subCardTotalDiscount = isSingleCardMode && isSamsungCard && isMultiPeriod
-    ? subSegments.reduce((sum, seg) => sum + seg.appliedCard * seg.duration, 0)
+  const subCardTotalDiscount = (isSingleCardMode && isSamsungCard && isMultiPeriod)
+    ? (cardDetails[0]?.totalDiscount ?? subSegments.reduce((sum, seg) => sum + seg.appliedCard * seg.duration, 0))
     : cardDetails.reduce((sum, d) => sum + d.totalDiscount, 0);
 
   const cardCompanySummary = [...new Set(cardDetails.map((d) => d.company).filter(Boolean))].join(' + ');
@@ -1369,33 +1500,145 @@ export default function BenefitCalculator({ onBack }) {
 
   const subMonthlyAfterCard = Math.max(0, effectiveMonthlyBase - startingTotalCardMonthly);
 
-  // 무상 A/S 연장 이용료 총액: 각 품목별 (월 이용료 × 대수 × 개월수) 합산
-  const subFreeServiceAmount = subFreeServiceItems.reduce((sum, it) => {
+  // 무상수리 연장 이용료 총액: 1번 계산기(!isMixedMode)에서는 subPlans의 품목별 설정에서 직접 파생
+  const activeSubFreeItems = isMixedMode
+    ? subFreeServiceItems
+    : subPlans
+        .filter((p) => (Number(p.freeRepairFee) || 0) > 0)
+        .map((p) => ({
+          id: p.id,
+          monthlyFee: Number(p.freeRepairFee) || 0,
+          quantity: 1,
+          months: Number(p.months) || 72,
+          isMobile: Boolean(p.isMobile),
+          name: p.name
+        }));
+
+  const subFreeServiceAmount = activeSubFreeItems.reduce((sum, it) => {
     const fee = Number(it.monthlyFee) || 0;
     const qty = it.quantity === '' ? 1 : Number(it.quantity) || 1;
     const months = Number(it.months) || 72;
     return sum + fee * qty * months;
   }, 0);
-  const validFreeServiceItems = subFreeServiceItems.filter((it) => (Number(it.monthlyFee) || 0) > 0);
+  const validFreeServiceItems = activeSubFreeItems.filter((it) => (Number(it.monthlyFee) || 0) > 0);
   const validFreeServiceCount = validFreeServiceItems.length;
+  const hasAnyFreeServiceMobile = activeSubFreeItems.some((it) => Boolean(it.isMobile));
+  const hasAnyMixedMobile = mixedSubItems.some((it) => Boolean(it.isMobile));
   const totalFreeServiceQuantity = validFreeServiceItems.reduce(
     (sum, it) => sum + (it.quantity === '' ? 1 : Number(it.quantity) || 1),
     0
   );
 
-  // 케어서비스 혜택 총액: 각 항목별 (금액 × 갯수/횟수) 합산 (1번 소모품비용 갯수, 2번 방문케어 횟수 ...)
-  const subCareServiceAmount = subCareServiceItems.reduce(
-    (sum, it) => sum + (Number(it.amount) || 0) * (Number(it.count) || 1),
+  // 가전(무상서비스 전용) vs 모바일(무상+파손보험) 분리 계산
+  const applianceFreeServiceItems = activeSubFreeItems.filter((it) => !it.isMobile && (Number(it.monthlyFee) || 0) > 0);
+  const applianceFreeServiceAmount = applianceFreeServiceItems.reduce((sum, it) => {
+    const fee = Number(it.monthlyFee) || 0;
+    const qty = it.quantity === '' ? 1 : Number(it.quantity) || 1;
+    const months = Number(it.months) || 72;
+    return sum + fee * qty * months;
+  }, 0);
+  const applianceFreeServiceCount = applianceFreeServiceItems.length;
+  const applianceFreeServiceQuantity = applianceFreeServiceItems.reduce(
+    (sum, it) => sum + (it.quantity === '' ? 1 : Number(it.quantity) || 1),
     0
   );
-  const validCareServiceItems = subCareServiceItems.filter((it) => (Number(it.amount) || 0) > 0);
+
+  const mobileFreeServiceItems = activeSubFreeItems.filter((it) => it.isMobile && (Number(it.monthlyFee) || 0) > 0);
+  const mobileFreeServiceAmount = mobileFreeServiceItems.reduce((sum, it) => {
+    const fee = Number(it.monthlyFee) || 0;
+    const qty = it.quantity === '' ? 1 : Number(it.quantity) || 1;
+    const months = Number(it.months) || 72;
+    return sum + fee * qty * months;
+  }, 0);
+  const mobileFreeServiceCount = mobileFreeServiceItems.length;
+  const mobileFreeServiceQuantity = mobileFreeServiceItems.reduce(
+    (sum, it) => sum + (it.quantity === '' ? 1 : Number(it.quantity) || 1),
+    0
+  );
+
+  const hasApplianceFreeService = applianceFreeServiceAmount > 0;
+  const hasMobileFreeService = mobileFreeServiceAmount > 0;
+  const isCombinedFreeService = hasApplianceFreeService && hasMobileFreeService;
+
+  // 케어서비스 혜택 총액: 1번 계산기(!isMixedMode)에서는 각 품목의 careItems에서 추출 (단가 × 횟수)
+  const activeSubCareItems = isMixedMode
+    ? subCareServiceItems
+    : subPlans.flatMap((p) => {
+        const rawCareItems = Array.isArray(p.careItems) ? p.careItems : [];
+        const items = rawCareItems.length > 0
+          ? rawCareItems
+          : (Number(p.careAmount) || 0) > 0
+            ? [{ id: 1, type: p.careType || 'visit', cycle: 12, count: 1, amount: Number(p.careAmount) || 0, customName: p.careName || '' }]
+            : [];
+
+        return items
+          .filter((c) => (Number(c.amount) || 0) > 0)
+          .map((c) => {
+            let typeLabel = '케어서비스';
+            let unit = '회';
+            if (c.type === 'visit') {
+              typeLabel = '방문케어';
+              unit = '회';
+            } else if (c.type === 'self') {
+              typeLabel = '셀프케어';
+              unit = '회';
+            } else if (c.type === 'consumable') {
+              typeLabel = '소모품';
+              unit = '개';
+            } else if (c.type === 'all') {
+              typeLabel = '방문케어+소모품';
+              unit = '회';
+            } else if (c.type === 'custom' && c.customName) {
+              typeLabel = c.customName;
+              unit = '건';
+            }
+
+            const countNum = c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1;
+            const cycleText = c.cycle ? `${c.cycle}개월 주기` : '';
+            const countText = countNum > 1 ? `${countNum}${unit}` : '';
+            const details = [cycleText, countText].filter(Boolean).join(' · ');
+            const planTitle = (p.name || '').trim();
+            const fullLabel = planTitle
+              ? `${planTitle} (${typeLabel}${details ? ` · ${details}` : ''})`
+              : `${typeLabel}${details ? ` (${details})` : ''}`;
+
+            return {
+              id: `${p.id}-${c.id}`,
+              name: fullLabel,
+              amount: Number(c.amount) || 0,
+              count: countNum,
+              unit,
+              planName: planTitle,
+              serviceType: typeLabel,
+              cycle: c.cycle
+            };
+          });
+      });
+
+  const subCareServiceAmount = isMixedMode
+    ? subCareServiceItems.reduce(
+        (sum, it) => sum + (Number(it.amount) || 0) * (Number(it.count) || 1),
+        0
+      )
+    : activeSubCareItems.reduce(
+        (sum, it) => sum + (Number(it.amount) || 0) * (Number(it.count) || 1),
+        0
+      );
+  const validCareServiceItems = isMixedMode
+    ? subCareServiceItems.filter((it) => (Number(it.amount) || 0) > 0)
+    : activeSubCareItems;
   const validCareServiceCount = validCareServiceItems.length;
   const hasCareService = subCareServiceAmount > 0;
   const subServiceTotal = (Number(subFreeServiceAmount) || 0) + (Number(subCareServiceAmount) || 0);
   const subCashBenefitTotal = subCardTotalDiscount + (Number(subPurchaseBenefit) || 0);
-  const subTotalBenefitSum = subCashBenefitTotal + (includeServiceInFinal ? subServiceTotal : 0);
+  // 총 혜택 합계: 무상서비스 연장이용료와 케어서비스는 제외하고 직접 청구할인·캐시백만 합산
+  const subTotalBenefitSum = subCashBenefitTotal;
 
-  const subFinalPrice = Math.max(0, subGrossTotal - subTotalBenefitSum);
+  // 삼성AI구독 최종 체감가: 총 혜택 합계 + (서비스 혜택 가치)까지 모두 반영하여 최종체감가 산출!
+  const subFinalPrice = Math.max(
+    0,
+    subGrossTotal - subTotalBenefitSum - (includeServiceInFinal ? subServiceTotal : 0)
+  );
 
   // 최종 차이가격: 일반구매 일시불 조건(lumpFinalPrice) 대비 비교
   const rawDiff = lumpFinalPrice - subFinalPrice; // 양수면 삼성AI구독이 일시불보다도 더 저렴
@@ -1444,6 +1687,842 @@ export default function BenefitCalculator({ onBack }) {
   const mixedLumpModelDiscountTotal = mixedLumpItems.reduce((sum, it) => sum + getMixedLumpItemCalc(it).totalDiscount, 0);
   const mixedLumpQtyTotal = validMixedLumpItems.reduce((sum, it) => sum + getMixedLumpItemCalc(it).qty, 0);
 
+  // 갤러리아 백화점 스마트 계산 엔진 (가전 907 vs 자급제 606 수수료 분리 · 마지노선 역산 · 1인 3분할 · 2인 카드 슬라이더)
+  const deptApplianceGross = deptCustomGross !== null ? Number(deptCustomGross) || 0 : mixedLumpGross;
+  const deptPhoneGross = deptHasPhone && Number(deptPhoneAmount) > 0 ? Number(deptPhoneAmount) : 0;
+  const deptEffectiveGross = deptApplianceGross + deptPhoneGross;
+  const deptPhoneGcash = Math.floor(deptPhoneGross / 1000000) * 40000;
+
+  const DEPT_TIERS = [
+    { label: '100만', minSpend: 1000000, targetReceipt: 1000000, cardDiscountRate: 0, normalGcash: 65000 },
+    { label: '200만', minSpend: 2000000, targetReceipt: 2000000, cardDiscountRate: 0, normalGcash: 130000 },
+    { label: '300만', minSpend: 3093000, targetReceipt: 3000000, cardDiscountRate: 0.03, normalGcash: 195000 },
+    { label: '400만', minSpend: 4124000, targetReceipt: 4000000, cardDiscountRate: 0.03, normalGcash: 260000 },
+    { label: '500만', minSpend: 5264000, targetReceipt: 5000000, cardDiscountRate: 0.05, normalGcash: 325000 },
+    { label: '700만', minSpend: 7369000, targetReceipt: 7000000, cardDiscountRate: 0.05, normalGcash: 325000 },
+    { label: '1000만', minSpend: 10527000, targetReceipt: 10000000, cardDiscountRate: 0.05, normalGcash: 650000 },
+    { label: '1500만', minSpend: 15790000, targetReceipt: 15000000, cardDiscountRate: 0.05, normalGcash: 975000 },
+    { label: '2000만', minSpend: 21053000, targetReceipt: 20000000, cardDiscountRate: 0.05, normalGcash: 1300000 }
+  ];
+
+  const getTierForAmount = (amt) => {
+    let matched = null;
+    let nextTier = DEPT_TIERS[0];
+    for (let i = DEPT_TIERS.length - 1; i >= 0; i--) {
+      if (amt >= DEPT_TIERS[i].minSpend) {
+        matched = DEPT_TIERS[i];
+        nextTier = DEPT_TIERS[i + 1] || null;
+        break;
+      }
+    }
+    if (!matched) nextTier = DEPT_TIERS[0];
+    return { matched, nextTier };
+  };
+
+  const getGcashForTier = (tier) => {
+    if (!tier) return 0;
+    if (tier.minSpend >= 5264000) {
+      return Math.round(tier.targetReceipt * (deptRewardRate / 100));
+    }
+    return tier.normalGcash;
+  };
+
+  const deptEnginePlan = (() => {
+    if (deptCardCount === 1) {
+      if (deptEffectiveGross <= 21053000) {
+        const { matched: tier, nextTier } = getTierForAmount(deptEffectiveGross);
+        const tierGcash = getGcashForTier(tier);
+        const baseGcash = tierGcash + deptPhoneGcash;
+        let bonusGcash = 0;
+        if (baseGcash >= 2000000) bonusGcash = 130000;
+        else if (baseGcash >= 1000000) bonusGcash = 65000;
+        const totalGcash = baseGcash + bonusGcash;
+
+        // 유효기간 분리 (기본 6.5%는 5년, 우대율 초과 추가분은 60일)
+        const tierNormal = tier ? tier.normalGcash : 0;
+        const gcash60Day = tier && tier.minSpend >= 5264000 ? Math.max(0, tierGcash - tierNormal) : 0;
+        const gcash5Year = Math.max(0, totalGcash - gcash60Day);
+
+        // 1) 전부 적립 시뮬레이션
+        const rewardApplianceApproval = deptPhoneGross > 0 ? Math.max(0, deptEffectiveGross - deptPhoneGross) : deptEffectiveGross;
+        const rewardCardDiscount = tier ? Math.floor(rewardApplianceApproval * tier.cardDiscountRate) : 0;
+        const rewardFinalPerceived = deptEffectiveGross - rewardCardDiscount - totalGcash;
+
+        // 2) 부분 차감 시뮬레이션 (마지노선 방어)
+        let partialSafeDeduct = 0;
+        let partialSafeReward = totalGcash;
+        if (tier) {
+          if (deptEffectiveGross - totalGcash >= tier.minSpend) {
+            partialSafeDeduct = totalGcash;
+            partialSafeReward = 0;
+          } else if (deptEffectiveGross >= tier.minSpend) {
+            partialSafeDeduct = Math.max(0, deptEffectiveGross - tier.minSpend);
+            partialSafeReward = totalGcash - partialSafeDeduct;
+          }
+        }
+        const partialCardApproval = deptEffectiveGross - partialSafeDeduct;
+        const partialApplianceApproval = deptPhoneGross > 0 ? Math.max(0, partialCardApproval - deptPhoneGross) : partialCardApproval;
+        const partialCardDiscount = tier ? Math.floor(partialApplianceApproval * tier.cardDiscountRate) : 0;
+        const partialFinalPerceived = deptEffectiveGross - partialCardDiscount - totalGcash;
+
+        // 3) 전부 차감 시뮬레이션 (G캐시 0원 올인)
+        const fullSafeDeduct = totalGcash;
+        const fullSafeReward = 0;
+        const fullCardApproval = Math.max(0, deptEffectiveGross - fullSafeDeduct);
+        const fullApplianceApproval = deptPhoneGross > 0 ? Math.max(0, fullCardApproval - deptPhoneGross) : fullCardApproval;
+        const fullCardDiscount = tier ? Math.floor(fullApplianceApproval * tier.cardDiscountRate) : 0;
+        const fullFinalPerceived = deptEffectiveGross - fullCardDiscount - totalGcash;
+
+        // 현재 선택된 전략에 따른 active 값
+        let safeDeduct = 0;
+        let safeReward = totalGcash;
+        let safeMode = 'reward_only';
+        if (deptStrategy === 'full') {
+          safeDeduct = fullSafeDeduct;
+          safeReward = fullSafeReward;
+          safeMode = 'full_instant';
+        } else if (deptStrategy === 'partial' || deptStrategy === 'instant') {
+          safeDeduct = partialSafeDeduct;
+          safeReward = partialSafeReward;
+          safeMode = safeDeduct >= totalGcash ? 'full_instant' : (safeDeduct > 0 ? 'partial_instant' : 'reward_only');
+        }
+
+        const cardApproval = deptEffectiveGross - safeDeduct;
+        const applianceApproval = deptPhoneGross > 0 ? Math.max(0, cardApproval - deptPhoneGross) : cardApproval;
+        const cardDiscount = tier ? Math.floor(applianceApproval * tier.cardDiscountRate) : 0;
+        const finalPerceived = deptEffectiveGross - cardDiscount - totalGcash;
+
+        let jumpTip = null;
+        if (nextTier) {
+          const needMore = nextTier.minSpend - deptEffectiveGross;
+          if (needMore > 0 && needMore <= 1500000) {
+            const nextGcash = getGcashForTier(nextTier);
+            const extraBenefit = (nextGcash - baseGcash) + Math.floor(nextTier.minSpend * nextTier.cardDiscountRate) - cardDiscount;
+            jumpTip = {
+              nextLabel: nextTier.label,
+              needMore,
+              nextGcash,
+              extraBenefit
+            };
+          }
+        }
+
+        return {
+          mode: 'single',
+          applianceGross: deptApplianceGross,
+          phoneGross: deptPhoneGross,
+          effectiveGross: deptEffectiveGross,
+          tierLabel: tier ? tier.label : '구간 미달 (300만 미만)',
+          cardApproval,
+          cardDiscount,
+          baseGcash,
+          bonusGcash,
+          totalGcash,
+          gcash5Year,
+          gcash60Day,
+          safeDeduct,
+          safeReward,
+          safeMode,
+          rewardPlan: {
+            cardApproval: deptEffectiveGross,
+            safeDeduct: 0,
+            safeReward: totalGcash,
+            totalCardDiscount: rewardCardDiscount,
+            finalPerceived: rewardFinalPerceived
+          },
+          partialPlan: {
+            cardApproval: partialCardApproval,
+            safeDeduct: partialSafeDeduct,
+            safeReward: partialSafeReward,
+            totalCardDiscount: partialCardDiscount,
+            finalPerceived: partialFinalPerceived
+          },
+          fullPlan: {
+            cardApproval: fullCardApproval,
+            safeDeduct: fullSafeDeduct,
+            safeReward: fullSafeReward,
+            totalCardDiscount: fullCardDiscount,
+            finalPerceived: fullFinalPerceived
+          },
+          rewardCardApproval: deptEffectiveGross,
+          rewardCardDiscount,
+          rewardFinalPerceived,
+          instantSafeDeduct: partialSafeDeduct,
+          instantSafeReward: partialSafeReward,
+          instantCardApproval: partialCardApproval,
+          instantCardDiscount: partialCardDiscount,
+          instantFinalPerceived: partialFinalPerceived,
+          totalCardDiscount: cardDiscount,
+          finalPerceived,
+          posSteps: [
+            {
+              step: 1,
+              label: '1차 제휴카드 승인 (가전)',
+              amount: applianceApproval,
+              barcodeType: 'appliance',
+              barcodeTail: '907',
+              barcodeBadge: '가전 907',
+              discountRate: tier ? tier.cardDiscountRate : 0,
+              discountAmount: cardDiscount,
+              receiptAmount: Math.max(0, applianceApproval - cardDiscount),
+              note: tier ? `${(tier.cardDiscountRate * 100).toFixed(0)}% 청구할인 [가전 수수료율]` : '청구할인 미적용'
+            },
+            deptPhoneGross > 0 ? {
+              step: '자급제',
+              label: '📱 자급제폰 결제 승인',
+              amount: deptPhoneGross,
+              barcodeType: 'phone',
+              barcodeTail: '606',
+              barcodeBadge: '자급제 606',
+              discountRate: 0,
+              discountAmount: 0,
+              receiptAmount: deptPhoneGross,
+              note: '⚠️ 자급제 전용 수수료율 적용 (가전 바코드 스캔 절대 금지! 100만당 4만 G캐시)'
+            } : null,
+            safeDeduct > 0 ? {
+              step: '선차감',
+              label: 'G캐시 선차감 결제',
+              amount: safeDeduct,
+              barcodeBadge: 'G캐시',
+              discountRate: 0,
+              discountAmount: 0,
+              receiptAmount: safeDeduct,
+              note: '결제 즉시 차감'
+            } : null,
+            safeReward > 0 ? {
+              step: '증정',
+              label: '💰 고객 G캐시 순적립',
+              amount: safeReward,
+              barcodeBadge: '앱 적립',
+              discountRate: 0,
+              discountAmount: 0,
+              receiptAmount: safeReward,
+              note: `백화점 모바일 앱 지급 (5년: ${formatWon(gcash5Year)} / 60일: ${formatWon(gcash60Day)})`
+            } : null
+          ].filter(Boolean),
+          jumpTip
+        };
+      }
+
+      // 2000만 초과: 1인 분할 비기 모드 (400만 / 300만 / 200만 / 100만 구간 지능형 매칭)
+      const step1MinSpend = 21053000;
+      let step2Approval = 0;
+      let step2Gcash = 0;
+      let step2Label = '';
+      let step2DiscountRate = 0;
+
+      if (deptApplianceGross - step1MinSpend >= 4124000) {
+        // 400만 구간 우선 매칭 (마지노선 4,124,000원 / 3% 청구할인 / 6.5% G캐시 260,000원)
+        step2Approval = 4124000;
+        step2Gcash = 260000;
+        step2Label = '400만';
+        step2DiscountRate = 0.03;
+      } else if (deptApplianceGross - step1MinSpend >= 3093000) {
+        // 300만 구간 매칭 (마지노선 3,093,000원 / 3% 청구할인 / 6.5% G캐시 195,000원)
+        step2Approval = 3093000;
+        step2Gcash = 195000;
+        step2Label = '300만';
+        step2DiscountRate = 0.03;
+      } else if (deptApplianceGross - step1MinSpend >= 2000000) {
+        // 200만 구간 매칭 (2,000,000원 결제 / 청구할인 없음 / 6.5% G캐시 130,000원)
+        step2Approval = 2000000;
+        step2Gcash = 130000;
+        step2Label = '200만';
+        step2DiscountRate = 0;
+      } else if (deptApplianceGross - step1MinSpend >= 1000000) {
+        // 100만 구간 매칭 (1,000,000원 결제 / 청구할인 없음 / 6.5% G캐시 65,000원)
+        step2Approval = 1000000;
+        step2Gcash = 65000;
+        step2Label = '100만';
+        step2DiscountRate = 0;
+      }
+
+      const remainingForStep1And3 = deptApplianceGross - step2Approval;
+      // 1차 카드는 2,000만원 마지노선(21,053,000원)을 안전하게 넘기며, 5% 청구할인을 받을 수 있도록 자투리 잔여금을 온전히 1차 카드에 배정!
+      let step1Approval = remainingForStep1And3;
+      const step1Tier = DEPT_TIERS.find((t) => t.label === '2000만') || DEPT_TIERS[DEPT_TIERS.length - 1];
+      const step1Gcash = Math.round(step1Tier.targetReceipt * (deptRewardRate / 100));
+
+      let step3Approval = 0;
+      let step3Gcash = 0;
+
+      const totalGcash = step1Gcash + step2Gcash + step3Gcash + deptPhoneGcash;
+
+      // 유효기간 분리 (1인 3분할: 1차 2000만 우대 초과분은 60일, 나머지 2차/3차/자급제 및 기본 130만은 5년)
+      const gcash60Day = Math.max(0, step1Gcash - 1300000);
+      const gcash5Year = Math.max(0, totalGcash - gcash60Day);
+
+      // 1) 전부 적립 시뮬레이션
+      const rewardStep1Approval = step1Approval;
+      const rewardStep2Approval = step2Approval;
+      const rewardCardApproval = deptEffectiveGross;
+      const rewardStep1Discount = Math.floor(rewardStep1Approval * 0.05);
+      const rewardStep2Discount = rewardStep2Approval > 0 ? Math.floor(rewardStep2Approval * step2DiscountRate) : 0;
+      const rewardCardDiscount = rewardStep1Discount + rewardStep2Discount;
+      const rewardFinalPerceived = deptEffectiveGross - rewardCardDiscount - totalGcash;
+
+      // 2) 부분 차감 시뮬레이션 (마지노선 방어)
+      const partDeduct3 = Math.min(step3Approval, totalGcash);
+      const partRem = totalGcash - partDeduct3;
+      const partMargin = Math.max(0, step1Approval - 21053000);
+      const partDeduct1 = Math.min(partMargin, partRem);
+      const partialSafeDeduct = partDeduct3 + partDeduct1;
+      const partialSafeReward = totalGcash - partialSafeDeduct;
+      const partStep1Approval = step1Approval - partDeduct1;
+      const partStep2Approval = step2Approval;
+      const partialCardApproval = partStep1Approval + partStep2Approval + (step3Approval - partDeduct3) + deptPhoneGross;
+      const partialStep1Discount = Math.floor(partStep1Approval * 0.05);
+      const partialStep2Discount = partStep2Approval > 0 ? Math.floor(partStep2Approval * step2DiscountRate) : 0;
+      const partialCardDiscount = partialStep1Discount + partialStep2Discount;
+      const partialFinalPerceived = deptEffectiveGross - partialCardDiscount - totalGcash;
+
+      // 3) 전부 차감 시뮬레이션 (G캐시 0원 올인):
+      // [사용자 특명]: 300만원 이하 구간은 청구할인이 없음!
+      // 따라서 300만원 미만 구간에서는 2차 카드는 딱 200만원만 결제하고 13만원 챙기고,
+      // 나머지 모든 자투리는 5% 청구할인을 받을 수 있는 1차 카드(2,000만원 이상)에 갖다 붙여서 계산!
+      let fullStep2Approval = 0;
+      let fullStep2Discount = 0;
+      let fullStep2Gcash = 0;
+      let fullStep2Label = '';
+      let fullStep2DiscountRate = 0;
+
+      if ((deptApplianceGross - step3Approval) - (step1Gcash + 260000) - 21053000 >= 4124000) {
+        fullStep2Approval = (deptApplianceGross - step3Approval) - (step1Gcash + 260000) - 21053000;
+        fullStep2DiscountRate = 0.03;
+        fullStep2Discount = Math.floor(fullStep2Approval * 0.03);
+        fullStep2Gcash = 260000;
+        fullStep2Label = '400만';
+      } else if ((deptApplianceGross - step3Approval) - (step1Gcash + 195000) - 21053000 >= 3093000) {
+        fullStep2Approval = (deptApplianceGross - step3Approval) - (step1Gcash + 195000) - 21053000;
+        fullStep2DiscountRate = 0.03;
+        fullStep2Discount = Math.floor(fullStep2Approval * 0.03);
+        fullStep2Gcash = 195000;
+        fullStep2Label = '300만';
+      } else if (deptApplianceGross - step1Gcash >= 21053000 + 2000000) {
+        // 딱 200만원 결제, 청구할인 0원, 13만원 사은 챙김, 나머지 자투리는 전부 1차 카드에 배정!
+        fullStep2Approval = 2000000;
+        fullStep2DiscountRate = 0;
+        fullStep2Discount = 0;
+        fullStep2Gcash = 130000;
+        fullStep2Label = '200만';
+      } else if (deptApplianceGross - step1Gcash >= 21053000 + 1000000) {
+        fullStep2Approval = 1000000;
+        fullStep2DiscountRate = 0;
+        fullStep2Discount = 0;
+        fullStep2Gcash = 65000;
+        fullStep2Label = '100만';
+      } else {
+        fullStep2Approval = 0;
+        fullStep2DiscountRate = 0;
+        fullStep2Discount = 0;
+        fullStep2Gcash = 0;
+        fullStep2Label = '미달';
+      }
+
+      const fullTotalGcash = step1Gcash + fullStep2Gcash + deptPhoneGcash;
+      const fullSafeDeduct = fullTotalGcash;
+      const fullSafeReward = 0;
+
+      // 1차 카드 승인: 전체 가전 원금에서 2차 승인액(200만)을 뺀 뒤, 총 G캐시를 전액 선차감!
+      // (자투리 금액이 1차 카드에 다 붙어 2,000만 상한 마지노선을 완벽히 초과 수령!)
+      const fullStep1Approval = Math.max(21053000, (deptApplianceGross - fullStep2Approval) - fullTotalGcash);
+      const fullStep1Discount = Math.floor(fullStep1Approval * 0.05);
+      const fullTotalCardDiscount = fullStep1Discount + fullStep2Discount;
+      const fullCardApproval = fullStep1Approval + fullStep2Approval + deptPhoneGross;
+      const fullFinalPerceived = deptEffectiveGross - fullTotalCardDiscount - fullTotalGcash;
+      const fullDeduct1 = fullSafeDeduct;
+      const fullDeduct2 = 0;
+      const fullDeduct3 = 0;
+
+      // 현재 선택된 전략에 따른 active 값
+      let deduct1 = 0;
+      let deduct2 = 0;
+      let deduct3 = 0;
+      let safeDeduct = 0;
+      let safeReward = totalGcash;
+      let safeMode = 'reward_only';
+      let activeTotalGcash = totalGcash;
+      let activeStep2Gcash = step2Gcash;
+      let activeStep2Label = step2Label || '400만';
+      let activeStep2DiscountRate = step2DiscountRate;
+      let activeStep1Discount = 0;
+      let activeStep2Discount = 0;
+      let activeTotalCardDiscount = 0;
+      let activeFinalPerceived = 0;
+      let activeStep1ActualApproval = 0;
+      let activeStep2ActualApproval = 0;
+      let activeStep3ActualApproval = 0;
+      let activeCardApproval = 0;
+
+      if (deptStrategy === 'full') {
+        deduct1 = fullDeduct1;
+        deduct2 = fullDeduct2;
+        deduct3 = fullDeduct3;
+        safeDeduct = fullSafeDeduct;
+        safeReward = fullSafeReward;
+        safeMode = 'full_instant';
+        activeTotalGcash = fullTotalGcash;
+        activeStep2Gcash = fullStep2Gcash;
+        activeStep2Label = fullStep2Label;
+        activeStep2DiscountRate = fullStep2DiscountRate;
+        activeStep1ActualApproval = fullStep1Approval;
+        activeStep2ActualApproval = fullStep2Approval;
+        activeStep3ActualApproval = 0;
+        activeCardApproval = fullCardApproval;
+        activeStep1Discount = fullStep1Discount;
+        activeStep2Discount = fullStep2Discount;
+        activeTotalCardDiscount = fullTotalCardDiscount;
+        activeFinalPerceived = fullFinalPerceived;
+      } else if (deptStrategy === 'partial' || deptStrategy === 'instant') {
+        deduct1 = partDeduct1;
+        deduct2 = 0;
+        deduct3 = partDeduct3;
+        safeDeduct = partialSafeDeduct;
+        safeReward = partialSafeReward;
+        safeMode = safeDeduct >= totalGcash ? 'full_instant' : (safeDeduct > 0 ? 'partial_instant' : 'reward_only');
+        activeTotalGcash = totalGcash;
+        activeStep2Gcash = step2Gcash;
+        activeStep2Label = step2Label || '400만';
+        activeStep2DiscountRate = step2DiscountRate;
+        activeStep1ActualApproval = partStep1Approval;
+        activeStep2ActualApproval = partStep2Approval;
+        activeStep3ActualApproval = step3Approval - partDeduct3;
+        activeCardApproval = partialCardApproval;
+        activeStep1Discount = partialStep1Discount;
+        activeStep2Discount = partialStep2Discount;
+        activeTotalCardDiscount = partialCardDiscount;
+        activeFinalPerceived = partialFinalPerceived;
+      } else {
+        // reward (전액 적립)
+        deduct1 = 0;
+        deduct2 = 0;
+        deduct3 = 0;
+        safeDeduct = 0;
+        safeReward = totalGcash;
+        safeMode = 'reward_only';
+        activeTotalGcash = totalGcash;
+        activeStep2Gcash = step2Gcash;
+        activeStep2Label = step2Label || '400만';
+        activeStep2DiscountRate = step2DiscountRate;
+        activeStep1ActualApproval = rewardStep1Approval;
+        activeStep2ActualApproval = rewardStep2Approval;
+        activeStep3ActualApproval = step3Approval;
+        activeCardApproval = rewardCardApproval;
+        activeStep1Discount = rewardStep1Discount;
+        activeStep2Discount = rewardStep2Discount;
+        activeTotalCardDiscount = rewardCardDiscount;
+        activeFinalPerceived = rewardFinalPerceived;
+      }
+
+      const step1ActualApproval = activeStep1ActualApproval;
+      const step2ActualApproval = activeStep2ActualApproval;
+      const step3ActualApproval = activeStep3ActualApproval;
+      const cardApproval = activeCardApproval;
+      const step1Discount = activeStep1Discount;
+      const step2Discount = activeStep2Discount;
+      const totalCardDiscount = activeTotalCardDiscount;
+      const finalPerceived = activeFinalPerceived;
+      const currentGcash = activeTotalGcash;
+
+      let jumpTip = null;
+      const jumpTarget = 21053000 + 5264000;
+      if (deptEffectiveGross < jumpTarget && (jumpTarget - deptEffectiveGross) <= 1000000) {
+        jumpTip = {
+          needMore: jumpTarget - deptEffectiveGross,
+          message: `단 ${(jumpTarget - deptEffectiveGross).toLocaleString()}원만 추가 시 [2,000만 + 500만] 동시 점프! G캐시 폭증!`
+        };
+      }
+
+      return {
+        mode: '1person_3split',
+        applianceGross: deptApplianceGross,
+        phoneGross: deptPhoneGross,
+        effectiveGross: deptEffectiveGross,
+        step1Approval: step1ActualApproval,
+        step1BaseApproval: step1Approval,
+        step1Discount,
+        step1Gcash,
+        step2Approval: step2ActualApproval,
+        step2BaseApproval: step2Approval,
+        step2Discount,
+        step2Gcash: activeStep2Gcash,
+        step2Label: activeStep2Label,
+        step3Approval: step3ActualApproval,
+        step3BaseApproval: step3Approval,
+        step3Gcash,
+        totalCardDiscount,
+        totalGcash: currentGcash,
+        gcash5Year,
+        gcash60Day,
+        safeDeduct,
+        safeReward,
+        safeMode,
+        deduct1,
+        deduct2,
+        deduct3,
+        cardApproval,
+        rewardPlan: {
+          cardApproval: rewardCardApproval,
+          safeDeduct: 0,
+          safeReward: totalGcash,
+          totalGcash: totalGcash,
+          step2Label: step2Label || '400만',
+          step2Gcash: step2Gcash,
+          totalCardDiscount: rewardCardDiscount,
+          finalPerceived: rewardFinalPerceived
+        },
+        partialPlan: {
+          cardApproval: partialCardApproval,
+          safeDeduct: partialSafeDeduct,
+          safeReward: partialSafeReward,
+          totalGcash: totalGcash,
+          step2Label: step2Label || '400만',
+          step2Gcash: step2Gcash,
+          totalCardDiscount: partialCardDiscount,
+          finalPerceived: partialFinalPerceived
+        },
+        fullPlan: {
+          cardApproval: fullCardApproval,
+          safeDeduct: fullSafeDeduct,
+          safeReward: 0,
+          totalGcash: fullTotalGcash,
+          step2Label: fullStep2Label || '200만',
+          step2Gcash: fullStep2Gcash,
+          totalCardDiscount: fullTotalCardDiscount,
+          finalPerceived: fullFinalPerceived
+        },
+        rewardCardApproval,
+        rewardCardDiscount,
+        rewardFinalPerceived,
+        instantSafeDeduct: partialSafeDeduct,
+        instantSafeReward: partialSafeReward,
+        instantCardApproval: partialCardApproval,
+        instantCardDiscount: partialCardDiscount,
+        instantFinalPerceived: partialFinalPerceived,
+        finalPerceived,
+        posSteps: [
+          {
+            step: 1,
+            label: '1차 제휴카드 결제 (가전)',
+            amount: step1ActualApproval,
+            barcodeType: 'appliance',
+            barcodeTail: '907',
+            barcodeBadge: '가전 907',
+            discountRate: 0.05,
+            discountAmount: step1Discount,
+            receiptAmount: Math.max(0, step1ActualApproval - step1Discount),
+            note: `5% 청구할인 + ${deptRewardRate}% 우대 사은 (2,000만 상한 사수)${deduct1 > 0 ? ` [자투리 합산 및 G캐시 ${formatWon(deduct1)} 선차감 반영]` : ''}`
+          },
+          step2ActualApproval > 0 ? {
+            step: 2,
+            label: '2차 제휴카드 결제 (가전)',
+            amount: step2ActualApproval,
+            barcodeType: 'appliance',
+            barcodeTail: '907',
+            barcodeBadge: '가전 907',
+            discountRate: activeStep2DiscountRate,
+            discountAmount: step2Discount,
+            receiptAmount: Math.max(0, step2ActualApproval - step2Discount),
+            note: activeStep2DiscountRate > 0
+              ? `3% 청구할인 + 6.5% 일반 사은 (${activeStep2Label} 구간: ${formatWon(activeStep2Gcash)})${deduct2 > 0 ? ` [G캐시 ${formatWon(deduct2)} 선차감]` : ''} [가전 수수료율]`
+              : `300만 미만 청구할인 미대상 (0원) + 6.5% 사은 (${activeStep2Label} ${formatWon(step2ActualApproval)} 결제: 사은 ${formatWon(activeStep2Gcash)} 챙김) [가전 수수료율]`
+          } : null,
+          step3ActualApproval > 0 ? {
+            step: 3,
+            label: '3차 일반/카드 결제 (가전)',
+            amount: step3ActualApproval,
+            barcodeType: 'appliance',
+            barcodeTail: '907',
+            barcodeBadge: '가전 907',
+            discountRate: 0,
+            discountAmount: 0,
+            receiptAmount: step3ActualApproval,
+            note: step3Gcash > 0 ? '6.5% 일반 사은 (100만 단위) [가전 수수료율]' : '가전 자투리 결제'
+          } : null,
+          deptPhoneGross > 0 ? {
+            step: '자급제',
+            label: '📱 자급제폰 단독 승인',
+            amount: deptPhoneGross,
+            barcodeType: 'phone',
+            barcodeTail: '606',
+            barcodeBadge: '자급제 606',
+            discountRate: 0,
+            discountAmount: 0,
+            receiptAmount: deptPhoneGross,
+            note: '⚠️ 자급제 전용 수수료율 적용 (가전 바코드 스캔 절대 금지! 100만당 4만 G캐시)'
+          } : null,
+          safeDeduct > 0 ? {
+            step: '선차감',
+            label: deptStrategy === 'full' ? '⚡ G캐시 전액 올인 선차감' : '⚡ G캐시 안전 선차감 결제',
+            amount: safeDeduct,
+            barcodeBadge: 'G캐시',
+            discountRate: 0,
+            discountAmount: 0,
+            receiptAmount: safeDeduct,
+            note: `결제 시 G캐시 즉시 차감 (${deptStrategy === 'full' ? 'G캐시 0원 올인 차감: ' : '마지노선 사수: '}1차 ${formatWon(deduct1)}${deduct2 > 0 ? ` + 2차 ${formatWon(deduct2)}` : ''}${deduct3 > 0 ? ` + 3차 ${formatWon(deduct3)}` : ''})`
+          } : null,
+          safeReward > 0 ? {
+            step: '증정',
+            label: safeDeduct > 0 ? '💰 고객 잔여 순적립 G캐시' : '💰 고객 최종 순적립 G캐시',
+            amount: safeReward,
+            barcodeBadge: '앱 적립',
+            discountRate: 0,
+            discountAmount: 0,
+            receiptAmount: safeReward,
+            note: `백화점 모바일 앱 지급 (5년: ${formatWon(gcash5Year)} / 60일: ${formatWon(gcash60Day)})`
+          } : null
+        ].filter(Boolean),
+        jumpTip
+      };
+    }
+
+    // 2인 2카드 분할
+    const ratio = Math.max(10, Math.min(90, deptSplitSlider)) / 100;
+    const card1Amount = Math.round((deptApplianceGross * ratio) / 10000) * 10000;
+    const card2Amount = deptApplianceGross - card1Amount;
+
+    const { matched: t1 } = getTierForAmount(card1Amount);
+    const { matched: t2, nextTier: t2Next } = getTierForAmount(card2Amount);
+
+    const c1Gcash = getGcashForTier(t1);
+    const c2Gcash = getGcashForTier(t2);
+
+    const totalGcash = c1Gcash + c2Gcash + deptPhoneGcash;
+
+    // 유효기간 분리 (2인 2카드: 각 카드가 500만 이상일 때 우대 추가분은 60일, 나머지는 5년)
+    const c1Extra = t1 && t1.minSpend >= 5264000 ? Math.max(0, c1Gcash - t1.normalGcash) : 0;
+    const c2Extra = t2 && t2.minSpend >= 5264000 ? Math.max(0, c2Gcash - t2.normalGcash) : 0;
+    const gcash60Day = c1Extra + c2Extra;
+    const gcash5Year = Math.max(0, totalGcash - gcash60Day);
+
+    // 1) 전부 적립 시뮬레이션
+    const rewardCardApproval = deptEffectiveGross;
+    const rewardC1Discount = t1 ? Math.floor(card1Amount * t1.cardDiscountRate) : 0;
+    const rewardC2Discount = t2 ? Math.floor(card2Amount * t2.cardDiscountRate) : 0;
+    const rewardCardDiscount = rewardC1Discount + rewardC2Discount;
+    const rewardFinalPerceived = deptEffectiveGross - rewardCardDiscount - totalGcash;
+
+    // 2) 부분 차감 시뮬레이션 (마지노선 방어)
+    const compM2 = t2 ? Math.max(0, card2Amount - t2.minSpend) : card2Amount;
+    const compM1 = t1 ? Math.max(0, card1Amount - t1.minSpend) : card1Amount;
+    const compCd2 = Math.min(compM2, totalGcash);
+    const compCd1 = Math.min(compM1, totalGcash - compCd2);
+    const partialSafeDeduct = compCd2 + compCd1;
+    const partialSafeReward = totalGcash - partialSafeDeduct;
+    const partCard1Actual = card1Amount - compCd1;
+    const partCard2Actual = card2Amount - compCd2;
+    const partialCardApproval = partCard1Actual + partCard2Actual + deptPhoneGross;
+    const partialC1Discount = t1 ? Math.floor(partCard1Actual * t1.cardDiscountRate) : 0;
+    const partialC2Discount = t2 ? Math.floor(partCard2Actual * t2.cardDiscountRate) : 0;
+    const partialCardDiscount = partialC1Discount + partialC2Discount;
+    const partialFinalPerceived = deptEffectiveGross - partialCardDiscount - totalGcash;
+
+    // 3) 전부 차감 시뮬레이션 (G캐시 0원 올인)
+    let fullC2Deduct = compCd2;
+    let fullC1Deduct = compCd1;
+    let fullRem = totalGcash - (fullC2Deduct + fullC1Deduct);
+    if (fullRem > 0) {
+      const extra2 = Math.min(card2Amount - fullC2Deduct, fullRem);
+      fullC2Deduct += extra2;
+      fullRem -= extra2;
+    }
+    if (fullRem > 0) {
+      fullC1Deduct += fullRem;
+      fullRem = 0;
+    }
+    const fullSafeDeduct = totalGcash;
+    const fullSafeReward = 0;
+    const fullCard1Actual = card1Amount - fullC1Deduct;
+    const fullCard2Actual = card2Amount - fullC2Deduct;
+    const fullCardApproval = fullCard1Actual + fullCard2Actual + deptPhoneGross;
+    const fullC1Discount = t1 ? Math.floor(fullCard1Actual * t1.cardDiscountRate) : 0;
+    const fullC2Discount = t2 ? Math.floor(fullCard2Actual * t2.cardDiscountRate) : 0;
+    const fullCardDiscount = fullC1Discount + fullC2Discount;
+    const fullFinalPerceived = deptEffectiveGross - fullCardDiscount - totalGcash;
+
+    // 현재 선택된 전략에 따른 active 값
+    let c1Deduct = 0;
+    let c2Deduct = 0;
+    let safeDeduct = 0;
+    let safeReward = totalGcash;
+    let safeMode = 'reward_only';
+
+    if (deptStrategy === 'full') {
+      c1Deduct = fullC1Deduct;
+      c2Deduct = fullC2Deduct;
+      safeDeduct = fullSafeDeduct;
+      safeReward = fullSafeReward;
+      safeMode = 'full_instant';
+    } else if (deptStrategy === 'partial' || deptStrategy === 'instant') {
+      c1Deduct = compCd1;
+      c2Deduct = compCd2;
+      safeDeduct = partialSafeDeduct;
+      safeReward = partialSafeReward;
+      safeMode = safeDeduct >= totalGcash ? 'full_instant' : (safeDeduct > 0 ? 'partial_instant' : 'reward_only');
+    }
+
+    const card1Actual = card1Amount - c1Deduct;
+    const card2Actual = card2Amount - c2Deduct;
+    const cardApproval = card1Actual + card2Actual + deptPhoneGross;
+
+    // 실제 카드 승인액에 대한 카드사 청구할인 계산
+    const c1Discount = t1 ? Math.floor(card1Actual * t1.cardDiscountRate) : 0;
+    const c2Discount = t2 ? Math.floor(card2Actual * t2.cardDiscountRate) : 0;
+    const totalCardDiscount = c1Discount + c2Discount;
+    const finalPerceived = deptEffectiveGross - totalCardDiscount - totalGcash;
+
+    let jumpTip = null;
+    if (t2Next) {
+      const needMore = t2Next.minSpend - card2Amount;
+      if (needMore > 0 && needMore <= 1000000) {
+        const nextGcash = getGcashForTier(t2Next);
+        const extraGcash = nextGcash - c2Gcash;
+        jumpTip = {
+          card: '신부 카드',
+          nextLabel: t2Next.label,
+          needMore,
+          extraGcash
+        };
+      }
+    }
+
+    return {
+      mode: '2person_2cards',
+      applianceGross: deptApplianceGross,
+      phoneGross: deptPhoneGross,
+      effectiveGross: deptEffectiveGross,
+      card1Amount: card1Actual,
+      card1BaseAmount: card1Amount,
+      card1Tier: t1 ? t1.label : '미달',
+      card1Discount: c1Discount,
+      card1Gcash: c1Gcash,
+      card2Amount: card2Actual,
+      card2BaseAmount: card2Amount,
+      card2Tier: t2 ? t2.label : '미달',
+      card2Discount: c2Discount,
+      card2Gcash: c2Gcash,
+      totalCardDiscount,
+      totalGcash,
+      gcash5Year,
+      gcash60Day,
+      safeDeduct,
+      safeReward,
+      safeMode,
+      c1Deduct,
+      c2Deduct,
+      cardApproval,
+      rewardPlan: {
+        cardApproval: rewardCardApproval,
+        safeDeduct: 0,
+        safeReward: totalGcash,
+        totalCardDiscount: rewardCardDiscount,
+        finalPerceived: rewardFinalPerceived
+      },
+      partialPlan: {
+        cardApproval: partialCardApproval,
+        safeDeduct: partialSafeDeduct,
+        safeReward: partialSafeReward,
+        totalCardDiscount: partialCardDiscount,
+        finalPerceived: partialFinalPerceived
+      },
+      fullPlan: {
+        cardApproval: fullCardApproval,
+        safeDeduct: fullSafeDeduct,
+        safeReward: fullSafeReward,
+        totalCardDiscount: fullCardDiscount,
+        finalPerceived: fullFinalPerceived
+      },
+      rewardCardApproval,
+      rewardCardDiscount,
+      rewardFinalPerceived,
+      instantSafeDeduct: partialSafeDeduct,
+      instantSafeReward: partialSafeReward,
+      instantCardApproval: partialCardApproval,
+      instantCardDiscount: partialCardDiscount,
+      instantFinalPerceived: partialFinalPerceived,
+      finalPerceived,
+      posSteps: [
+        {
+          step: 1,
+          label: '1번 카드 승인 (신랑 - 가전)',
+          amount: card1Actual,
+          barcodeType: 'appliance',
+          barcodeTail: '907',
+          barcodeBadge: '가전 907',
+          discountRate: t1 ? t1.cardDiscountRate : 0,
+          discountAmount: c1Discount,
+          receiptAmount: Math.max(0, card1Actual - c1Discount),
+          note: t1 ? `${t1.label} 구간 (${(t1.cardDiscountRate * 100).toFixed(0)}% 청구할인 + 우대 G캐시)${c1Deduct > 0 ? ` [G캐시 ${formatWon(c1Deduct)} 선차감]` : ''} [가전 수수료율]` : '구간 미달'
+        },
+        {
+          step: 2,
+          label: '2번 카드 승인 (신부 - 가전)',
+          amount: card2Actual,
+          barcodeType: 'appliance',
+          barcodeTail: '907',
+          barcodeBadge: '가전 907',
+          discountRate: t2 ? t2.cardDiscountRate : 0,
+          discountAmount: c2Discount,
+          receiptAmount: Math.max(0, card2Actual - c2Discount),
+          note: t2 ? `${t2.label} 구간 (${(t2.cardDiscountRate * 100).toFixed(0)}% 청구할인 + 우대 G캐시)${c2Deduct > 0 ? ` [G캐시 ${formatWon(c2Deduct)} 선차감]` : ''} [가전 수수료율]` : '구간 미달'
+        },
+        deptPhoneGross > 0 ? {
+          step: '자급제',
+          label: '📱 자급제폰 단독 승인',
+          amount: deptPhoneGross,
+          barcodeType: 'phone',
+          barcodeTail: '606',
+          barcodeBadge: '자급제 606',
+          discountRate: 0,
+          discountAmount: 0,
+          receiptAmount: deptPhoneGross,
+          note: '⚠️ 자급제 전용 수수료율 적용 (가전 바코드 스캔 절대 금지! 100만당 4만 G캐시)'
+        } : null,
+        safeDeduct > 0 ? {
+          step: '선차감',
+          label: '⚡ G캐시 즉시 선차감 결제',
+          amount: safeDeduct,
+          barcodeBadge: 'G캐시',
+          discountRate: 0,
+          discountAmount: 0,
+          receiptAmount: safeDeduct,
+          note: `결제 시 G캐시 즉시 차감 (마지노선 사수: 1번 ${formatWon(c1Deduct)} / 2번 ${formatWon(c2Deduct)})`
+        } : null,
+        safeReward > 0 ? {
+          step: '증정',
+          label: safeDeduct > 0 ? '💰 고객 잔여 순적립 G캐시' : '💰 고객 최종 순적립 G캐시',
+          amount: safeReward,
+          barcodeBadge: '앱 적립',
+          discountRate: 0,
+          discountAmount: 0,
+          receiptAmount: safeReward,
+          note: `백화점 모바일 앱 지급 (5년: ${formatWon(gcash5Year)} / 60일: ${formatWon(gcash60Day)})`
+        } : null
+      ].filter(Boolean),
+      jumpTip
+    };
+  })();
+
+  const handleApplyDeptEnginePlan = () => {
+    setMixedChannelType('dept');
+    setMixedDeptCardDiscount(deptEnginePlan.totalCardDiscount);
+    setMixedDeptDiscount(deptEnginePlan.totalCardDiscount);
+    const isDeduct = deptStrategy === 'partial' || deptStrategy === 'instant' || deptStrategy === 'full';
+    const voucherAmt = isDeduct && deptEnginePlan.safeDeduct > 0
+      ? deptEnginePlan.safeDeduct
+      : deptEnginePlan.totalGcash;
+    setMixedDeptVoucherDiscount(voucherAmt);
+    setMixedDeptVoucherMode(deptStrategy);
+    setMixedDeptDiscountProof(true);
+    showTempNotice(
+      deptStrategy === 'full'
+        ? `✓ 백화점 전액 선차감 혜택(G캐시 전액 차감 ${formatWon(voucherAmt)}, 청구할인 ${formatWon(deptEnginePlan.totalCardDiscount)})이 견적서에 자동 반영되었습니다.`
+        : isDeduct
+          ? `✓ 백화점 부분 선차감 혜택(G캐시 선차감 ${formatWon(voucherAmt)}, 청구할인 ${formatWon(deptEnginePlan.totalCardDiscount)})이 견적서에 자동 반영되었습니다.`
+          : `✓ 백화점 전액 적립 혜택(청구할인 ${formatWon(deptEnginePlan.totalCardDiscount)}, G캐시 ${formatWon(deptEnginePlan.totalGcash)})이 견적서에 자동 반영되었습니다.`
+    );
+  };
+
   // 행사 접두사 (혼수 / 입주 / 이사 / 일반)
   const eventPrefix =
     mixedEventType === 'wedding'
@@ -1473,7 +2552,7 @@ export default function BenefitCalculator({ onBack }) {
   // 결제 시점에서 즉시 차감되는 금액:
   // 백화점 상품권의 경우: 'instant'는 결제 즉시 차감, 'reward'는 사후 적립(고객이 나중에 사용하므로 결제 시점에는 미차감)
   const mixedLumpInstantPaymentDiscount = mixedChannelType === 'dept'
-    ? (deptCardDiscount + (mixedDeptVoucherMode === 'instant' ? deptVoucherDiscount : 0))
+    ? (deptCardDiscount + ((mixedDeptVoucherMode === 'instant' || mixedDeptVoucherMode === 'partial' || mixedDeptVoucherMode === 'full') ? deptVoucherDiscount : 0))
     : roadSpecificDiscount;
 
   const mixedSpecialDiscountProof =
@@ -1521,6 +2600,19 @@ export default function BenefitCalculator({ onBack }) {
     (sum, it) => sum + (Number(it.freeRepairFee) || 0) * (Number(it.months) || 72) * getSubQty(it.quantity),
     0
   );
+  // 가전 무상 A/S 및 모바일(무상+파손) 분리 계산
+  const mixedApplianceRepairTotal = mixedSubItems
+    .filter((it) => !it.isMobile)
+    .reduce(
+      (sum, it) => sum + (Number(it.freeRepairFee) || 0) * (Number(it.months) || 72) * getSubQty(it.quantity),
+      0
+    );
+  const mixedMobileRepairTotal = mixedSubItems
+    .filter((it) => it.isMobile)
+    .reduce(
+      (sum, it) => sum + (Number(it.freeRepairFee) || 0) * (Number(it.months) || 72) * getSubQty(it.quantity),
+      0
+    );
 
   // 케어서비스(소모품 + 방문케어) 혜택 총액
   const mixedSubCareTotal = mixedSubItems.reduce(
@@ -1535,14 +2627,14 @@ export default function BenefitCalculator({ onBack }) {
   const mixedSubMonthsList = [...new Set(validMixedSubItems.map((it) => Number(it.months) || 72))].sort((a, b) => b - a);
   const mixedSubPeriodSummary = mixedSubMonthsList.join('·') || '72';
 
-  // 구독 총 혜택 (카드 청구할인 + 구독료 할인 + 무상수리 및 케어서비스)
-  const mixedSubOnlyDiscount =
-    subCardTotalDiscount +
-    mixedSubFeeDiscountTotal +
-    (includeServiceInFinal ? mixedSubServiceBenefit : 0);
+  // 구독 총 혜택 (카드 청구할인 + 구독료 할인만 합산! 무상수리 및 케어서비스는 제외)
+  const mixedSubOnlyDiscount = subCardTotalDiscount + mixedSubFeeDiscountTotal;
 
-  // 구독 월 납부 체감합계 (기준총액 - 혜택총액)
-  const mixedSubPerceivedPrice = Math.max(0, mixedSubGrossTotal - mixedSubOnlyDiscount);
+  // 구독 월 납부 체감합계: 총 혜택(직접할인) + (서비스 혜택 가치)까지 반영하여 최종 체감가 계산!
+  const mixedSubPerceivedPrice = Math.max(
+    0,
+    mixedSubGrossTotal - mixedSubOnlyDiscount - (includeServiceInFinal ? mixedSubServiceBenefit : 0)
+  );
 
   // 구독 최종 체감 소계 (선납금액 합산!)
   const mixedSubFinalPrice = mixedSubPerceivedPrice + mixedSubPrepayTotal;
@@ -1579,11 +2671,15 @@ export default function BenefitCalculator({ onBack }) {
 
   // 전체 기준 총액 (일반 기준총액 + 구독 기준총액만 합산: 10,740,000원 + 11,850,000원)
   const mixedGrandGross = mixedLumpGross + mixedSubGrossTotal;
-  // 전체 총 혜택 = 구독 전용 혜택 + 일반 특정조건 할인 + 통합 캐시백 + 상품권 지급
+  // 전체 총 혜택 = 구독 전용 직접할인 + 일반 특정조건 할인 + 통합 캐시백 + 상품권 지급 (무상/케어서비스 제외)
   const mixedGrandBenefit = mixedSubOnlyDiscount + mixedLumpDiscountTotal + mixedTotalCashback + mixedTotalVoucher;
-  // 고객 최종 실체감가 (총 기준금액 - 총 적용 혜택)
-  const mixedGrandFinal = Math.max(0, mixedGrandGross - mixedGrandBenefit);
-  const mixedGrandBenefitRate = mixedGrandGross > 0 ? ((mixedGrandBenefit / mixedGrandGross) * 100).toFixed(1) : '0.0';
+  // 고객 최종 실체감가: 총 적용 혜택 + 구독 전용 무상/케어 서비스 가치까지 모두 반영!
+  const mixedGrandFinal = Math.max(
+    0,
+    mixedGrandGross - mixedGrandBenefit - (includeServiceInFinal ? mixedSubServiceBenefit : 0)
+  );
+  const totalGrandSavings = mixedGrandBenefit + (includeServiceInFinal ? mixedSubServiceBenefit : 0);
+  const mixedGrandBenefitRate = mixedGrandGross > 0 ? ((totalGrandSavings / mixedGrandGross) * 100).toFixed(1) : '0.0';
 
   // 납부 분리:
   // ① 초기 실결제 부담금: 일반 결제액 - 즉시 차감 혜택(통합 캐시백/상품권) + 구독 선납금
@@ -1607,7 +2703,19 @@ export default function BenefitCalculator({ onBack }) {
     setSubInputMode('monthly');
     setSubPrepay(0);
     setSubPlans([
-      { id: 1, name: '', quantity: 1, months: 72, monthlyFee: 0, totalAmount: 0, policyNote: '', policyDiscount: 0 }
+      {
+        id: 1,
+        name: '',
+        quantity: 1,
+        months: 72,
+        monthlyFee: 0,
+        totalAmount: 0,
+        policyNote: '',
+        policyDiscount: 0,
+        isMobile: false,
+        freeRepairFee: 0,
+        careItems: []
+      }
     ]);
     setSubCardName('');
     setSubCardMinSpend('');
@@ -1627,7 +2735,7 @@ export default function BenefitCalculator({ onBack }) {
     setSubSegmentCardOverrides({});
     setSubSegmentSpendOverrides({});
     setSubPurchaseBenefit(0);
-    setSubFreeServiceItems([{ id: 1, monthlyFee: 0, quantity: 1, months: 72 }]);
+    setSubFreeServiceItems([{ id: 1, monthlyFee: 0, quantity: 1, months: 72, isMobile: false }]);
     setSubCareServiceItems([
       { id: 1, name: '소모품비용', amount: 0, count: 1, unit: '개' },
       { id: 2, name: '방문케어', amount: 0, count: 1, unit: '회' }
@@ -1659,9 +2767,8 @@ export default function BenefitCalculator({ onBack }) {
   const handleAddFreeServiceItem = () => {
     setSubFreeServiceItems((prev) => {
       const nextId = prev.length > 0 ? Math.max(...prev.map((it) => it.id)) + 1 : 1;
-      const lastMonths = prev[prev.length - 1]?.months;
-      const nextMonths = lastMonths === 72 ? 60 : lastMonths === 60 ? 72 : subMonths || 72;
-      return [...prev, { id: nextId, monthlyFee: 0, quantity: 1, months: nextMonths }];
+      const defaultMonths = subPlans[0]?.months || subMonths || 72;
+      return [...prev, { id: nextId, monthlyFee: 0, quantity: 1, months: defaultMonths, isMobile: false }];
     });
   };
 
@@ -1857,8 +2964,35 @@ export default function BenefitCalculator({ onBack }) {
     setSubPrepay(Number(d.subPrepay) || 0);
     setSubPlans(
       Array.isArray(d.subPlans) && d.subPlans.length > 0
-        ? d.subPlans
-        : [{ id: 1, months: 72, monthlyFee: 0, totalAmount: 0 }]
+        ? d.subPlans.map((p) => {
+            const rawCareItems = Array.isArray(p.careItems) ? p.careItems : [];
+            const careItems = rawCareItems.length > 0
+              ? rawCareItems
+              : (Number(p.careAmount) || 0) > 0
+                ? [{ id: 1, type: p.careType || 'visit', cycle: 12, amount: Number(p.careAmount) || 0, customName: p.careName || '' }]
+                : [];
+            return {
+              ...p,
+              isMobile: Boolean(p.isMobile),
+              freeRepairFee: Number(p.freeRepairFee) || 0,
+              careItems
+            };
+          })
+        : [
+            {
+              id: 1,
+              name: '',
+              quantity: 1,
+              months: 72,
+              monthlyFee: 0,
+              totalAmount: 0,
+              policyNote: '',
+              policyDiscount: 0,
+              isMobile: false,
+              freeRepairFee: 0,
+              careItems: []
+            }
+          ]
     );
     setSubCardName(d.subCardName ?? '');
     setSubCardMinSpend(d.subCardMinSpend ?? '');
@@ -1894,15 +3028,16 @@ export default function BenefitCalculator({ onBack }) {
       setSubFreeServiceItems(
         d.subFreeServiceItems.map((it) => ({
           ...it,
-          quantity: it.quantity !== undefined ? (it.quantity === '' ? '' : Number(it.quantity) || 1) : 1
+          quantity: it.quantity !== undefined ? (it.quantity === '' ? '' : Number(it.quantity) || 1) : 1,
+          isMobile: Boolean(it.isMobile)
         }))
       );
     } else if (Number(d.subFreeServiceAmount) > 0) {
       setSubFreeServiceItems([
-        { id: 1, monthlyFee: Math.round(Number(d.subFreeServiceAmount) / 72), quantity: 1, months: 72 }
+        { id: 1, monthlyFee: Math.round(Number(d.subFreeServiceAmount) / 72), quantity: 1, months: 72, isMobile: false }
       ]);
     } else {
-      setSubFreeServiceItems([{ id: 1, monthlyFee: 0, quantity: 1, months: 72 }]);
+      setSubFreeServiceItems([{ id: 1, monthlyFee: 0, quantity: 1, months: 72, isMobile: false }]);
     }
     if (Array.isArray(d.subCareServiceItems) && d.subCareServiceItems.length > 0) {
       setSubCareServiceItems(
@@ -2250,6 +3385,554 @@ export default function BenefitCalculator({ onBack }) {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const renderPosCashierModal = () => {
+    if (!showPosCashierModal) return null;
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="no-print"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.85)',
+          zIndex: 9999,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+          backdropFilter: 'blur(6px)'
+        }}
+        onClick={() => setShowPosCashierModal(false)}
+      >
+        <div
+          style={{
+            background: '#ffffff',
+            color: '#0f172a',
+            borderRadius: '16px',
+            maxWidth: '760px',
+            width: '100%',
+            maxHeight: '92vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.85)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* 모달 상단 헤더 (화면용 제어바) */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '0.75rem 1.25rem',
+              background: '#0f172a',
+              color: '#ffffff'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Receipt size={18} color="#f59e0b" />
+              <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#fde68a' }}>
+                캐셔 POS 결제 & 사은행사 지시서 (직원 출력용)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPosCashierModal(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                fontSize: '1.2rem',
+                lineHeight: 1
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* 영수증/지시서 본체 (인쇄 가능) */}
+          <div
+            id="pos-cashier-print-area"
+            style={{
+              padding: '1.4rem 1.6rem',
+              overflowY: 'auto',
+              fontFamily: '"Pretendard", -apple-system, sans-serif'
+            }}
+          >
+            {/* 지시서 타이틀 & 매장 정보 */}
+            <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '0.9rem', marginBottom: '1rem' }}>
+              <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 700, letterSpacing: '2px' }}>
+                GALLERIA JINJU STORE
+              </div>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 900, margin: '0.3rem 0', color: '#0f172a' }}>
+                POS 결제 및 사은행사 지시서
+              </h2>
+              <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '0.3rem' }}>
+                <span>일자: {consultDate || new Date().toISOString().slice(0, 10)}</span>
+                <span>고객: <strong>{customerName || '소중한고객님'}</strong></span>
+                <span>담당: <strong>조준석 매니저</strong></span>
+              </div>
+            </div>
+
+            {/* 매장 계좌 및 담당 매니저 정보 헤더 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '0.75rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.86rem', marginBottom: '2px' }}>
+                  ㈜한화 갤러리아 진주점 가전매장
+                </div>
+                <div style={{ fontSize: '0.76rem', color: '#475569' }}>
+                  입금계좌: <strong>경남은행 207-0123-9010-00</strong>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: '0.78rem' }}>
+                <span style={{ color: '#64748b' }}>담당 매니저: </span>
+                <strong style={{ color: '#0369a1', fontWeight: 900 }}>조준석 매니저 (1041315089)</strong>
+              </div>
+            </div>
+
+            {/* 3대 시나리오 실시간 플랜 전환 바 (POS 지시서 모달 상단) */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f1f5f9', padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.45rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 800, color: '#0f172a' }}>
+                <span>지시서 적용 플랜:</span>
+                <span style={{
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.78rem',
+                  fontWeight: 900,
+                  background: deptStrategy === 'reward' ? '#d1fae5' : deptStrategy === 'full' ? '#fef3c7' : '#e0f2fe',
+                  color: deptStrategy === 'reward' ? '#047857' : deptStrategy === 'full' ? '#b45309' : '#0369a1',
+                  border: `1px solid ${deptStrategy === 'reward' ? '#6ee7b7' : deptStrategy === 'full' ? '#fde68a' : '#7dd3fc'}`
+                }}>
+                  {deptStrategy === 'reward'
+                    ? '💰 1. 전부 적립 플랜 (G캐시 100% 모바일 앱 적립)'
+                    : deptStrategy === 'full'
+                      ? '⚡ 3. 전부 차감 플랜 (G캐시 0원 올인 현장 차감)'
+                      : '🛡️ 2. 부분 차감 플랜 (마지노선 방어 선차감)'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setDeptStrategy('reward')}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '5px',
+                    border: deptStrategy === 'reward' ? '1.5px solid #10b981' : '1px solid #cbd5e1',
+                    background: deptStrategy === 'reward' ? '#10b981' : '#ffffff',
+                    color: deptStrategy === 'reward' ? '#ffffff' : '#475569',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  💰 1.전부적립
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeptStrategy('partial')}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '5px',
+                    border: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                    background: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '#0284c7' : '#ffffff',
+                    color: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '#ffffff' : '#475569',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🛡️ 2.부분차감
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeptStrategy('full')}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '5px',
+                    border: deptStrategy === 'full' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                    background: deptStrategy === 'full' ? '#d97706' : '#ffffff',
+                    color: deptStrategy === 'full' ? '#ffffff' : '#475569',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  ⚡ 3.전부차감
+                </button>
+              </div>
+            </div>
+
+            {/* 핵심: POS 필수 스캔 바코드 2종 (가전 907 vs 자급제 606 - 수수료 완전 분리) */}
+            <div style={{ marginBottom: '1.2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'wrap', gap: '0.3rem' }}>
+                <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a' }}>
+                  ■ POS 필수 스캔 바코드 2종 (수수료 상이 · 교차스캔 금지)
+                </span>
+                <span style={{ fontSize: '0.72rem', color: '#dc2626', fontWeight: 800, background: '#fee2e2', padding: '2px 8px', borderRadius: '4px', border: '1px solid #fca5a5' }}>
+                  ⚠️ 가전 vs 자급제폰 수수료율 상이 / 전용 바코드 분리 필수
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>
+                {/* 1. 일반 가전 결제 바코드 (끝자리 907) */}
+                <div
+                  style={{
+                    background: '#f0f9ff',
+                    border: '2px solid #0284c7',
+                    borderRadius: '10px',
+                    padding: '0.75rem 0.85rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.45rem',
+                    boxShadow: '0 4px 12px rgba(2, 132, 199, 0.12)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 900, color: '#0369a1' }}>
+                      🏬 일반 가전 결제용 바코드
+                    </span>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 900, background: '#0284c7', color: '#ffffff', padding: '2px 7px', borderRadius: '4px' }}>
+                      끝자리 907 (가전 수수료율)
+                    </span>
+                  </div>
+
+                  {/* 실물 바코드 이미지 (끝자리 907) */}
+                  <div style={{ background: '#ffffff', padding: '5px 8px', borderRadius: '6px', border: '1px solid #bae6fd', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace', letterSpacing: '2px' }}>
+                      {DEPT_POS_BARCODES.appliance.topCode}
+                    </div>
+                    <img
+                      src={DEPT_POS_BARCODES.appliance.image}
+                      alt="가전 바코드 2304641471907"
+                      style={{ width: '100%', maxWidth: '240px', height: '48px', objectFit: 'contain', margin: '3px auto', display: 'block' }}
+                    />
+                    <div style={{ fontSize: '0.98rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '2.5px', color: '#0f172a' }}>
+                      2304641471<span style={{ color: '#0284c7', textDecoration: 'underline' }}>907</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.76rem' }}>
+                    <span style={{ color: '#64748b', fontWeight: 700 }}>가전 승인 대상액:</span>
+                    <strong style={{ fontSize: '1.02rem', fontWeight: 900, color: '#0369a1' }}>
+                      {formatWon(deptEnginePlan.applianceGross)}
+                    </strong>
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#0369a1', fontWeight: 700, lineHeight: 1.3 }}>
+                    ※ 일반 가전(냉장고, TV, 세탁기 등) 결제 시 스캔 (자급제 스캔 절대 금지)
+                  </div>
+                </div>
+
+                {/* 2. 자급제폰 결제 바코드 (끝자리 606) */}
+                <div
+                  style={{
+                    background: deptEnginePlan.phoneGross > 0 ? '#ecfdf5' : '#f8fafc',
+                    border: deptEnginePlan.phoneGross > 0 ? '2px solid #059669' : '1px dashed #cbd5e1',
+                    borderRadius: '10px',
+                    padding: '0.75rem 0.85rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.45rem',
+                    opacity: deptEnginePlan.phoneGross > 0 ? 1 : 0.65,
+                    boxShadow: deptEnginePlan.phoneGross > 0 ? '0 4px 12px rgba(5, 150, 105, 0.12)' : 'none'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 900, color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#64748b' }}>
+                      📱 자급제폰 결제용 바코드
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 900,
+                        background: deptEnginePlan.phoneGross > 0 ? '#059669' : '#94a3b8',
+                        color: '#ffffff',
+                        padding: '2px 7px',
+                        borderRadius: '4px'
+                      }}
+                    >
+                      끝자리 606 (자급제 수수료율)
+                    </span>
+                  </div>
+
+                  {/* 실물 바코드 이미지 (끝자리 606) */}
+                  <div style={{ background: '#ffffff', padding: '5px 8px', borderRadius: '6px', border: '1px solid #a7f3d0', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace', letterSpacing: '2px' }}>
+                      {DEPT_POS_BARCODES.phone.topCode}
+                    </div>
+                    <img
+                      src={DEPT_POS_BARCODES.phone.image}
+                      alt="자급제 바코드 2303990976606"
+                      style={{ width: '100%', maxWidth: '240px', height: '48px', objectFit: 'contain', margin: '3px auto', display: 'block' }}
+                    />
+                    <div style={{ fontSize: '0.98rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '2.5px', color: '#0f172a' }}>
+                      2303990976<span style={{ color: '#059669', textDecoration: 'underline' }}>606</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.76rem' }}>
+                    <span style={{ color: '#64748b', fontWeight: 700 }}>자급제 승인 대상액:</span>
+                    <strong style={{ fontSize: '1.02rem', fontWeight: 900, color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#94a3b8' }}>
+                      {deptEnginePlan.phoneGross > 0 ? formatWon(deptEnginePlan.phoneGross) : '자급제 없음 (0원)'}
+                    </strong>
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#94a3b8', fontWeight: 700, lineHeight: 1.3 }}>
+                    {deptEnginePlan.phoneGross > 0
+                      ? '※ 자급제폰 결제 시에만 단독 스캔 (일반 가전 스캔 절대 금지)'
+                      : '※ 이번 결제에는 자급제폰이 포함되지 않아 스캔하지 않습니다.'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 결제 실행 단계별 지시표 */}
+            <div style={{ marginBottom: '1.2rem' }}>
+              <div style={{ fontSize: '0.86rem', fontWeight: 900, color: '#0f172a', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>■ POS 승인 순서 및 분할 결제 지시 (현장 영수증 일치 확인)</span>
+                <span style={{ fontSize: '0.75rem', color: '#0369a1', fontWeight: 700 }}>
+                  {deptEnginePlan.mode === '2person_2cards' ? '👥 2인 2카드 분할' : deptEnginePlan.mode === '1person_3split' ? '👤 1인 분할 비기' : '👤 1인 단독 결제'}
+                </span>
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9', borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1', textAlign: 'left' }}>
+                    <th style={{ padding: '0.5rem 0.5rem', width: '38px', textAlign: 'center' }}>단계</th>
+                    <th style={{ padding: '0.5rem 0.5rem' }}>결제 구분</th>
+                    <th style={{ padding: '0.5rem 0.5rem', textAlign: 'center', width: '85px' }}>스캔 바코드</th>
+                    <th style={{ padding: '0.5rem 0.5rem', textAlign: 'right', width: '110px' }}>POS 승인 금액</th>
+                    <th style={{ padding: '0.5rem 0.6rem', textAlign: 'right', width: '145px', background: '#eff6ff', color: '#1e40af' }}>
+                      청구할인된 영수증 금액 (확인용)
+                    </th>
+                    <th style={{ padding: '0.5rem 0.5rem' }}>혜택 및 수수료 비고</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deptEnginePlan.posSteps.map((st, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', background: st.discountAmount > 0 ? '#f8fafc' : 'transparent' }}>
+                      <td style={{ padding: '0.55rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#64748b' }}>
+                        {st.step}
+                      </td>
+                      <td style={{ padding: '0.55rem 0.5rem', fontWeight: 800, color: '#0f172a' }}>
+                        {st.label}
+                      </td>
+                      <td style={{ padding: '0.55rem 0.5rem', textAlign: 'center' }}>
+                        {st.barcodeBadge === '가전 907' ? (
+                          <span style={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', border: '1px solid #7dd3fc', whiteSpace: 'nowrap' }}>
+                            🏬 가전 907
+                          </span>
+                        ) : st.barcodeBadge === '자급제 606' ? (
+                          <span style={{ background: '#d1fae5', color: '#047857', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', border: '1px solid #6ee7b7', whiteSpace: 'nowrap' }}>
+                            📱 자급제 606
+                          </span>
+                        ) : st.barcodeBadge === 'G캐시' ? (
+                          <span style={{ background: '#fef3c7', color: '#b45309', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', border: '1px solid #fde68a', whiteSpace: 'nowrap' }}>
+                            ⚡ G캐시 차감
+                          </span>
+                        ) : st.barcodeBadge === '앱 적립' ? (
+                          <span style={{ background: '#f1f5f9', color: '#475569', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', border: '1px solid #cbd5e1', whiteSpace: 'nowrap' }}>
+                            💰 모바일 적립
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>—</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '0.55rem 0.5rem', textAlign: 'right', fontWeight: 800, fontSize: '0.9rem', color: '#475569', whiteSpace: 'nowrap' }}>
+                        {formatWon(st.amount)}
+                      </td>
+                      <td style={{ padding: '0.55rem 0.6rem', textAlign: 'right', background: st.discountAmount > 0 ? '#eff6ff' : 'transparent', whiteSpace: 'nowrap' }}>
+                        {st.discountAmount > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.25 }}>
+                            <strong style={{ fontSize: '0.98rem', fontWeight: 900, color: '#1d4ed8' }}>
+                              {formatWon(st.receiptAmount)}
+                            </strong>
+                            <span style={{ fontSize: '0.69rem', color: '#dc2626', fontWeight: 700 }}>
+                              (-{formatWon(st.discountAmount)} 즉시 청구할인)
+                            </span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#64748b' }}>
+                            {formatWon(st.receiptAmount || st.amount)}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.74rem', color: '#64748b' }}>
+                        {st.note}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 최종 혜택 및 고객 정산 요약 */}
+            <div style={{ background: '#f8fafc', padding: '0.9rem 1.1rem', borderRadius: '10px', border: '1px solid #cbd5e1', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+                <span style={{ color: '#64748b' }}>결제 기준 금액 총액</span>
+                <div>
+                  <strong>{formatWon(deptEnginePlan.effectiveGross)}</strong>
+                  {deptEnginePlan.phoneGross > 0 && (
+                    <span style={{ fontSize: '0.74rem', color: '#64748b', marginLeft: '6px' }}>
+                      (가전 {formatWon(deptEnginePlan.applianceGross)} + 자급제 {formatWon(deptEnginePlan.phoneGross)})
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* 선차감 모드일 때: G캐시 선차감 및 고객 실제 카드 결제액 표시 */}
+              {deptEnginePlan.safeDeduct > 0 ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem', color: '#059669', background: '#ecfdf5', padding: '4px 8px', borderRadius: '5px', border: '1px solid #a7f3d0' }}>
+                    <span style={{ fontWeight: 800 }}>⚡ G캐시 즉시 선차감 (결제 시 현장 차감)</span>
+                    <strong style={{ fontSize: '0.95rem' }}>- {formatWon(deptEnginePlan.safeDeduct)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.88rem', marginBottom: '0.45rem', padding: '4px 8px', background: '#f0f9ff', borderRadius: '5px', border: '1px solid #bae6fd' }}>
+                    <span style={{ color: '#0369a1', fontWeight: 900 }}>💳 고객 실제 카드 결제 승인 총액</span>
+                    <strong style={{ fontSize: '1.15rem', color: '#0284c7', fontWeight: 900 }}>
+                      {formatWon(deptEnginePlan.cardApproval || (deptEnginePlan.effectiveGross - deptEnginePlan.safeDeduct))}
+                    </strong>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem', color: '#64748b' }}>
+                  <span>고객 카드 결제 승인 총액 (전액 카드 결제)</span>
+                  <strong>{formatWon(deptEnginePlan.effectiveGross)}</strong>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem', color: '#dc2626' }}>
+                <span>제휴카드 즉시 청구할인 합계 (영수증 현장 차감)</span>
+                <strong>- {formatWon(deptEnginePlan.totalCardDiscount)}</strong>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.88rem', marginBottom: '0.45rem', padding: '5px 8px', background: '#eff6ff', borderRadius: '5px', border: '1px solid #bfdbfe' }}>
+                <span style={{ color: '#1e40af', fontWeight: 900 }}>🧾 청구할인 적용 후 영수증 결제 총액 (확인용)</span>
+                <strong style={{ fontSize: '1.18rem', color: '#1d4ed8', fontWeight: 900 }}>
+                  {formatWon((deptEnginePlan.cardApproval || deptEnginePlan.effectiveGross) - deptEnginePlan.totalCardDiscount)}
+                </strong>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '0.82rem', marginBottom: '0.55rem', color: '#d97706' }}>
+                <div>
+                  <span>
+                    {deptEnginePlan.safeDeduct > 0 ? '💰 고객 잔여 순적립 G캐시 (모바일 앱)' : `백화점 사은행사 G캐시 증정 합계 (${deptRewardRate}%)`}
+                  </span>
+                  <div style={{ fontSize: '0.71rem', color: '#b45309', fontWeight: 700, marginTop: '2px' }}>
+                    • 기본 6.5% 사은 (유효기간 5년): <strong>{formatWon(deptEnginePlan.gcash5Year)}</strong>
+                    {deptEnginePlan.gcash60Day > 0 && (
+                      <span style={{ marginLeft: '6px' }}>
+                        • 우대 추가분 (유효기간 60일): <strong style={{ color: '#dc2626' }}>{formatWon(deptEnginePlan.gcash60Day)}</strong>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <strong style={{ fontSize: '1.05rem', whiteSpace: 'nowrap' }}>
+                  + {formatWon(deptEnginePlan.safeReward !== undefined ? deptEnginePlan.safeReward : deptEnginePlan.totalGcash)}
+                </strong>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: '0.55rem', borderTop: '2px solid #0f172a' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>고객 체감 최종 혜택가</span>
+                <strong style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0f172a' }}>
+                  {formatWon(deptEnginePlan.finalPerceived)}
+                </strong>
+              </div>
+            </div>
+
+            {/* 하단 캐셔 안내 주의사항 (수수료율 구분 및 G캐시 유효기간 안내) */}
+            <div style={{ fontSize: '0.73rem', color: '#475569', lineHeight: 1.5, borderTop: '2px solid #ef4444', paddingTop: '0.7rem', background: '#fef2f2', padding: '0.7rem 0.9rem', borderRadius: '8px' }}>
+              <div style={{ color: '#b91c1c', fontWeight: 900, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                🚨 [캐셔 필수 확인 - 백화점 마진 수수료율 구분 및 G캐시 유효기간 지침]
+              </div>
+              <div>① 일반 가전과 자급제폰은 <strong>백화점 마진 수수료율이 완전히 상이</strong>하여 반드시 서로 다른 바코드로 분리 결제되어야 합니다.</div>
+              <div>② 가전 승인금액은 반드시 <strong>[가전 바코드 907]</strong>을 스캔하고, 자급제폰 승인금액은 반드시 <strong>[자급제 바코드 606]</strong>을 스캔하십시오.</div>
+              <div>③ 바코드를 교차 스캔하거나 하나로 통합 결제할 경우 <strong>매장 및 백화점 정산 수수료에 치명적인 오류</strong>가 발생하므로 절대 주의 바랍니다.</div>
+              <div>④ ⏱️ <strong>사은행사 G캐시 유효기간 분리 안내</strong>: 기본 6.5% 사은(<strong>{formatWon(deptEnginePlan.gcash5Year)}</strong>)은 증정일로부터 <strong>5년</strong>, 9.5% 이상 우대 추가분(<strong>{formatWon(deptEnginePlan.gcash60Day)}</strong>)은 증정일로부터 <strong>60일(2개월 이내)</strong> 유효합니다. 고객에게 반드시 안내바랍니다.</div>
+            </div>
+          </div>
+
+          {/* 모달 하단 버튼 바 */}
+          <div
+            style={{
+              padding: '0.75rem 1.25rem',
+              background: '#f1f5f9',
+              borderTop: '1px solid #cbd5e1',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '0.65rem'
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowPosCashierModal(false)}
+              style={{
+                padding: '0.55rem 1rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                color: '#475569',
+                fontSize: '0.84rem',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              닫기
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const printContents = document.getElementById('pos-cashier-print-area').innerHTML;
+                const printWindow = window.open('', '', 'width=800,height=900');
+                printWindow.document.write(`
+                  <html>
+                    <head>
+                      <title>POS 결제 지시서 - ${customerName || '고객님'}</title>
+                      <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; color: #0f172a; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { border-bottom: 1px solid #cbd5e1; padding: 8px; }
+                        th { background: #f1f5f9; }
+                        @media print { body { padding: 0; } }
+                      </style>
+                    </head>
+                    <body>
+                      ${printContents}
+                    </body>
+                  </html>
+                `);
+                printWindow.document.close();
+                printWindow.focus();
+                setTimeout(() => {
+                  printWindow.print();
+                  printWindow.close();
+                }, 250);
+              }}
+              style={{
+                padding: '0.55rem 1.2rem',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#0284c7',
+                color: '#ffffff',
+                fontSize: '0.84rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
+            >
+              <Receipt size={16} />
+              POS 지시서 인쇄
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // ============================================================================
@@ -2699,13 +4382,34 @@ export default function BenefitCalculator({ onBack }) {
               <div className="a4-header-left">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.25rem' }}>
                   <img
-                    src="/images/logo_new.png"
+                    src={BRAND_LOGO_B64}
                     alt="JCC"
                     style={{ height: '30px', width: 'auto', objectFit: 'contain' }}
                   />
-                  <span className="a4-tag-gold">
-                    {isMixedMode ? 'SAMSUNG AI SMART QUOTE' : 'PAYMENT & BENEFIT COMPARISON'}
-                  </span>
+                  {/* 공식 삼성스토어 로고 (세상에 없던 AI 라이프.) */}
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.55rem',
+                      padding: '0.22rem 0.65rem',
+                      background: '#ffffff',
+                      border: '1.5px solid #0c2340',
+                      borderRadius: '6px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      fontFamily: '"Pretendard", "Samsung Sans", -apple-system, sans-serif'
+                    }}
+                    title="삼성스토어 공식 로고 · 세상에 없던 AI 라이프"
+                  >
+                    <span style={{ fontSize: '0.86rem', fontWeight: 900, color: '#0c2340', letterSpacing: '-0.5px' }}>
+                      삼성스토어
+                    </span>
+                    <div style={{ width: '1.5px', height: '14px', background: '#cbd5e1' }} />
+                    <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#334155', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+                      세상에 없던 <strong style={{ fontWeight: 900, color: '#0f172a' }}>AI 라이프</strong>
+                      <span style={{ color: '#2563eb', fontWeight: 900, fontSize: '0.92rem', lineHeight: 0, marginLeft: '1px' }}>.</span>
+                    </span>
+                  </div>
                   {totalPages > 1 && (
                     <span
                       style={{
@@ -2784,7 +4488,7 @@ export default function BenefitCalculator({ onBack }) {
               <footer className="a4-manager-card">
                 <div className="a4-manager-left">
                   <img
-                    src="/images/profile.jpg"
+                    src={MANAGER_PROFILE_B64}
                     alt="조준석 매니저"
                     className="a4-manager-photo"
                   />
@@ -2897,11 +4601,11 @@ export default function BenefitCalculator({ onBack }) {
                       </div>
                       <div style={{ background: '#ffffff', padding: '0.45rem', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
                         <strong style={{ color: '#0f172a', display: 'block', marginBottom: '2px' }}>② 캐시백·상품권 지급</strong>
-                        행사 기준 증빙 완료 후 익월 지정 계좌 및 모바일 지급
+                        행사 기준 증빙 완료 후 익월(삼성AI구독 캐시백은 차차월 5~7일) 지정 계좌 및 모바일 지급
                       </div>
                       <div style={{ background: '#ffffff', padding: '0.45rem', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
                         <strong style={{ color: '#0f172a', display: 'block', marginBottom: '2px' }}>③ 구독 전용 케어 보장</strong>
-                        계약 기간 무상 A/S 보증 및 전문 엔지니어 정기 케어
+                        계약 기간 무상수리 보증 및 전문 엔지니어 정기 케어
                       </div>
                     </div>
                   </div>
@@ -3091,44 +4795,63 @@ export default function BenefitCalculator({ onBack }) {
                       <div style={{ borderTop: '1px dashed rgba(37, 99, 235, 0.18)', margin: '0.12rem 0 0.08rem 0' }} />
 
                       {/* 제휴카드 혜택 */}
-                      <div className="a4-benefit-row" style={{ alignItems: 'flex-start' }}>
-                        <span style={{ flex: 1, wordBreak: 'keep-all' }}>
+                      <div className="a4-benefit-row" style={{ alignItems: 'center', lineHeight: 1.28 }}>
+                        <span style={{ fontSize: '0.78rem', flex: 1, wordBreak: 'keep-all' }}>
                           <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                          제휴카드 혜택 {cardCompanySummary ? `(${cardCompanySummary})` : !hasAnyCardDiscount ? '(미적용)' : ''}
+                          <strong style={{ fontWeight: 900, color: '#0f172a' }}>제휴카드 청구할인</strong>
+                          {cardCompanySummary && (
+                            <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>
+                              ({cardCompanySummary})
+                            </span>
+                          )}
                         </span>
-                        <span className="a4-minus-blue">- {formatWon(subCardTotalDiscount)}</span>
+                        <strong className="a4-minus-blue" style={{ fontSize: '0.84rem', fontWeight: 900 }}>- {formatWon(subCardTotalDiscount)}</strong>
                       </div>
                       {allCardSubLines.length > 0 && (
-                        <div style={{ fontSize: '0.64rem', color: '#475569', fontWeight: 600, marginLeft: '9px', lineHeight: 1.3 }}>
+                        <div style={{ fontSize: '0.63rem', color: '#64748b', fontWeight: 500, marginLeft: '9px', lineHeight: 1.35 }}>
                           {allCardSubLines.map((line, lIdx) => (
                             <div key={lIdx}>{line}</div>
                           ))}
                         </div>
                       )}
 
-                      {/* 무상 A/S 연장 혜택 */}
-                      {mixedSubFreeRepairTotal > 0 && (
-                        <div className="a4-benefit-row">
-                          <span>
+                      {/* 무상수리 연장 혜택 (가전/모바일 복합 시 분리 표시) */}
+                      {mixedApplianceRepairTotal > 0 && (
+                        <div className="a4-benefit-row" style={{ alignItems: 'center' }}>
+                          <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                             <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                            무상 A/S 연장 이용료 (혜택)
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>무상수리 연장 이용료</strong>
+                            <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>(가전)</span>
                           </span>
-                          <span className="a4-minus-blue">
-                            {includeServiceInFinal ? `- ${formatWon(mixedSubFreeRepairTotal)}` : `+ ${formatWon(mixedSubFreeRepairTotal)} 상당`}
+                          <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem' }}>
+                            {formatWon(mixedApplianceRepairTotal)} 상당
+                          </strong>
+                        </div>
+                      )}
+
+                      {mixedMobileRepairTotal > 0 && (
+                        <div className="a4-benefit-row" style={{ alignItems: 'center' }}>
+                          <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                            <span style={{ color: '#0284c7', marginRight: '4px', fontWeight: 800 }}>•</span>
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>모바일 무상수리 + 파손보험</strong>
                           </span>
+                          <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem' }}>
+                            {formatWon(mixedMobileRepairTotal)} 상당
+                          </strong>
                         </div>
                       )}
 
                       {/* 케어서비스 혜택 */}
                       {mixedSubCareTotal > 0 && (
-                        <div className="a4-benefit-row">
-                          <span>
+                        <div className="a4-benefit-row" style={{ alignItems: 'center' }}>
+                          <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                             <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                            케어서비스 이용료 (소모품.방문 혜택)
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>케어서비스 이용료</strong>
+                            <span style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 500, marginLeft: '4px' }}>(소모품·방문)</span>
                           </span>
-                          <span className="a4-minus-blue">
-                            {includeServiceInFinal ? `- ${formatWon(mixedSubCareTotal)}` : `+ ${formatWon(mixedSubCareTotal)} 상당`}
-                          </span>
+                          <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem' }}>
+                            {formatWon(mixedSubCareTotal)} 상당
+                          </strong>
                         </div>
                       )}
                     </div>
@@ -3152,7 +4875,8 @@ export default function BenefitCalculator({ onBack }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.73rem', color: '#334155', flexWrap: 'wrap' }}>
                         <span>
                           구독 체감 합계금액
-                          {mixedSubPrepayTotal > 0 ? ` (선납금 ${formatWon(mixedSubPrepayTotal)} 포함)` : ''}:
+                          {mixedSubPrepayTotal > 0 ? ` (선납금 ${formatWon(mixedSubPrepayTotal)} 포함)` : ''}
+                          {includeServiceInFinal && mixedSubServiceBenefit > 0 ? ` (서비스혜택 ${formatWon(mixedSubServiceBenefit)} 반영)` : ''}:
                         </span>
                         <strong style={{ color: '#1e40af', fontWeight: 800, fontSize: '0.78rem' }}>
                           {formatWon(mixedSubFinalPrice)}
@@ -3291,7 +5015,7 @@ export default function BenefitCalculator({ onBack }) {
                                   </span>
                                 ) : (
                                   <span style={{ display: 'inline-block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', padding: '1px 6px', borderRadius: '4px', marginLeft: '6px', verticalAlign: 'middle' }}>
-                                    적립 (2개월내 사용)
+                                    적립 (기본 5년 / 우대 추가분 60일)
                                   </span>
                                 )}
                               </span>
@@ -3370,7 +5094,7 @@ export default function BenefitCalculator({ onBack }) {
                       <span>3. 통합 캐시백 · 상품권 지급 및 최종 실체감가</span>
                     </div>
                     <span style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 700 }}>
-                      총 혜택 합계: - {formatWon(mixedGrandBenefit)} ({mixedGrandBenefitRate}% 절감)
+                      총 할인 합계: - {formatWon(mixedGrandBenefit)} ({mixedGrandBenefitRate}% 절감)
                     </span>
                   </div>
 
@@ -3461,7 +5185,7 @@ export default function BenefitCalculator({ onBack }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', paddingTop: '0.3rem' }}>
                       <div>
                         <div style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600 }}>
-                          총 기준금액 {formatWon(mixedGrandGross)} · 총 적용 혜택 - {formatWon(mixedGrandBenefit)}
+                          총 기준금액 {formatWon(mixedGrandGross)} · 총 할인 합계 - {formatWon(mixedGrandBenefit)}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem', marginTop: '0.15rem' }}>
                           <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a' }}>고객 최종 실체감가</span>
@@ -3568,7 +5292,7 @@ export default function BenefitCalculator({ onBack }) {
                     <div className="a4-benefit-row">
                       <span>
                         <span style={{ color: '#d97706', marginRight: '4px', fontWeight: 800 }}>•</span>
-                        무상 A/S 보증
+                        무상수리 보증
                       </span>
                       <span className="a4-benefit-note">기본 보증만 적용</span>
                     </div>
@@ -3584,7 +5308,7 @@ export default function BenefitCalculator({ onBack }) {
                   </div>
 
                   <div className="a4-row a4-benefit-total-row">
-                    <span>총 혜택 합계</span>
+                    <span>총 할인 합계</span>
                     <strong className="a4-minus">- {formatWon(lumpTotalBenefit)}</strong>
                   </div>
                 </div>
@@ -3629,27 +5353,30 @@ export default function BenefitCalculator({ onBack }) {
                   </div>
 
                   <div className="a4-row" style={isMultiPeriod || subPrepay > 0 ? { alignItems: 'flex-start' } : undefined}>
-                    <span>월 기본 구독료</span>
+                    <span style={{ fontWeight: 800, color: '#1e293b' }}>월 기본 구독료</span>
                     {isMultiPeriod ? (
-                      <div style={{ textAlign: 'right', lineHeight: 1.38 }}>
+                      <div style={{ textAlign: 'right', lineHeight: 1.42 }}>
                         {subSegments.map((seg, idx) => (
-                          <div key={seg.endMonth} style={{ fontWeight: 700, color: '#0f172a' }}>
-                            {idx === 0
-                              ? `${seg.duration}개월간 월 ${formatWon(seg.baseMonthly)}`
-                              : `잔여 ${seg.duration}개월 월 ${formatWon(seg.baseMonthly)}`}
+                          <div key={seg.endMonth} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '5px' }}>
+                            <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>
+                              {idx === 0 ? `${seg.duration}개월간` : `잔여 ${seg.duration}개월`}
+                            </span>
+                            <strong style={{ fontSize: '0.86rem', fontWeight: 900, color: '#0f172a' }}>
+                              월 {formatWon(seg.baseMonthly)}
+                            </strong>
                           </div>
                         ))}
                         {subPrepay > 0 && (
-                          <div style={{ fontSize: '0.69rem', color: '#475569', fontWeight: 600, marginTop: '1px' }}>
+                          <div style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>
                             선납금 {formatWon(subPrepay)}
                           </div>
                         )}
                       </div>
                     ) : (
                       <div style={{ textAlign: 'right', lineHeight: 1.36 }}>
-                        <strong style={{ display: 'block', color: '#0f172a' }}>월 {formatWon(effectiveMonthlyBase)}</strong>
+                        <strong style={{ display: 'block', fontSize: '0.88rem', fontWeight: 900, color: '#0f172a' }}>월 {formatWon(effectiveMonthlyBase)}</strong>
                         {subPrepay > 0 && (
-                          <span style={{ display: 'block', fontSize: '0.69rem', color: '#475569', fontWeight: 600 }}>
+                          <span style={{ display: 'block', fontSize: '0.67rem', color: '#64748b', fontWeight: 500 }}>
                             선납금 {formatWon(subPrepay)}
                           </span>
                         )}
@@ -3665,43 +5392,48 @@ export default function BenefitCalculator({ onBack }) {
                       <div
                         className="a4-benefit-row"
                         style={{
-                          alignItems: 'flex-start',
+                          alignItems: 'center',
                           lineHeight: 1.28
                         }}
                       >
                         <span
                           style={{
-                            fontSize: cardCompanySummary && cardCompanySummary.length > 8 ? '0.70rem' : '0.76rem',
+                            fontSize: '0.78rem',
                             wordBreak: 'keep-all',
                             lineHeight: 1.25,
                             flex: 1
                           }}
                         >
                           <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                          제휴카드 혜택
-                          {cardCompanySummary ? ` (${cardCompanySummary})` : !hasAnyCardDiscount ? ' (미적용)' : ''}
+                          <strong style={{ fontWeight: 900, color: '#0f172a' }}>제휴카드 청구할인</strong>
+                          {cardCompanySummary && (
+                            <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>
+                              ({cardCompanySummary})
+                            </span>
+                          )}
                         </span>
-                        <span
+                        <strong
                           className="a4-minus-blue"
                           style={{
                             flexShrink: 0,
                             marginLeft: '0.35rem',
                             whiteSpace: 'nowrap',
-                            fontSize: '0.78rem'
+                            fontSize: '0.84rem',
+                            fontWeight: 900
                           }}
                         >
                           - {formatWon(subCardTotalDiscount)}
-                        </span>
+                        </strong>
                       </div>
                       {allCardSubLines.length > 0 && (
                         <div
                           style={{
-                            fontSize: '0.64rem',
-                            color: '#475569',
-                            fontWeight: 600,
+                            fontSize: '0.63rem',
+                            color: '#64748b',
+                            fontWeight: 500,
                             marginTop: '2px',
                             marginLeft: '9px',
-                            lineHeight: 1.32,
+                            lineHeight: 1.35,
                             wordBreak: 'keep-all'
                           }}
                         >
@@ -3713,9 +5445,9 @@ export default function BenefitCalculator({ onBack }) {
                       {hasAnyNonSamsungCard && (
                         <div
                           style={{
-                            fontSize: '0.62rem',
+                            fontSize: '0.60rem',
                             color: '#dc2626',
-                            fontWeight: 700,
+                            fontWeight: 600,
                             marginTop: '2px',
                             marginLeft: '9px',
                             lineHeight: 1.25,
@@ -3723,50 +5455,110 @@ export default function BenefitCalculator({ onBack }) {
                           }}
                         >
                           <div>※ 주의: 기존 카드 보유회원 적용 제외</div>
-                          <div style={{ color: '#b91c1c', fontWeight: 600 }}>
+                          <div style={{ color: '#b91c1c', fontWeight: 500 }}>
                             (비회원 또는 최근 6개월간 결제이력 없는 고객 한함)
                           </div>
                         </div>
                       )}
                     </div>
                     {!isMixedMode && (
-                      <div className="a4-benefit-row">
-                        <span>
+                      <div className="a4-benefit-row" style={{ alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.78rem' }}>
                           <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                          삼성AI구독 혜택(캐시백)
+                          <strong style={{ fontWeight: 900, color: '#0f172a' }}>삼성AI구독 혜택</strong>
+                          <span style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: 500, marginLeft: '4px' }}>
+                            (캐시백, 차차월 5~7일)
+                          </span>
                         </span>
-                        <span className="a4-minus-blue">- {formatWon(subPurchaseBenefit)}</span>
+                        <strong className="a4-minus-blue" style={{ fontSize: '0.84rem', fontWeight: 900 }}>
+                          - {formatWon(subPurchaseBenefit)}
+                        </strong>
                       </div>
                     )}
-                    <div className="a4-benefit-row" style={{ alignItems: 'flex-start' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.25 }}>
-                        <span style={{ whiteSpace: 'nowrap' }}>
-                          <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                          무상 A/S 연장 이용료(혜택)
-                        </span>
-                        {validFreeServiceCount > 0 && (
-                          <span style={{ fontSize: '0.67rem', color: '#64748b', marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
-                            (총 {validFreeServiceCount}개 품목 · {totalFreeServiceQuantity}대)
+                    {isCombinedFreeService ? (
+                      <>
+                        {/* 1) 가전 무상수리 연장 이용료 */}
+                        <div className="a4-benefit-row" style={{ alignItems: 'flex-start' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.25 }}>
+                            <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                              <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                              <strong style={{ fontWeight: 900, color: '#0f172a' }}>무상수리 연장 이용료</strong>
+                              <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>
+                                (가전)
+                              </span>
+                            </span>
+                            {applianceFreeServiceCount > 0 && (
+                              <span style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
+                                (가전 {applianceFreeServiceCount}개 품목 · {applianceFreeServiceQuantity}대)
+                              </span>
+                            )}
+                          </div>
+                          <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem', flexShrink: 0, marginTop: '1px' }}>
+                            {applianceFreeServiceAmount > 0
+                              ? `${formatWon(applianceFreeServiceAmount)} 상당`
+                              : '무상 보증 포함'}
+                          </strong>
+                        </div>
+
+                        {/* 2) 모바일 무상수리 + 파손보험 */}
+                        <div className="a4-benefit-row" style={{ alignItems: 'flex-start' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.25 }}>
+                            <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                              <span style={{ color: '#0284c7', marginRight: '4px', fontWeight: 800 }}>•</span>
+                              <strong style={{ fontWeight: 900, color: '#0f172a' }}>모바일 무상수리 + 파손보험</strong>
+                            </span>
+                            {mobileFreeServiceCount > 0 && (
+                              <span style={{ fontSize: '0.64rem', color: '#0284c7', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap', opacity: 0.85 }}>
+                                (모바일 {mobileFreeServiceCount}개 품목 · {mobileFreeServiceQuantity}대)
+                              </span>
+                            )}
+                          </div>
+                          <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem', flexShrink: 0, marginTop: '1px' }}>
+                            {mobileFreeServiceAmount > 0
+                              ? `${formatWon(mobileFreeServiceAmount)} 상당`
+                              : '무상 보증 포함'}
+                          </strong>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="a4-benefit-row" style={{ alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.25 }}>
+                          <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
+                            <span style={{ color: hasAnyFreeServiceMobile ? '#0284c7' : '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>
+                              {hasAnyFreeServiceMobile ? '모바일 무상수리 + 파손보험' : '무상수리 연장 이용료'}
+                            </strong>
+                            {!hasAnyFreeServiceMobile && (
+                              <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>
+                                (혜택)
+                              </span>
+                            )}
                           </span>
-                        )}
+                          {validFreeServiceCount > 0 && (
+                            <span style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
+                              (총 {validFreeServiceCount}개 품목 · {totalFreeServiceQuantity}대)
+                            </span>
+                          )}
+                        </div>
+                        <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem', flexShrink: 0, marginTop: '1px' }}>
+                          {subFreeServiceAmount > 0
+                            ? `${formatWon(subFreeServiceAmount)} 상당`
+                            : '무상 보증 포함'}
+                        </strong>
                       </div>
-                      <span className="a4-minus-blue" style={{ flexShrink: 0, marginTop: '1px' }}>
-                        {subFreeServiceAmount > 0
-                          ? includeServiceInFinal
-                            ? `- ${formatWon(subFreeServiceAmount)}`
-                            : `+ ${formatWon(subFreeServiceAmount)} 상당`
-                          : '무상 보증 포함'}
-                      </span>
-                    </div>
+                    )}
                     {hasCareService && (
                       <div className="a4-benefit-row" style={{ alignItems: 'flex-start' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.25 }}>
-                          <span style={{ whiteSpace: 'nowrap' }}>
+                          <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                             <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                            케어서비스 혜택(방문관리·소모품)
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>케어서비스 혜택</strong>
+                            <span style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 500, marginLeft: '4px' }}>
+                              (방문관리·소모품)
+                            </span>
                           </span>
                           {validCareServiceCount > 0 && (
-                            <span style={{ fontSize: '0.67rem', color: '#64748b', marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
                               ({validCareServiceCount <= 2
                                 ? validCareServiceItems
                                     .map((it) => `${it.name?.trim() || '케어서비스'} ${it.count || 1}${it.unit || (it.name?.includes('소모품') ? '개' : '회')}`)
@@ -3775,17 +5567,15 @@ export default function BenefitCalculator({ onBack }) {
                             </span>
                           )}
                         </div>
-                        <span className="a4-minus-blue" style={{ flexShrink: 0, marginTop: '1px' }}>
-                          {includeServiceInFinal
-                            ? `- ${formatWon(subCareServiceAmount)}`
-                            : `+ ${formatWon(subCareServiceAmount)} 상당`}
-                        </span>
+                        <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem', flexShrink: 0, marginTop: '1px' }}>
+                          {formatWon(subCareServiceAmount)} 상당
+                        </strong>
                       </div>
                     )}
                   </div>
 
                   <div className="a4-row a4-benefit-total-row">
-                    <span>총 혜택 합계</span>
+                    <span>총 할인 합계</span>
                     <strong className="a4-minus-blue">- {formatWon(subTotalBenefitSum)}</strong>
                   </div>
                 </div>
@@ -3793,39 +5583,56 @@ export default function BenefitCalculator({ onBack }) {
                 {/* 우측 결과 푸터: 메인(최종 체감가 크게) + 하단(실제 월 납부액 작게) */}
                 <div className="a4-plan-footer footer-sub">
                   <div className="a4-final-row" style={{ alignItems: 'center' }}>
-                    <span className="a4-final-label" style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}>
-                      <span>삼성AI구독 최종 체감가</span>
-                      {subPrepay > 0 && (
-                        <span style={{ fontSize: '0.66rem', color: '#1e40af', fontWeight: 600, marginTop: '2px', letterSpacing: '-0.2px' }}>
-                          (선납금포함)
-                        </span>
-                      )}
+                    <span className="a4-final-label" style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.25 }}>
+                      <strong style={{ fontSize: '0.94rem', fontWeight: 900, color: '#0f172a' }}>삼성AI구독 최종 체감가</strong>
+                      <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', marginTop: '2px', flexWrap: 'wrap' }}>
+                        {subPrepay > 0 && (
+                          <span style={{ fontSize: '0.65rem', color: '#1e40af', fontWeight: 600, letterSpacing: '-0.2px' }}>
+                            (선납금포함)
+                          </span>
+                        )}
+                        {includeServiceInFinal && subServiceTotal > 0 && (
+                          <span style={{ fontSize: '0.65rem', color: '#0284c7', fontWeight: 600, letterSpacing: '-0.2px' }}>
+                            (서비스혜택 {formatWon(subServiceTotal)} 반영)
+                          </span>
+                        )}
+                      </div>
                     </span>
-                    <strong className="a4-final-price price-blue">
+                    <strong className="a4-final-price price-blue" style={{ fontSize: '1.45rem', fontWeight: 900 }}>
                       {formatWon(subFinalPrice)}
                     </strong>
                   </div>
 
-                  <div className="a4-footer-sub-box sub-box-blue">
+                  <div className="a4-footer-sub-box sub-box-blue" style={{ padding: '0.45rem 0.65rem' }}>
                     {isMultiPeriod ? (
                       subSegments.map((seg, idx) => (
                         <div
                           key={seg.endMonth}
                           className="a4-footer-sub-main"
-                          style={idx > 0 ? { marginTop: '0.14rem' } : undefined}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginTop: idx > 0 ? '0.2rem' : 0
+                          }}
                         >
-                          <span>
-                            {idx === 0
-                              ? `${seg.duration}개월간 월 실납부액 (1~${seg.endMonth}개월)`
-                              : `잔여 ${seg.duration}개월 월 실납부액 (${seg.startMonth}~${seg.endMonth}개월)`}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <strong style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e3a8a' }}>
+                              {idx === 0 ? `${seg.duration}개월간 월 실납부액` : `잔여 ${seg.duration}개월 월 실납부액`}
+                            </strong>
+                            <span style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: 500 }}>
+                              ({idx === 0 ? `1~${seg.endMonth}개월` : `${seg.startMonth}~${seg.endMonth}개월`})
+                            </span>
                           </span>
-                          <strong className="sub-strong-blue">월 {formatWon(seg.netMonthly)}</strong>
+                          <strong className="sub-strong-blue" style={{ fontSize: '1.02rem', fontWeight: 900 }}>
+                            월 {formatWon(seg.netMonthly)}
+                          </strong>
                         </div>
                       ))
                     ) : (
-                      <div className="a4-footer-sub-main">
-                        <span>제휴카드 적용 월 실납부액</span>
-                        <strong className="sub-strong-blue">월 {formatWon(subMonthlyAfterCard)}</strong>
+                      <div className="a4-footer-sub-main" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1e3a8a' }}>제휴카드 적용 월 실납부액</strong>
+                        <strong className="sub-strong-blue" style={{ fontSize: '1.02rem', fontWeight: 900 }}>월 {formatWon(subMonthlyAfterCard)}</strong>
                       </div>
                     )}
                   </div>
@@ -3859,6 +5666,30 @@ export default function BenefitCalculator({ onBack }) {
         >
           <button
             type="button"
+            onClick={() => {
+              setStep('input');
+              window.scrollTo(0, 0);
+            }}
+            className="btn-secondary"
+            style={{
+              padding: '0.85rem 1.6rem',
+              fontSize: '1rem',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid var(--glass-border)',
+              color: 'var(--text-primary)',
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25)'
+            }}
+          >
+            <ArrowLeft size={19} /> 조건 수정하기
+          </button>
+          <button
+            type="button"
             onClick={handleExportAsImage}
             disabled={isExportingImage}
             style={{
@@ -3886,6 +5717,28 @@ export default function BenefitCalculator({ onBack }) {
           >
             <Printer size={19} /> A4 용지로 인쇄 / PDF 저장
           </button>
+          {isMixedMode && mixedChannelType === 'dept' && (
+            <button
+              type="button"
+              onClick={() => setShowPosCashierModal(true)}
+              style={{
+                background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.25), rgba(14, 165, 233, 0.35))',
+                border: '1px solid rgba(56, 189, 248, 0.6)',
+                color: '#38bdf8',
+                padding: '0.85rem 1.55rem',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                fontWeight: 800,
+                fontSize: '1rem',
+                boxShadow: '0 4px 14px rgba(2, 132, 199, 0.22)'
+              }}
+            >
+              <Receipt size={19} /> 🖨️ 캐셔 POS 결제 지시서
+            </button>
+          )}
         </div>
 
         {/* 견적서 사진 미리보기 & 모바일 저장 모달 */}
@@ -4082,6 +5935,8 @@ export default function BenefitCalculator({ onBack }) {
             </div>
           </div>
         )}
+        {/* 직원 전용 캐셔 POS 결제 및 사은행사 지시서 모달 */}
+        {renderPosCashierModal()}
       </section>
     );
   }
@@ -4849,6 +6704,905 @@ export default function BenefitCalculator({ onBack }) {
                   </div>
                 </div>
 
+                {/* 🏬 갤러리아 백화점 스마트 정산 & 결제 설계기 (직원 전용) */}
+                <div
+                  style={{
+                    marginBottom: '1rem',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(212, 175, 55, 0.45)',
+                    background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.95))',
+                    overflow: 'hidden',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.35)'
+                  }}
+                >
+                  {/* 접기/펼치기 헤더 */}
+                  <div
+                    onClick={() => setDeptCalcOpen(!deptCalcOpen)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.85rem 1.15rem',
+                      background: 'rgba(212, 175, 55, 0.12)',
+                      cursor: 'pointer',
+                      borderBottom: deptCalcOpen ? '1px solid rgba(212, 175, 55, 0.25)' : 'none',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Calculator size={18} color="#f59e0b" />
+                        <span style={{ fontSize: '0.96rem', fontWeight: 900, color: '#fde68a' }}>
+                          🏬 갤러리아 백화점 스마트 정산 & 결제 설계기
+                        </span>
+                        <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#b45309', color: '#fff', padding: '2px 7px', borderRadius: '4px' }}>
+                          직원 전용
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '0.76rem', color: '#cbd5e1' }}>
+                        마지노선 방어 · 사은행사(11%/10%) 극대화 · 1인 3분할 & 2인 카드 슬라이더
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', padding: '3px 9px', borderRadius: '6px' }}>
+                        {deptCalcOpen ? '▲ 접기' : '▼ 설계기 열기'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 펼쳐졌을 때의 계산기 바디 */}
+                  {deptCalcOpen && (
+                    <div style={{ padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {/* 1. 기준 결제 대상 금액 설정 */}
+                      <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#f8fafc' }}>
+                            1. 결제 대상 기준금액 설정
+                          </span>
+                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => setDeptCustomGross(null)}
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: '5px',
+                                border: 'none',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                background: deptCustomGross === null ? '#0284c7' : 'rgba(255,255,255,0.08)',
+                                color: deptCustomGross === null ? '#fff' : '#94a3b8'
+                              }}
+                            >
+                              견적 품목 합계 ({formatWon(mixedLumpGross)}) 연동
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { if (deptCustomGross === null) setDeptCustomGross(mixedLumpGross || 26008000); }}
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: '5px',
+                                border: 'none',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                background: deptCustomGross !== null ? '#0284c7' : 'rgba(255,255,255,0.08)',
+                                color: deptCustomGross !== null ? '#fff' : '#94a3b8'
+                              }}
+                            >
+                              수기 직접입력
+                            </button>
+                          </div>
+                        </div>
+
+                        {deptCustomGross !== null ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ flex: 1 }}>
+                              <MoneyInput
+                                value={deptCustomGross}
+                                onChange={setDeptCustomGross}
+                                placeholder="정산할 가전 결제 금액 입력 (예: 26,008,000)"
+                                compact
+                                accentColor="#38bdf8"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setDeptCustomGross(26008000)}
+                              style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', borderRadius: '8px', border: '1px solid #38bdf8', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', cursor: 'pointer', fontWeight: 700 }}
+                            >
+                              예시 2,600.8만
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '0.86rem', color: '#93c5fd', display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                            <span>현재 가전 견적금액:</span>
+                            <strong style={{ fontSize: '1.15rem', color: '#f8fafc' }}>{formatWon(mixedLumpGross)}</strong>
+                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>(상단 품목표 금액과 실시간 동기화)</span>
+                          </div>
+                        )}
+
+                        {/* 자급제폰 결제 체크박스 & 수수료 바코드 분리 안내 */}
+                        <div style={{ marginTop: '0.65rem', paddingTop: '0.65rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={deptHasPhone}
+                              onChange={(e) => setDeptHasPhone(e.target.checked)}
+                              style={{ accentColor: '#10b981', width: '14px', height: '14px', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: '0.8rem', fontWeight: 800, color: deptHasPhone ? '#6ee7b7' : '#cbd5e1' }}>
+                              📱 자급제폰 결제 포함 (100만당 G캐시 40,000P 추가 적립)
+                            </span>
+                          </label>
+
+                          {deptHasPhone && (
+                            <div style={{ width: '220px' }}>
+                              <MoneyInput
+                                value={deptPhoneAmount}
+                                onChange={setDeptPhoneAmount}
+                                placeholder="자급제폰 결제액"
+                                compact
+                                accentColor="#10b981"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 바코드 수수료 분리 상태 뱃지 */}
+                        <div style={{ marginTop: '0.45rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span style={{ color: '#38bdf8', fontWeight: 800 }}>
+                            🏬 가전 바코드 (끝자리 907 · 수수료 A) 연동
+                          </span>
+                          {deptHasPhone && Number(deptPhoneAmount) > 0 && (
+                            <span style={{ color: '#34d399', fontWeight: 800, background: 'rgba(16, 185, 129, 0.15)', padding: '1px 6px', borderRadius: '4px' }}>
+                              + 📱 자급제 바코드 (끝자리 606 · 수수료 B) 분리 적용
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 2. 설계 옵션 그리드 */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>
+                        {/* A. 사은행사 우대율 선택 (직접입력 + 원터치 프리셋) */}
+                        <div style={{ background: 'rgba(0,0,0,0.22)', padding: '0.75rem', borderRadius: '9px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 800, color: '#fde68a', marginBottom: '0.45rem' }}>
+                            🎁 백화점 사은행사 우대율 (500만 이상)
+                          </label>
+                          {/* 직접 퍼센트 입력창 */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem' }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="30"
+                                value={deptRewardRate}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  setDeptRewardRate(isNaN(val) ? 0 : Number(val.toFixed(2)));
+                                }}
+                                style={{
+                                  width: '100%',
+                                  background: 'rgba(15, 23, 42, 0.85)',
+                                  border: '1.5px solid #f59e0b',
+                                  borderRadius: '7px',
+                                  padding: '0.45rem 1.6rem 0.45rem 0.65rem',
+                                  color: '#fef08a',
+                                  fontSize: '0.98rem',
+                                  fontWeight: 800,
+                                  outline: 'none',
+                                  boxSizing: 'border-box'
+                                }}
+                              />
+                              <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#f59e0b', fontWeight: 900, fontSize: '0.85rem' }}>
+                                %
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                              직접 입력 가능
+                            </span>
+                          </div>
+                          {/* 빠른 원터치 프리셋 칩 */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem' }}>
+                            {[9.5, 10.0, 10.5, 11.0, 11.5].map((rate) => (
+                              <button
+                                key={rate}
+                                type="button"
+                                onClick={() => setDeptRewardRate(rate)}
+                                style={{
+                                  padding: '0.4rem 0.15rem',
+                                  borderRadius: '6px',
+                                  border: Math.abs(deptRewardRate - rate) < 0.001 ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
+                                  background: Math.abs(deptRewardRate - rate) < 0.001 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.03)',
+                                  color: Math.abs(deptRewardRate - rate) < 0.001 ? '#fde68a' : '#cbd5e1',
+                                  fontSize: '0.74rem',
+                                  fontWeight: 800,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                {rate.toFixed(1)}%{rate === 11.0 ? ' 🔥' : ''}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{ fontSize: '0.67rem', color: '#94a3b8', marginTop: '0.45rem', lineHeight: 1.4 }}>
+                            <div>• <strong>400만 이하</strong>: 기본 6.5% 사은행사 고정 적용 (300만: 19.5만 / 400만: 26만)</div>
+                            <div>• ⏱️ <strong>유효기간</strong>: 기본 6.5%는 <strong>5년</strong> / 9.5% 이상 우대 추가분은 <strong>60일(2개월)</strong></div>
+                          </div>
+                        </div>
+
+                        {/* B. 카드 인원 모드 */}
+                        <div style={{ background: 'rgba(0,0,0,0.22)', padding: '0.75rem', borderRadius: '9px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 800, color: '#93c5fd', marginBottom: '0.45rem' }}>
+                            💳 카드 소지 인원 설정
+                          </label>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => setDeptCardCount(1)}
+                              style={{
+                                padding: '0.45rem 0.5rem',
+                                borderRadius: '6px',
+                                border: deptCardCount === 1 ? '2px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
+                                background: deptCardCount === 1 ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.03)',
+                                color: deptCardCount === 1 ? '#38bdf8' : '#cbd5e1',
+                                fontSize: '0.76rem',
+                                fontWeight: 800,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              👤 1인 카드 (최적 분할 비기)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeptCardCount(2)}
+                              style={{
+                                padding: '0.45rem 0.5rem',
+                                borderRadius: '6px',
+                                border: deptCardCount === 2 ? '2px solid #ec4899' : '1px solid rgba(255,255,255,0.1)',
+                                background: deptCardCount === 2 ? 'rgba(236, 72, 153, 0.25)' : 'rgba(255,255,255,0.03)',
+                                color: deptCardCount === 2 ? '#f472b6' : '#cbd5e1',
+                                fontSize: '0.76rem',
+                                fontWeight: 800,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              👥 2인 2카드 (신랑+신부)
+                            </button>
+                          </div>
+                          <div style={{ fontSize: '0.67rem', color: '#94a3b8', marginTop: '0.35rem' }}>
+                            {deptCardCount === 1 ? '2,000만 상한 초과 시 2,000만(21,884,000원) + 400만(4,124,000원) 신규구간 지능형 자동 분할' : '부부 2명이 각각 카드를 발급하여 둘 다 5% 청구할인 극대화'}
+                          </div>
+                        </div>
+
+                        {/* C. 혜택 처리 전략 */}
+                        <div style={{ background: 'rgba(0,0,0,0.22)', padding: '0.75rem', borderRadius: '9px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 800, color: '#6ee7b7', marginBottom: '0.45rem' }}>
+                            🎯 G캐시 혜택 수령 방식 (3대 시나리오 선택)
+                          </label>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => setDeptStrategy('reward')}
+                              style={{
+                                padding: '0.45rem 0.35rem',
+                                borderRadius: '6px',
+                                border: deptStrategy === 'reward' ? '2px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
+                                background: deptStrategy === 'reward' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.03)',
+                                color: deptStrategy === 'reward' ? '#6ee7b7' : '#cbd5e1',
+                                fontSize: '0.73rem',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                textAlign: 'center'
+                              }}
+                            >
+                              💰 1. 전부 적립 (체감가 최저)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeptStrategy('partial')}
+                              style={{
+                                padding: '0.45rem 0.35rem',
+                                borderRadius: '6px',
+                                border: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '2px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
+                                background: (deptStrategy === 'partial' || deptStrategy === 'instant') ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.03)',
+                                color: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '#7dd3fc' : '#cbd5e1',
+                                fontSize: '0.73rem',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                textAlign: 'center'
+                              }}
+                            >
+                              🛡️ 2. 부분 차감 (마지노선 방어)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeptStrategy('full')}
+                              style={{
+                                padding: '0.45rem 0.35rem',
+                                borderRadius: '6px',
+                                border: deptStrategy === 'full' ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
+                                background: deptStrategy === 'full' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.03)',
+                                color: deptStrategy === 'full' ? '#fde68a' : '#cbd5e1',
+                                fontSize: '0.73rem',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                textAlign: 'center'
+                              }}
+                            >
+                              ⚡ 3. 전부 차감 (G캐시 0원 올인)
+                            </button>
+                          </div>
+                          <div style={{ fontSize: '0.67rem', color: '#94a3b8', marginTop: '0.35rem' }}>
+                            {deptStrategy === 'reward' && '💰 G캐시 100% 모바일 앱 적립 → 카드 원금 전체 청구할인 극대화로 실질 체감가 가장 저렴 (쇼핑 활용형)'}
+                            {(deptStrategy === 'partial' || deptStrategy === 'instant') && '🛡️ 청구할인 마지노선(2,000만 등)을 완벽 방어하면서 가능한 여유분만 선차감 (안전 추천형)'}
+                            {deptStrategy === 'full' && '⚡ G캐시를 1원도 남기지 않고(잔여 0원) 100% 현장에서 선차감하여 카드 승인금액 자체를 최소화 (카드값 절약형)'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 3. 2인 분할 슬라이더 (2인 모드 선택 시 활성화) */}
+                      {deptCardCount === 2 && (
+                        <div style={{ background: 'rgba(236, 72, 153, 0.08)', padding: '0.9rem', borderRadius: '10px', border: '1px solid rgba(236, 72, 153, 0.3)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <Sliders size={16} color="#f472b6" />
+                              <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#f472b6' }}>
+                                👥 2인 카드 금액 배분 슬라이더 (신랑 {deptSplitSlider}% : 신부 {100 - deptSplitSlider}%)
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.3rem' }}>
+                              {[50, 60, 70, 80].map((preset) => (
+                                <button
+                                  key={preset}
+                                  type="button"
+                                  onClick={() => setDeptSplitSlider(preset)}
+                                  style={{
+                                    padding: '2px 7px',
+                                    borderRadius: '4px',
+                                    border: '1px solid rgba(244, 114, 182, 0.4)',
+                                    background: deptSplitSlider === preset ? '#ec4899' : 'rgba(0,0,0,0.3)',
+                                    color: '#fff',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {preset}:{100 - preset}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <input
+                            type="range"
+                            min="10"
+                            max="90"
+                            step="5"
+                            value={deptSplitSlider}
+                            onChange={(e) => setDeptSplitSlider(Number(e.target.value))}
+                            style={{ width: '100%', accentColor: '#ec4899', cursor: 'pointer', height: '6px' }}
+                          />
+
+                          {/* 2인 카드 분할 결과 비교 카드 */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem', marginTop: '0.65rem' }}>
+                            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.65rem', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#93c5fd', fontWeight: 800, marginBottom: '0.3rem' }}>
+                                <span>🤵 1번 카드 (신랑 - {deptSplitSlider}%)</span>
+                                <span style={{ background: 'rgba(56, 189, 248, 0.2)', padding: '1px 5px', borderRadius: '3px' }}>{deptEnginePlan.card1Tier}</span>
+                              </div>
+                              <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#f8fafc', marginBottom: '0.25rem' }}>
+                                {formatWon(deptEnginePlan.card1Amount)}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>
+                                청구할인: <strong style={{ color: '#fca5a5' }}>-{formatWon(deptEnginePlan.card1Discount)}</strong> | G캐시: <strong style={{ color: '#fde68a' }}>+{formatWon(deptEnginePlan.card1Gcash)}</strong>
+                              </div>
+                            </div>
+
+                            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.65rem', borderRadius: '8px', border: '1px solid rgba(244, 114, 182, 0.3)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#f472b6', fontWeight: 800, marginBottom: '0.3rem' }}>
+                                <span>👰 2번 카드 (신부 - {100 - deptSplitSlider}%)</span>
+                                <span style={{ background: 'rgba(244, 114, 182, 0.2)', padding: '1px 5px', borderRadius: '3px' }}>{deptEnginePlan.card2Tier}</span>
+                              </div>
+                              <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#f8fafc', marginBottom: '0.25rem' }}>
+                                {formatWon(deptEnginePlan.card2Amount)}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>
+                                청구할인: <strong style={{ color: '#fca5a5' }}>-{formatWon(deptEnginePlan.card2Discount)}</strong> | G캐시: <strong style={{ color: '#fde68a' }}>+{formatWon(deptEnginePlan.card2Gcash)}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 4. 1인 3분할 비기 모드 안내 (2,000만 초과 시) */}
+                      {deptCardCount === 1 && deptEnginePlan.mode === '1person_3split' && (
+                        <div style={{ background: 'rgba(212, 175, 55, 0.08)', padding: '0.85rem', borderRadius: '10px', border: '1px solid rgba(212, 175, 55, 0.35)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 900, color: '#fde68a' }}>
+                              {deptEnginePlan.step3BaseApproval > 0
+                                ? '⚡ 1인 카드 3분할 결제 비기 작동 중 (2,000만 한도 초과 최적화)'
+                                : `⚡ 1인 카드 2단계 최적 분할 (2,000만 + ${deptEnginePlan.step2Label || '400만'} 신규구간 완벽 매칭)`}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: deptEnginePlan.safeDeduct > 0 ? '#67e8f9' : '#6ee7b7', fontWeight: 700 }}>
+                              {deptEnginePlan.safeDeduct > 0 ? `✓ G캐시 ${formatWon(deptEnginePlan.safeDeduct)} 즉시 선차감 적용` : '✓ 사은행사 2차/3차 전액 수령'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem', fontSize: '0.76rem' }}>
+                            <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.5rem 0.65rem', borderRadius: '6px' }}>
+                              <div style={{ color: '#93c5fd', fontWeight: 700, fontSize: '0.85rem' }}>
+                                1차 제휴카드: {formatWon(deptEnginePlan.step1Approval)}
+                              </div>
+                              <div style={{ color: '#cbd5e1', fontSize: '0.72rem' }}>
+                                5% 청구할인 ({formatWon(deptEnginePlan.step1Discount)}) + {deptRewardRate}% 우대 G캐시 ({formatWon(deptEnginePlan.step1Gcash)})
+                                {deptEnginePlan.deduct1 > 0 && (
+                                  <div style={{ color: '#67e8f9', fontWeight: 700, marginTop: '2px' }}>
+                                    └ 마지노선(2,105.3만) 사수: G캐시 -{formatWon(deptEnginePlan.deduct1)} 선차감
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {deptEnginePlan.step2BaseApproval > 0 && (
+                              <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.5rem 0.65rem', borderRadius: '6px' }}>
+                                <div style={{ color: '#fde68a', fontWeight: 700, fontSize: '0.85rem' }}>
+                                  2차 제휴카드: {formatWon(deptEnginePlan.step2Approval)} ({deptEnginePlan.step2Label || '400만'} 구간)
+                                </div>
+                                <div style={{ color: '#cbd5e1', fontSize: '0.72rem' }}>
+                                  {deptEnginePlan.step2Discount > 0
+                                    ? `3% 청구할인 (${formatWon(deptEnginePlan.step2Discount)})`
+                                    : '청구할인 미적용 (300만 이하)'} + 6.5% 일반 G캐시 ({formatWon(deptEnginePlan.step2Gcash)})
+                                </div>
+                              </div>
+                            )}
+                            {deptEnginePlan.step3BaseApproval > 0 && (
+                              <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.5rem 0.65rem', borderRadius: '6px' }}>
+                                <div style={{ color: deptEnginePlan.step3Approval === 0 ? '#94a3b8' : '#6ee7b7', fontWeight: 700, fontSize: '0.85rem' }}>
+                                  3차 일반/타카드: {formatWon(deptEnginePlan.step3Approval)}
+                                </div>
+                                <div style={{ color: '#cbd5e1', fontSize: '0.72rem' }}>
+                                  {deptEnginePlan.deduct3 > 0 ? (
+                                    <span style={{ color: '#67e8f9', fontWeight: 700 }}>
+                                      └ G캐시 {formatWon(deptEnginePlan.deduct3)} 선차감 결제로 카드승인 0원 대체 완료!
+                                    </span>
+                                  ) : (
+                                    `6.5% 일반 G캐시 (${formatWon(deptEnginePlan.step3Gcash)})`
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 선차감 시 총 카드 결제 승인액 요약 */}
+                          {deptEnginePlan.safeDeduct > 0 && (
+                            <div style={{ marginTop: '0.5rem', padding: '0.45rem 0.75rem', background: 'rgba(14, 165, 233, 0.15)', borderRadius: '6px', border: '1px solid rgba(14, 165, 233, 0.35)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
+                              <span style={{ color: '#e0f2fe' }}>
+                                ⚡ 총 선차감액: <strong style={{ color: '#38bdf8' }}>-{formatWon(deptEnginePlan.safeDeduct)}</strong> {deptEnginePlan.deduct3 > 0 ? `(1차 ${formatWon(deptEnginePlan.deduct1)} + 3차 ${formatWon(deptEnginePlan.deduct3)})` : `(1차 ${formatWon(deptEnginePlan.deduct1)})`}
+                              </span>
+                              <span style={{ color: '#fef08a' }}>
+                                실제 고객 카드 결제 총액: <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>{formatWon(deptEnginePlan.cardApproval)}</strong>
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 5. 실시간 업셀링 코칭 배너 (Jump Tip) */}
+                      {deptEnginePlan.jumpTip && (
+                        <div
+                          style={{
+                            background: 'linear-gradient(90deg, rgba(234, 179, 8, 0.22), rgba(249, 115, 22, 0.22))',
+                            border: '1px solid rgba(234, 179, 8, 0.55)',
+                            padding: '0.7rem 0.95rem',
+                            borderRadius: '9px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.65rem'
+                          }}
+                        >
+                          <span style={{ fontSize: '1.25rem' }}>💡</span>
+                          <div style={{ fontSize: '0.8rem', color: '#fef08a', lineHeight: 1.4 }}>
+                            <strong>[업셀링 골든 코칭]</strong>{' '}
+                            {deptEnginePlan.jumpTip.message || (
+                              <>
+                                고객님께 소형 가전이나 소모품 <strong>+{formatWon(deptEnginePlan.jumpTip.needMore)}</strong>만 추가 제안하시면{' '}
+                                <span style={{ textDecoration: 'underline', fontWeight: 800 }}>[{deptEnginePlan.jumpTip.nextLabel}]</span> 구간으로 동시 승급되어 사은행사 혜택이 폭증합니다!
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ⚖️ 5-1. [적립] vs [선차감] 실시간 유불리 비교 분석 카드 */}
+                      <div
+                        style={{
+                          background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85))',
+                          padding: '1rem 1.1rem',
+                          borderRadius: '11px',
+                          border: '1px solid rgba(212, 175, 55, 0.38)',
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.25)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                            <Scale size={18} color="#f59e0b" />
+                            <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#fde68a' }}>
+                              ⚖️ [1.전부적립] vs [2.부분차감] vs [3.전부차감] 3대 시나리오 실시간 유불리 비교
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                            ※ 원하시는 플랜 카드를 클릭하시면 해당 수령 방식으로 즉시 전환됩니다.
+                          </span>
+                        </div>
+
+                        {/* 3열 나란한 비교 카드 (전부적립 vs 부분차감 vs 전부차감) */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', gap: '0.75rem' }}>
+                          {/* 1) 💰 1. 전부 적립 플랜 */}
+                          <div
+                            onClick={() => setDeptStrategy('reward')}
+                            style={{
+                              background: deptStrategy === 'reward' ? 'rgba(16, 185, 129, 0.16)' : 'rgba(0,0,0,0.28)',
+                              border: deptStrategy === 'reward' ? '2px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '9px',
+                              padding: '0.85rem',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between'
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <span style={{ fontSize: '0.86rem', fontWeight: 900, color: '#6ee7b7' }}>
+                                    💰 1. 전부 적립 플랜
+                                  </span>
+                                  <span style={{ fontSize: '0.66rem', background: '#065f46', color: '#a7f3d0', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>
+                                    쇼핑 활용형 🔥
+                                  </span>
+                                </div>
+                                {deptStrategy === 'reward' && (
+                                  <span style={{ fontSize: '0.66rem', background: '#10b981', color: '#ffffff', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>
+                                    ✓ 현재 선택됨
+                                  </span>
+                                )}
+                              </div>
+
+                              <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.6rem 0.75rem', borderRadius: '7px', marginBottom: '0.6rem', fontSize: '0.78rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#cbd5e1' }}>
+                                  <span>카드 결제 승인 총액:</span>
+                                  <strong style={{ color: '#ffffff' }}>{formatWon(deptEnginePlan.rewardPlan?.cardApproval || deptEnginePlan.effectiveGross)}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fde68a' }}>
+                                  <span>G캐시 앱 적립 합계:</span>
+                                  <strong style={{ color: '#fde68a' }}>+ {formatWon(deptEnginePlan.totalGcash)} (100% 지급)</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fca5a5' }}>
+                                  <span>제휴카드 청구할인:</span>
+                                  <strong>- {formatWon(deptEnginePlan.rewardPlan?.totalCardDiscount || deptEnginePlan.rewardCardDiscount)}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.35rem', borderTop: '1px dashed rgba(255,255,255,0.15)', color: '#6ee7b7', fontWeight: 800 }}>
+                                  <span>고객 체감 최종가:</span>
+                                  <strong style={{ fontSize: '0.96rem' }}>{formatWon(deptEnginePlan.rewardPlan?.finalPerceived || deptEnginePlan.rewardFinalPerceived)}</strong>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 2) 🛡️ 2. 부분 차감 플랜 (마지노선 방어) */}
+                          <div
+                            onClick={() => setDeptStrategy('partial')}
+                            style={{
+                              background: (deptStrategy === 'partial' || deptStrategy === 'instant') ? 'rgba(56, 189, 248, 0.16)' : 'rgba(0,0,0,0.28)',
+                              border: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '2px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '9px',
+                              padding: '0.85rem',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between'
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <span style={{ fontSize: '0.86rem', fontWeight: 900, color: '#7dd3fc' }}>
+                                    🛡️ 2. 부분 차감 플랜
+                                  </span>
+                                  <span style={{ fontSize: '0.66rem', background: '#0369a1', color: '#bae6fd', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>
+                                    안전 추천형 ⭐
+                                  </span>
+                                </div>
+                                {(deptStrategy === 'partial' || deptStrategy === 'instant') && (
+                                  <span style={{ fontSize: '0.66rem', background: '#0284c7', color: '#ffffff', padding: '1px 6px', borderRadius: '4px', fontWeight: 900 }}>
+                                    ✓ 현재 선택됨
+                                  </span>
+                                )}
+                              </div>
+
+                              <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.6rem 0.75rem', borderRadius: '7px', marginBottom: '0.6rem', fontSize: '0.78rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#38bdf8' }}>
+                                  <span style={{ fontWeight: 800 }}>실제 카드 승인 총액:</span>
+                                  <strong style={{ color: '#67e8f9', fontSize: '0.88rem' }}>{formatWon(deptEnginePlan.partialPlan?.cardApproval || deptEnginePlan.instantCardApproval)}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#34d399' }}>
+                                  <span>현장 G캐시 부분 선차감:</span>
+                                  <strong>- {formatWon(deptEnginePlan.partialPlan?.safeDeduct || deptEnginePlan.instantSafeDeduct)}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fca5a5' }}>
+                                  <span>제휴카드 청구할인:</span>
+                                  <strong>- {formatWon(deptEnginePlan.partialPlan?.totalCardDiscount || deptEnginePlan.instantCardDiscount)}</strong>
+                                </div>
+                                {(deptEnginePlan.partialPlan?.safeReward || deptEnginePlan.instantSafeReward) > 0 && (
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fef08a', fontSize: '0.73rem' }}>
+                                    <span>잔여 G캐시 앱 적립:</span>
+                                    <strong>+ {formatWon(deptEnginePlan.partialPlan?.safeReward || deptEnginePlan.instantSafeReward)}</strong>
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.35rem', borderTop: '1px dashed rgba(255,255,255,0.15)', color: '#7dd3fc', fontWeight: 800 }}>
+                                  <span>고객 체감 최종가:</span>
+                                  <strong style={{ fontSize: '0.96rem' }}>{formatWon(deptEnginePlan.partialPlan?.finalPerceived || deptEnginePlan.instantFinalPerceived)}</strong>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 3) ⚡ 3. 전부 차감 플랜 (G캐시 0원 올인) */}
+                          <div
+                            onClick={() => setDeptStrategy('full')}
+                            style={{
+                              background: deptStrategy === 'full' ? 'rgba(245, 158, 11, 0.16)' : 'rgba(0,0,0,0.28)',
+                              border: deptStrategy === 'full' ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '9px',
+                              padding: '0.85rem',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between'
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <span style={{ fontSize: '0.86rem', fontWeight: 900, color: '#fde68a' }}>
+                                    ⚡ 3. 전부 차감 플랜
+                                  </span>
+                                  <span style={{ fontSize: '0.66rem', background: '#78350f', color: '#fde68a', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>
+                                    카드값 최소화형 💥
+                                  </span>
+                                </div>
+                                {deptStrategy === 'full' && (
+                                  <span style={{ fontSize: '0.66rem', background: '#f59e0b', color: '#0f172a', padding: '1px 6px', borderRadius: '4px', fontWeight: 900 }}>
+                                    ✓ 현재 선택됨
+                                  </span>
+                                )}
+                              </div>
+
+                              <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.6rem 0.75rem', borderRadius: '7px', marginBottom: '0.6rem', fontSize: '0.78rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fbbf24' }}>
+                                  <span style={{ fontWeight: 800 }}>실제 카드 승인 총액:</span>
+                                  <strong style={{ color: '#fef08a', fontSize: '0.88rem' }}>{formatWon(deptEnginePlan.fullPlan?.cardApproval)} (최저 승인액!)</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fde68a' }}>
+                                  <span>G캐시 발생 (결제금액 재판정):</span>
+                                  <strong style={{ color: '#fde68a' }}>+ {formatWon(deptEnginePlan.fullPlan?.totalGcash)} (1차 2,000만 + 2차 {deptEnginePlan.fullPlan?.step2Label || '200만'})</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#34d399' }}>
+                                  <span>현장 G캐시 전액 선차감:</span>
+                                  <strong>- {formatWon(deptEnginePlan.fullPlan?.safeDeduct)} (100% 올인 차감)</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fca5a5' }}>
+                                  <span>제휴카드 청구할인:</span>
+                                  <strong>- {formatWon(deptEnginePlan.fullPlan?.totalCardDiscount)}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#94a3b8', fontSize: '0.73rem' }}>
+                                  <span>잔여 G캐시 앱 적립:</span>
+                                  <strong style={{ color: '#cbd5e1' }}>0원 (남김없이 올인 차감)</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.35rem', borderTop: '1px dashed rgba(255,255,255,0.15)', color: '#fde68a', fontWeight: 800 }}>
+                                  <span>고객 체감 최종가:</span>
+                                  <strong style={{ fontSize: '0.96rem' }}>{formatWon(deptEnginePlan.fullPlan?.finalPerceived)}</strong>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 1, 2, 3 플랜 최종가 및 차액 한눈에 비교 (설명 없이 금액과 차액만 집중) */}
+                        <div style={{ marginTop: '0.75rem', padding: '0.8rem 1rem', background: 'rgba(15, 23, 42, 0.85)', borderRadius: '10px', border: '1px solid rgba(212, 175, 55, 0.35)' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.65rem' }}>
+                            {/* 1번 플랜 최종가 */}
+                            <div style={{ background: 'rgba(6, 95, 70, 0.25)', border: '1px solid #10b981', borderRadius: '8px', padding: '0.75rem 0.9rem' }}>
+                              <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#a7f3d0', marginBottom: '0.35rem' }}>
+                                💰 1번 전부적립 최종가
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#6ee7b7' }}>
+                                  {formatWon(deptEnginePlan.rewardPlan?.finalPerceived || deptEnginePlan.rewardFinalPerceived)}
+                                </span>
+                                <span style={{ fontSize: '0.75rem', color: '#94a3b8', background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '4px' }}>
+                                  기준
+                                </span>
+                              </div>
+                              <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: '1px dashed rgba(255,255,255,0.1)', fontSize: '0.75rem', color: '#cbd5e1' }}>
+                                <span>승인액: <strong>{formatWon(deptEnginePlan.rewardPlan?.cardApproval || deptEnginePlan.rewardCardApproval)}</strong></span>
+                              </div>
+                            </div>
+
+                            {/* 2번 플랜 최종가 */}
+                            <div style={{ background: 'rgba(3, 105, 161, 0.25)', border: '1px solid #38bdf8', borderRadius: '8px', padding: '0.75rem 0.9rem' }}>
+                              <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#bae6fd', marginBottom: '0.35rem' }}>
+                                🛡️ 2번 부분차감 최종가
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#38bdf8' }}>
+                                  {formatWon(deptEnginePlan.partialPlan?.finalPerceived || deptEnginePlan.instantFinalPerceived)}
+                                </span>
+                                {(() => {
+                                  const diff = (deptEnginePlan.partialPlan?.finalPerceived || deptEnginePlan.instantFinalPerceived) - (deptEnginePlan.rewardPlan?.finalPerceived || deptEnginePlan.rewardFinalPerceived);
+                                  return (
+                                    <span style={{ fontSize: '0.82rem', fontWeight: 900, padding: '2px 7px', borderRadius: '4px', background: diff >= 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)', color: diff >= 0 ? '#fca5a5' : '#6ee7b7' }}>
+                                      {diff >= 0 ? `+${formatWon(diff)}` : `-${formatWon(Math.abs(diff))}`}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                              <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: '1px dashed rgba(255,255,255,0.1)', fontSize: '0.75rem', color: '#cbd5e1', display: 'flex', justifyContent: 'space-between' }}>
+                                <span>승인액: <strong>{formatWon(deptEnginePlan.partialPlan?.cardApproval || deptEnginePlan.instantCardApproval)}</strong></span>
+                                <span style={{ color: '#38bdf8', fontWeight: 800 }}>
+                                  (-{formatWon((deptEnginePlan.rewardPlan?.cardApproval || deptEnginePlan.rewardCardApproval) - (deptEnginePlan.partialPlan?.cardApproval || deptEnginePlan.instantCardApproval))})
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* 3번 플랜 최종가 */}
+                            <div style={{ background: 'rgba(120, 53, 15, 0.25)', border: '1px solid #f59e0b', borderRadius: '8px', padding: '0.75rem 0.9rem' }}>
+                              <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#fde68a', marginBottom: '0.35rem' }}>
+                                ⚡ 3번 전부차감 최종가
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#fbbf24' }}>
+                                  {formatWon(deptEnginePlan.fullPlan?.finalPerceived)}
+                                </span>
+                                {(() => {
+                                  const diff = deptEnginePlan.fullPlan?.finalPerceived - (deptEnginePlan.rewardPlan?.finalPerceived || deptEnginePlan.rewardFinalPerceived);
+                                  return (
+                                    <span style={{ fontSize: '0.82rem', fontWeight: 900, padding: '2px 7px', borderRadius: '4px', background: diff >= 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)', color: diff >= 0 ? '#fca5a5' : '#6ee7b7' }}>
+                                      {diff >= 0 ? `+${formatWon(diff)}` : `-${formatWon(Math.abs(diff))}`}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                              <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: '1px dashed rgba(255,255,255,0.1)', fontSize: '0.75rem', color: '#cbd5e1', display: 'flex', justifyContent: 'space-between' }}>
+                                <span>승인액: <strong>{formatWon(deptEnginePlan.fullPlan?.cardApproval)}</strong></span>
+                                <span style={{ color: '#fbbf24', fontWeight: 800 }}>
+                                  (-{formatWon((deptEnginePlan.rewardPlan?.cardApproval || deptEnginePlan.rewardCardApproval) - deptEnginePlan.fullPlan?.cardApproval)})
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 6. 종합 혜택 요약 & 2대 핵심 실행 버튼 */}
+                      <div
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.9)',
+                          padding: '0.95rem 1.15rem',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(212, 175, 55, 0.35)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '0.85rem'
+                        }}
+                      >
+                        {deptEnginePlan.safeDeduct > 0 ? (
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.65rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.85rem', color: deptStrategy === 'full' ? '#f59e0b' : '#38bdf8', fontWeight: 800 }}>
+                              {deptStrategy === 'full' ? '⚡ 전액 선차감(올인):' : '🛡️ 부분 선차감(방어):'}
+                            </span>
+                            <span style={{ fontSize: '0.84rem', color: '#93c5fd' }}>
+                              실제 카드승인액 <strong style={{ color: '#38bdf8', fontSize: '1.05rem', fontWeight: 900 }}>{formatWon(deptEnginePlan.cardApproval)}</strong>
+                              <span style={{ fontSize: '0.72rem', color: '#a7f3d0', marginLeft: '4px' }}>(G캐시 -{formatWon(deptEnginePlan.safeDeduct)} 즉시차감)</span>
+                            </span>
+                            <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>|</span>
+                            <span style={{ fontSize: '0.82rem', color: '#fca5a5' }}>
+                              청구할인 <strong style={{ color: '#fca5a5' }}>-{formatWon(deptEnginePlan.totalCardDiscount)}</strong>
+                            </span>
+                            {deptEnginePlan.safeReward > 0 ? (
+                              <>
+                                <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>|</span>
+                                <span style={{ fontSize: '0.82rem', color: '#fde68a' }}>
+                                  잔여 G캐시 적립 <strong style={{ color: '#fde68a' }}>+{formatWon(deptEnginePlan.safeReward)}</strong>
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>|</span>
+                                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                                  잔여 G캐시 <strong style={{ color: '#cbd5e1' }}>0원 (올인 차감)</strong>
+                                </span>
+                              </>
+                            )}
+                            <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>=</span>
+                            <span style={{ fontSize: '0.92rem', color: 'var(--accent-gold-light)', fontWeight: 900 }}>
+                              최종 체감가 {formatWon(deptEnginePlan.finalPerceived)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.85rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>설계 산출 혜택:</span>
+                            <span style={{ fontSize: '0.82rem', color: '#93c5fd' }}>
+                              제휴카드 청구할인 <strong style={{ color: '#fca5a5', fontSize: '0.98rem' }}>-{formatWon(deptEnginePlan.totalCardDiscount)}</strong>
+                            </span>
+                            <span style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>+</span>
+                            <span style={{ fontSize: '0.82rem', color: '#fde68a' }}>
+                              백화점 G캐시 증정 <strong style={{ color: '#fde68a', fontSize: '0.98rem' }}>+{formatWon(deptEnginePlan.totalGcash)}</strong>
+                              <span style={{ fontSize: '0.72rem', color: '#fef3c7', marginLeft: '6px', background: 'rgba(217, 119, 6, 0.35)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
+                                5년: {formatWon(deptEnginePlan.gcash5Year)}{deptEnginePlan.gcash60Day > 0 ? ` / 60일: ${formatWon(deptEnginePlan.gcash60Day)}` : ''}
+                              </span>
+                            </span>
+                            <span style={{ fontSize: '0.85rem', color: '#cbd5e1', marginLeft: '0.2rem' }}>=</span>
+                            <span style={{ fontSize: '0.92rem', color: 'var(--accent-gold-light)', fontWeight: 900 }}>
+                              총 혜택 {formatWon(deptEnginePlan.totalCardDiscount + deptEnginePlan.totalGcash)}
+                            </span>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={handleApplyDeptEnginePlan}
+                            style={{
+                              padding: '0.6rem 1.1rem',
+                              borderRadius: '8px',
+                              border: 'none',
+                              background: 'linear-gradient(135deg, #d97706, #b45309)',
+                              color: '#fff',
+                              fontSize: '0.84rem',
+                              fontWeight: 900,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                              boxShadow: '0 4px 14px rgba(217, 119, 6, 0.35)'
+                            }}
+                          >
+                            <CheckCircle2 size={16} />
+                            견적서에 자동 반영 (고객용 심플 견적)
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowPosCashierModal(true)}
+                            style={{
+                              padding: '0.6rem 1.1rem',
+                              borderRadius: '8px',
+                              border: '1px solid rgba(56, 189, 248, 0.5)',
+                              background: 'rgba(14, 165, 233, 0.18)',
+                              color: '#38bdf8',
+                              fontSize: '0.84rem',
+                              fontWeight: 900,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.4rem'
+                            }}
+                          >
+                            <Receipt size={16} />
+                            🖨️ 캐셔 POS 결제 지시서 출력
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* 본문: 직원이 볼 수 있는 백화점 & 로드샵 2분할 조건 카드 */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
                   {/* 카드 1: 백화점 결제조건 */}
@@ -4973,7 +7727,7 @@ export default function BenefitCalculator({ onBack }) {
                               transition: 'all 0.15s ease'
                             }}
                           >
-                            적립 (2개월내 사용)
+                            적립 (5년/60일 적립)
                           </button>
                         </div>
                       </div>
@@ -5541,13 +8295,24 @@ export default function BenefitCalculator({ onBack }) {
                         {/* 3행: 전용 서비스 3종 (무상수리 이용금액, 소모품비용, 방문케어비용) */}
                         <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(52, 211, 153, 0.3)', borderRadius: '9px', padding: '0.55rem 0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', alignItems: 'end' }}>
                           <div>
-                            <label style={{ fontSize: '0.71rem', color: '#6ee7b7', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.2rem' }}>
-                              <ShieldCheck size={12} /> 무상수리 이용금액(월)
-                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.2rem', gap: '0.25rem' }}>
+                              <label style={{ fontSize: '0.71rem', color: '#6ee7b7', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem', margin: 0 }}>
+                                <ShieldCheck size={12} /> {item.isMobile ? '무상수리 + 파손보험(월)' : '무상수리 이용금액(월)'}
+                              </label>
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', cursor: 'pointer', fontSize: '0.68rem', color: item.isMobile ? '#38bdf8' : '#94a3b8', userSelect: 'none' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(item.isMobile)}
+                                  onChange={(e) => handleUpdateMixedSubItem(item.id, 'isMobile', e.target.checked)}
+                                  style={{ accentColor: '#38bdf8', cursor: 'pointer', width: '12px', height: '12px' }}
+                                />
+                                모바일
+                              </label>
+                            </div>
                             <MoneyInput
                               value={item.freeRepairFee}
                               onChange={(val) => handleUpdateMixedSubItem(item.id, 'freeRepairFee', val)}
-                              placeholder="월 A/S이용액"
+                              placeholder={item.isMobile ? "월 케어+(파손보험)" : "월 무상수리액"}
                               compact
                               accentColor="#34d399"
                             />
@@ -5624,119 +8389,608 @@ export default function BenefitCalculator({ onBack }) {
               <>
                 {/* 1. 맨 위칸: 선납금 합계 */}
                 <div style={{ marginBottom: '0.9rem' }}>
-                  <label style={labelStyle}>선납금 합계 (선택)</label>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginBottom: '0.3rem' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#e2e8f0' }}>선납금 합계</span>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 500, color: '#64748b' }}>(선택 입력)</span>
+                  </div>
                   <MoneyInput value={subPrepay} onChange={setSubPrepay} accentColor="#93c5fd" compact />
                 </div>
 
-                {/* 2. 두 번째 칸~: 구독료 합계 금액(넓게) + 약정기간(컴팩트) 일원화 목록 & 하단 추가 버튼 */}
-                <div style={{ marginBottom: '0.95rem' }}>
+                {/* 2. 두 번째 칸~: 품목별 통합 카드 (품목명 + 월구독료 + 약정기간 + 모바일체크 + 무상수리 + 케어서비스) */}
+                <div style={{ marginBottom: '1rem' }}>
                   <div
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      marginBottom: '0.4rem',
-                      paddingRight: subPlans.length > 1 ? '2rem' : 0
+                      marginBottom: '0.65rem',
+                      flexWrap: 'wrap',
+                      gap: '0.4rem'
                     }}
                   >
-                    <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'white' }}>
-                      {subInputMode === 'monthly' ? '월 구독료 합계 금액' : '약정 구독료 합계 금액'}
-                    </span>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#93c5fd', width: '82px', textAlign: 'center' }}>
-                      약정기간
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
+                      <span style={{ color: '#93c5fd', fontSize: '0.9rem', fontWeight: 800 }}>
+                        📦 구독 품목 및 전용 서비스 설정
+                      </span>
+                      {subPlans.length > 1 && (
+                        <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>
+                          (총 {subPlans.length}개 품목)
+                        </span>
+                      )}
+                    </div>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.74rem', color: '#a7f3d0', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={includeServiceInFinal}
+                        onChange={(e) => setIncludeServiceInFinal(e.target.checked)}
+                        style={{ accentColor: '#34d399', cursor: 'pointer', width: '13px', height: '13px' }}
+                      />
+                      서비스 혜택 최종 체감가에 차감 반영
+                    </label>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                    {subPlans.map((plan, idx) => (
-                      <div key={plan.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <MoneyInput
-                            value={subInputMode === 'monthly' ? plan.monthlyFee : plan.totalAmount}
-                            onChange={(val) =>
-                              handleUpdateSubPlan(
-                                plan.id,
-                                subInputMode === 'monthly' ? { monthlyFee: val } : { totalAmount: val }
-                              )
-                            }
-                            placeholder={subInputMode === 'monthly' ? (idx === 0 ? '예: 72,000' : '예: 25,000') : '0'}
-                            accentColor="#93c5fd"
-                          />
-                        </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {subPlans.map((plan, idx) => {
+                      const planMonths = Number(plan.months) || 72;
+                      const planMonthly =
+                        subInputMode === 'monthly'
+                          ? Number(plan.monthlyFee) || 0
+                          : Math.round((Number(plan.totalAmount) || 0) / planMonths);
+                      const planGross = planMonthly * planMonths;
+                      const freeRepairTotal = (Number(plan.freeRepairFee) || 0) * planMonths;
+                      const planCareItems = Array.isArray(plan.careItems) ? plan.careItems : [];
+                      const planCareTotal = planCareItems.reduce(
+                        (sum, c) => sum + (Number(c.amount) || 0) * (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1),
+                        0
+                      ) + (Number(plan.careAmount) || 0);
+                      const itemServiceBenefit = freeRepairTotal + planCareTotal;
 
-                        <select
-                          value={plan.months}
-                          onChange={(e) => handleUpdateSubPlan(plan.id, { months: Number(e.target.value) })}
-                          aria-label={`약정기간 선택 ${idx + 1}`}
+                      return (
+                        <div
+                          key={plan.id}
                           style={{
-                            width: '82px',
-                            height: '46px',
-                            flexShrink: 0,
-                            borderRadius: '10px',
-                            background: 'rgba(30, 58, 138, 0.45)',
-                            border: '1px solid rgba(96, 165, 250, 0.55)',
-                            color: 'white',
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            padding: '0 0.35rem',
-                            cursor: 'pointer',
-                            outline: 'none'
+                            background: plan.isMobile ? 'rgba(30, 58, 138, 0.28)' : 'rgba(30, 58, 138, 0.22)',
+                            border: plan.isMobile ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid rgba(96, 165, 250, 0.4)',
+                            borderRadius: '13px',
+                            padding: '0.85rem 0.95rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.65rem',
+                            position: 'relative'
                           }}
                         >
-                          {[72, 60, 48, 36].map((m) => (
-                            <option key={m} value={m} style={{ background: '#0f172a', color: 'white' }}>
-                              {m}개월
-                            </option>
-                          ))}
-                        </select>
+                          {/* 카드 헤더: 품목 번호 배지 + 모바일 배지 + 간이 요약 + 삭제 버튼 */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                              <span
+                                style={{
+                                  background: plan.isMobile ? 'rgba(56, 189, 248, 0.25)' : 'rgba(59, 130, 246, 0.3)',
+                                  border: `1px solid ${plan.isMobile ? '#38bdf8' : '#60a5fa'}`,
+                                  color: plan.isMobile ? '#38bdf8' : '#bfdbfe',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 800,
+                                  padding: '0.22rem 0.55rem',
+                                  borderRadius: '6px'
+                                }}
+                              >
+                                {idx + 1}번 품목
+                              </span>
 
-                        {subPlans.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSubPlan(plan.id)}
-                            title="해당 약정 칸 삭제"
+                              {plan.isMobile && (
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 800,
+                                    color: '#38bdf8',
+                                    background: 'rgba(56, 189, 248, 0.16)',
+                                    border: '1px solid rgba(56, 189, 248, 0.45)',
+                                    padding: '0.15rem 0.45rem',
+                                    borderRadius: '5px'
+                                  }}
+                                >
+                                  📱 모바일
+                                </span>
+                              )}
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
+                                <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>약정총액</span>
+                                <span style={{ fontSize: '0.92rem', color: '#ffffff', fontWeight: 800 }}>{formatWon(planGross)}</span>
+                                {itemServiceBenefit > 0 && (
+                                  <span style={{ fontSize: '0.74rem', color: '#34d399', fontWeight: 700, marginLeft: '0.2rem' }}>
+                                    (혜택 +{formatWon(itemServiceBenefit)})
+                                  </span>
+                                )}
+                              </div>
+
+                              {subPlans.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSubPlan(plan.id)}
+                                  title="이 품목 삭제"
+                                  style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    padding: 0,
+                                    borderRadius: '7px',
+                                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    color: '#fca5a5',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 1) 품목명 입력 (전체 너비로 확장하여 긴 모델명도 깔끔하게 수용) */}
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginBottom: '0.3rem' }}>
+                              <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>품목명</span>
+                              <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>(미입력 시 생략)</span>
+                            </div>
+                            <input
+                              type="text"
+                              value={plan.name || ''}
+                              onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value })}
+                              placeholder="예: 비스포크 AI 콤보 세탁건조기, 갤럭시 S25"
+                              style={{
+                                ...textInputStyle,
+                                padding: '0.45rem 0.65rem',
+                                fontSize: '0.84rem'
+                              }}
+                            />
+                          </div>
+
+                          {/* 2) 월 구독료 + 약정기간 (같은 줄에 나란히 배치 최적화) */}
+                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+                            <div style={{ flex: '1 1 180px', minWidth: '130px' }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginBottom: '0.3rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
+                                  {subInputMode === 'monthly' ? '월 구독료' : '약정 총 구독료'}
+                                </span>
+                                <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>
+                                  {subInputMode === 'monthly' ? '(매월 납부금)' : '(약정 전체 금액)'}
+                                </span>
+                              </div>
+                              <MoneyInput
+                                value={subInputMode === 'monthly' ? plan.monthlyFee : plan.totalAmount}
+                                onChange={(val) =>
+                                  handleUpdateSubPlan(
+                                    plan.id,
+                                    subInputMode === 'monthly' ? { monthlyFee: val } : { totalAmount: val }
+                                  )
+                                }
+                                placeholder={subInputMode === 'monthly' ? (idx === 0 ? '예: 72,000' : '예: 25,000') : '0'}
+                                accentColor="#93c5fd"
+                                compact
+                              />
+                            </div>
+
+                            <div style={{ width: '96px', flexShrink: 0 }}>
+                              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.3rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
+                                  약정기간
+                                </span>
+                              </div>
+                              <select
+                                value={plan.months}
+                                onChange={(e) => handleUpdateSubPlan(plan.id, { months: Number(e.target.value) })}
+                                style={{
+                                  width: '100%',
+                                  height: '38px',
+                                  boxSizing: 'border-box',
+                                  borderRadius: '8px',
+                                  background: 'rgba(15, 23, 42, 0.9)',
+                                  border: '1px solid rgba(96, 165, 250, 0.55)',
+                                  color: 'white',
+                                  fontSize: '0.86rem',
+                                  fontWeight: 800,
+                                  padding: '0 0.35rem',
+                                  cursor: 'pointer',
+                                  outline: 'none',
+                                  textAlign: 'center'
+                                }}
+                              >
+                                {[72, 60, 48, 36].map((m) => (
+                                  <option key={m} value={m} style={{ background: '#0f172a', color: 'white' }}>
+                                    {m}개월
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* 3) 전용 서비스 혜택 (모바일 체크 + 무상수리 약정일치 + 케어서비스 행추가) */}
+                          <div
                             style={{
-                              width: '28px',
-                              height: '46px',
-                              flexShrink: 0,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              borderRadius: '9px',
-                              background: 'rgba(239, 68, 68, 0.12)',
-                              border: '1px solid rgba(248, 113, 113, 0.35)',
-                              color: '#fca5a5',
-                              cursor: 'pointer'
+                              background: plan.isMobile ? 'rgba(56, 189, 248, 0.06)' : 'rgba(16, 185, 129, 0.05)',
+                              border: plan.isMobile ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(52, 211, 153, 0.25)',
+                              borderRadius: '10px',
+                              padding: '0.75rem 0.85rem',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.65rem'
                             }}
                           >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                            {/* 상단 라벨 & 모바일 체크박스 */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <ShieldCheck size={14} style={{ color: plan.isMobile ? '#38bdf8' : '#34d399' }} />
+                                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: plan.isMobile ? '#7dd3fc' : '#a7f3d0' }}>
+                                  {plan.isMobile ? '모바일 파손보험 + 무상수리' : '무상수리 연장 이용료'}
+                                </span>
+                                <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>
+                                  (약정 {plan.months}개월 자동 연동)
+                                </span>
+                              </div>
+
+                              {/* 모바일 체크박스 */}
+                              <label
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  color: plan.isMobile ? '#38bdf8' : '#94a3b8',
+                                  background: plan.isMobile ? 'rgba(56, 189, 248, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                                  border: `1px solid ${plan.isMobile ? '#38bdf8' : 'rgba(255, 255, 255, 0.12)'}`,
+                                  borderRadius: '6px',
+                                  padding: '0.18rem 0.45rem',
+                                  cursor: 'pointer',
+                                  userSelect: 'none',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(plan.isMobile)}
+                                  onChange={(e) => handleUpdateSubPlan(plan.id, { isMobile: e.target.checked })}
+                                  style={{ accentColor: '#38bdf8', cursor: 'pointer', width: '12px', height: '12px' }}
+                                />
+                                모바일
+                              </label>
+                            </div>
+
+                            {/* 무상수리 월 금액 입력 (약정기간 자동 일치 계산) */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <div style={{ flex: '1 1 180px', minWidth: '130px' }}>
+                                <MoneyInput
+                                  value={plan.freeRepairFee}
+                                  onChange={(val) => handleUpdateSubPlan(plan.id, { freeRepairFee: val })}
+                                  placeholder={plan.isMobile ? "월 케어+(파손보험) 금액" : "월 무상수리 이용료 (원)"}
+                                  compact
+                                  accentColor={plan.isMobile ? '#38bdf8' : '#34d399'}
+                                />
+                              </div>
+                              <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                                {freeRepairTotal > 0 ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                    <div style={{ fontSize: '0.88rem', fontWeight: 800, color: plan.isMobile ? '#38bdf8' : '#6ee7b7' }}>
+                                      = {formatWon(freeRepairTotal)} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#a7f3d0' }}>상당</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 500 }}>
+                                      월 {formatWon(plan.freeRepairFee || 0)} × {plan.months}개월
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                                    약정 {plan.months}개월 일치 연동
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* 케어서비스 행추가 섹션: 한 세트당 2줄 배치 최적화 & 타이포그래피 계층화 */}
+                            <div style={{ marginTop: '0.2rem', paddingTop: '0.55rem', borderTop: '1px dashed rgba(52, 211, 153, 0.25)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <Wrench size={13} style={{ color: '#34d399' }} />
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#a7f3d0' }}>
+                                    케어서비스 혜택
+                                  </span>
+                                  <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>
+                                    (주기·횟수·비용 맞춤 설정)
+                                  </span>
+                                </div>
+                                {planCareTotal > 0 && (
+                                  <span style={{ fontSize: '0.82rem', color: '#6ee7b7', fontWeight: 800 }}>
+                                    소계: {formatWon(planCareTotal)} 상당
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* 케어서비스 행 목록: 기본 1칸 노출 (한 세트당 2줄 배치 최적화) */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.45rem' }}>
+                                {planCareItems.map((care, cIdx) => {
+                                  const careCount = care.count !== undefined && care.count !== '' ? Number(care.count) : 1;
+                                  const careAmt = Number(care.amount) || 0;
+                                  const careSubtotal = careCount * careAmt;
+
+                                  return (
+                                    <div
+                                      key={care.id || cIdx}
+                                      style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '0.45rem',
+                                        background: 'rgba(15, 23, 42, 0.75)',
+                                        border: '1px solid rgba(52, 211, 153, 0.35)',
+                                        borderRadius: '8px',
+                                        padding: '0.55rem 0.65rem'
+                                      }}
+                                    >
+                                      {/* 1번째 줄: 종류 (방문케어) + 점검주기 (6,12,36개월) + 삭제 버튼 (글자 크기 축소 및 콤팩트 최적화) */}
+                                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.35rem' }}>
+                                        {/* 번호 배지 */}
+                                        <div style={{ paddingBottom: '0.3rem', flexShrink: 0 }}>
+                                          <span
+                                            style={{
+                                              fontSize: '0.67rem',
+                                              fontWeight: 800,
+                                              color: '#6ee7b7',
+                                              background: 'rgba(52, 211, 153, 0.18)',
+                                              padding: '0.15rem 0.35rem',
+                                              borderRadius: '4px'
+                                            }}
+                                          >
+                                            #{cIdx + 1}
+                                          </span>
+                                        </div>
+
+                                        {/* 종류 */}
+                                        <div style={{ flex: '1.2 1 85px', minWidth: '78px' }}>
+                                          <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.18rem' }}>
+                                            종류
+                                          </label>
+                                          <select
+                                            value={care.type || 'visit'}
+                                            onChange={(e) => handleUpdatePlanCareItem(plan.id, care.id, { type: e.target.value })}
+                                            style={{
+                                              width: '100%',
+                                              height: '30px',
+                                              borderRadius: '6px',
+                                              background: '#0f172a',
+                                              border: '1px solid rgba(52, 211, 153, 0.45)',
+                                              color: '#f8fafc',
+                                              fontSize: '0.72rem',
+                                              fontWeight: 600,
+                                              padding: '0 0.35rem',
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            <option value="visit">방문케어</option>
+                                            <option value="self">셀프케어</option>
+                                            <option value="consumable">소모품</option>
+                                            <option value="custom">직접입력</option>
+                                          </select>
+                                        </div>
+
+                                        {/* 점검주기 */}
+                                        <div style={{ width: '78px', flexShrink: 0 }}>
+                                          <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.18rem', textAlign: 'center' }}>
+                                            점검주기
+                                          </label>
+                                          <select
+                                            value={care.cycle || 12}
+                                            onChange={(e) => handleUpdatePlanCareItem(plan.id, care.id, { cycle: Number(e.target.value) })}
+                                            style={{
+                                              width: '100%',
+                                              height: '30px',
+                                              borderRadius: '6px',
+                                              background: '#0f172a',
+                                              border: '1px solid rgba(52, 211, 153, 0.45)',
+                                              color: '#a7f3d0',
+                                              fontSize: '0.72rem',
+                                              fontWeight: 600,
+                                              padding: '0 0.2rem',
+                                              cursor: 'pointer',
+                                              textAlign: 'center'
+                                            }}
+                                          >
+                                            <option value={6}>6개월</option>
+                                            <option value={12}>12개월</option>
+                                            <option value={36}>36개월</option>
+                                          </select>
+                                        </div>
+
+                                        {/* 삭제 버튼 (슬림 콤팩트 최적화) */}
+                                        <div style={{ flexShrink: 0 }}>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemovePlanCareItem(plan.id, care.id)}
+                                            title="이 케어서비스 항목 삭제"
+                                            style={{
+                                              width: '28px',
+                                              height: '30px',
+                                              padding: 0,
+                                              borderRadius: '6px',
+                                              border: '1px solid rgba(239, 68, 68, 0.4)',
+                                              background: 'rgba(239, 68, 68, 0.12)',
+                                              color: '#fca5a5',
+                                              cursor: 'pointer',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              transition: 'all 0.15s ease'
+                                            }}
+                                          >
+                                            <Trash2 size={12} />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* 직접입력 명칭 필드 (custom 선택 시) */}
+                                      {care.type === 'custom' && (
+                                        <div style={{ width: '100%' }}>
+                                          <label style={{ display: 'block', fontSize: '0.67rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.2rem' }}>
+                                            직접입력 서비스 명칭
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={care.customName || ''}
+                                            onChange={(e) => handleUpdatePlanCareItem(plan.id, care.id, { customName: e.target.value })}
+                                            placeholder="예: 필터 교체 서비스, 안심 점검 케어"
+                                            style={{
+                                              ...textInputStyle,
+                                              padding: '0.35rem 0.55rem',
+                                              fontSize: '0.8rem'
+                                            }}
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* 2번째 줄: 횟수 (축소 최적화) + 회당금액 (공간 확장 최적화) */}
+                                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.45rem' }}>
+                                        {/* 횟수 (1~2자리 숫자에 맞춰 58px로 축소) */}
+                                        <div style={{ width: '58px', flexShrink: 0 }}>
+                                          <label style={{ display: 'block', fontSize: '0.67rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.2rem', textAlign: 'center' }}>
+                                            횟수
+                                          </label>
+                                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                            <input
+                                              type="text"
+                                              inputMode="numeric"
+                                              value={care.count !== undefined ? care.count : 1}
+                                              onChange={(e) => {
+                                                const raw = e.target.value.replace(/[^0-9]/g, '');
+                                                handleUpdatePlanCareItem(plan.id, care.id, { count: raw === '' ? '' : parseInt(raw, 10) });
+                                              }}
+                                              placeholder="1"
+                                              title="이용 횟수"
+                                              style={{
+                                                width: '100%',
+                                                height: '34px',
+                                                borderRadius: '6px',
+                                                background: '#0f172a',
+                                                border: '1px solid rgba(52, 211, 153, 0.45)',
+                                                color: '#ffffff',
+                                                fontSize: '0.86rem',
+                                                fontWeight: 800,
+                                                padding: '0 1.15rem 0 0.35rem',
+                                                textAlign: 'right',
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                              }}
+                                            />
+                                            <span style={{ position: 'absolute', right: '0.35rem', fontSize: '0.72rem', color: '#94a3b8', pointerEvents: 'none', fontWeight: 600 }}>
+                                              회
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        {/* 곱하기 기호 */}
+                                        <div style={{ paddingBottom: '0.45rem', fontSize: '0.85rem', color: '#64748b', fontWeight: 700, flexShrink: 0 }}>
+                                          ×
+                                        </div>
+
+                                        {/* 회당금액 (남은 전체 폭을 넉넉하게 사용하도록 확장) */}
+                                        <div style={{ flex: 1, minWidth: '130px' }}>
+                                          <label style={{ display: 'block', fontSize: '0.67rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.2rem' }}>
+                                            회당금액
+                                          </label>
+                                          <MoneyInput
+                                            value={care.amount}
+                                            onChange={(val) => handleUpdatePlanCareItem(plan.id, care.id, { amount: val })}
+                                            placeholder="회당 금액 (원)"
+                                            compact
+                                            accentColor="#34d399"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* 합계는 칸없이 아래에 보여주기만 하면 될 것 같다 */}
+                                      {careSubtotal > 0 && (
+                                        <div
+                                          style={{
+                                            display: 'flex',
+                                            justifyContent: 'flex-end',
+                                            alignItems: 'baseline',
+                                            gap: '0.3rem',
+                                            paddingTop: '0.2rem'
+                                          }}
+                                        >
+                                          <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>
+                                            합계:
+                                          </span>
+                                          <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#34d399' }}>
+                                            {formatWon(careSubtotal)}
+                                          </span>
+                                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#a7f3d0' }}>
+                                            상당
+                                          </span>
+                                          {careCount > 1 && (
+                                            <span style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 500, marginLeft: '0.25rem' }}>
+                                              ({careCount}회 × {formatWon(careAmt)})
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* + 케어서비스 추가 버튼 */}
+                              <button
+                                type="button"
+                                onClick={() => handleAddPlanCareItem(plan.id)}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.4rem 0.65rem',
+                                  borderRadius: '7px',
+                                  border: '1px dashed rgba(52, 211, 153, 0.55)',
+                                  background: 'rgba(16, 185, 129, 0.08)',
+                                  color: '#6ee7b7',
+                                  fontSize: '0.77rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '0.3rem',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                <Plus size={13} /> 케어서비스 추가
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <button
                     type="button"
                     onClick={handleAddSubPlan}
                     style={{
-                      marginTop: '0.55rem',
+                      marginTop: '0.65rem',
                       width: '100%',
-                      padding: '0.48rem 0.75rem',
-                      borderRadius: '9px',
+                      padding: '0.55rem 0.85rem',
+                      borderRadius: '10px',
                       border: '1px dashed rgba(96, 165, 250, 0.55)',
                       background: 'rgba(59, 130, 246, 0.1)',
                       color: '#93c5fd',
-                      fontSize: '0.82rem',
+                      fontSize: '0.84rem',
                       fontWeight: 700,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '0.35rem'
+                      gap: '0.35rem',
+                      transition: 'all 0.15s ease'
                     }}
                   >
-                    <Plus size={15} /> 약정기간 · 구독료 칸 추가
+                    <Plus size={16} /> 구독 품목 추가 (2번, 3번...)
                   </button>
                 </div>
               </>
@@ -5825,9 +9079,9 @@ export default function BenefitCalculator({ onBack }) {
                             background: 'rgba(59, 130, 246, 0.12)',
                             border: '1px solid rgba(96, 165, 250, 0.35)',
                             borderRadius: '7px',
-                            padding: '0.4rem 0.65rem',
+                            padding: '0.45rem 0.65rem',
                             flexWrap: 'wrap',
-                            gap: '0.4rem'
+                            gap: '0.5rem'
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -5838,8 +9092,76 @@ export default function BenefitCalculator({ onBack }) {
                               전체 구독 모델 자동 반영 (총 {(isMixedMode ? validMixedSubItems : activePlans).length}개 모델 합산)
                             </span>
                           </div>
-                          <div style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 700 }}>
-                            약정기간: {isMultiPeriod ? `${periodSummaryLabel} 다구간 자동 계산` : `${subMonths}개월`}
+
+                          {/* 제휴카드 1 약정개월수 직접 입력 & 프리셋 */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.74rem', color: '#93c5fd', fontWeight: 800 }}>약정기간:</span>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <input
+                                type="number"
+                                min="1"
+                                max="120"
+                                value={cardItem.months ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10) || 0);
+                                  handleUpdateCard(cardItem.id, { months: val });
+                                }}
+                                placeholder={isMultiPeriod ? '자동' : String(subMonths)}
+                                title="제휴카드 약정개월수 직접 입력 (비워두면 구독기간 연동)"
+                                style={{
+                                  width: '56px',
+                                  padding: '0.22rem 0.4rem',
+                                  borderRadius: '6px',
+                                  background: '#0f172a',
+                                  border: cardItem.months ? '1.5px solid #38bdf8' : '1px solid rgba(96, 165, 250, 0.4)',
+                                  color: cardItem.months ? '#38bdf8' : '#cbd5e1',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 800,
+                                  textAlign: 'center'
+                                }}
+                              />
+                              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>개월</span>
+                            </div>
+                            <div style={{ display: 'inline-flex', gap: '0.2rem' }}>
+                              {[72, 60, 48, 36].map((m) => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => handleUpdateCard(cardItem.id, { months: cardItem.months === m ? null : m })}
+                                  style={{
+                                    padding: '0.18rem 0.45rem',
+                                    borderRadius: '4px',
+                                    border: cardItem.months === m ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.14)',
+                                    background: cardItem.months === m ? 'rgba(56, 189, 248, 0.28)' : 'rgba(255,255,255,0.06)',
+                                    color: cardItem.months === m ? '#38bdf8' : '#cbd5e1',
+                                    fontSize: '0.71rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {m}
+                                </button>
+                              ))}
+                              {cardItem.months && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateCard(cardItem.id, { months: null })}
+                                  title="구독 기본기간 자동 연동으로 초기화"
+                                  style={{
+                                    padding: '0.18rem 0.42rem',
+                                    borderRadius: '4px',
+                                    border: '1px solid rgba(248, 113, 113, 0.4)',
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    color: '#fca5a5',
+                                    fontSize: '0.69rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  자동
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -5940,26 +9262,74 @@ export default function BenefitCalculator({ onBack }) {
                             )}
                           </select>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <span style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>약정기간:</span>
-                            <select
-                              value={cardItem.months || (isMixedMode ? (mixedSubItems[cardItem.targetModelIndex !== undefined ? cardItem.targetModelIndex : cardIdx]?.months || 72) : 72)}
-                              onChange={(e) => handleUpdateCard(cardItem.id, { months: Number(e.target.value) })}
-                              style={{
-                                padding: '0.18rem 0.4rem',
-                                borderRadius: '6px',
-                                background: '#0f172a',
-                                border: '1px solid #60a5fa',
-                                color: 'white',
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                cursor: 'pointer'
-                              }}
-                            >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700 }}>약정기간:</span>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <input
+                                type="number"
+                                min="1"
+                                max="120"
+                                value={cardItem.months ?? ''}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10) || 0);
+                                  handleUpdateCard(cardItem.id, { months: val });
+                                }}
+                                placeholder={String(isMixedMode ? (mixedSubItems[cardItem.targetModelIndex !== undefined ? cardItem.targetModelIndex : cardIdx]?.months || 72) : 72)}
+                                title="제휴카드 약정개월수 직접 입력 (비워두면 모델기간 연동)"
+                                style={{
+                                  width: '54px',
+                                  padding: '0.2rem 0.35rem',
+                                  borderRadius: '6px',
+                                  background: '#0f172a',
+                                  border: cardItem.months ? '1.5px solid #60a5fa' : '1px solid rgba(255,255,255,0.2)',
+                                  color: cardItem.months ? '#93c5fd' : '#cbd5e1',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 800,
+                                  textAlign: 'center'
+                                }}
+                              />
+                              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>개월</span>
+                            </div>
+                            <div style={{ display: 'inline-flex', gap: '0.2rem' }}>
                               {[72, 60, 48, 36].map((m) => (
-                                <option key={m} value={m}>{m}개월</option>
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => handleUpdateCard(cardItem.id, { months: cardItem.months === m ? null : m })}
+                                  style={{
+                                    padding: '0.16rem 0.4rem',
+                                    borderRadius: '4px',
+                                    border: cardItem.months === m ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.12)',
+                                    background: cardItem.months === m ? 'rgba(59, 130, 246, 0.28)' : 'rgba(255,255,255,0.05)',
+                                    color: cardItem.months === m ? '#93c5fd' : '#cbd5e1',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {m}
+                                </button>
                               ))}
-                            </select>
+                              {cardItem.months && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateCard(cardItem.id, { months: null })}
+                                  title="모델 기본기간 자동 연동으로 초기화"
+                                  style={{
+                                    padding: '0.16rem 0.38rem',
+                                    borderRadius: '4px',
+                                    border: '1px solid rgba(248, 113, 113, 0.4)',
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    color: '#fca5a5',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  자동
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )}
@@ -6128,7 +9498,7 @@ export default function BenefitCalculator({ onBack }) {
                               2·3. 구간별 필요 실적 &amp; 월 청구할인 설정
                             </span>
                             <span style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 600 }}>
-                              약정기간 다구간 자동 계산
+                              {cardItem.months ? `직접 입력 (${cardItem.months}개월 적용)` : '약정기간 다구간 자동 계산'}
                             </span>
                           </div>
 
@@ -6468,437 +9838,91 @@ export default function BenefitCalculator({ onBack }) {
               )}
             </div>
 
-            {/* 삼성AI구독 혜택(캐시백) - 복합 모드일 때는 좌측 일반구매 쪽에 배치되므로 숨김 */}
+            {/* 삼성AI구독 혜택(캐시백) - 특별 강조 UI */}
             {!isMixedMode && (
-              <div style={{ marginBottom: '0.95rem' }}>
-                <label style={{ ...labelStyle, fontSize: '0.9rem', color: 'white' }}>
-                  삼성AI구독 혜택(캐시백)
-                </label>
-                <MoneyInput value={subPurchaseBenefit} onChange={setSubPurchaseBenefit} compact accentColor="#93c5fd" />
-              </div>
-            )}
+              <div
+                style={{
+                  marginBottom: '1rem',
+                  padding: '0.9rem 1.05rem',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, rgba(30, 58, 138, 0.35) 0%, rgba(14, 165, 233, 0.2) 100%)',
+                  border: '2px solid #38bdf8',
+                  boxShadow: '0 0 18px rgba(56, 189, 248, 0.25)',
+                  position: 'relative'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.55rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                    <Sparkles size={18} color="#fde68a" />
+                    <label style={{ ...labelStyle, fontSize: '0.96rem', fontWeight: 900, color: '#f0f9ff', marginBottom: 0 }}>
+                      🎁 삼성AI구독 혜택 (캐시백,차차월 5~7일)
+                    </label>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: '5px', background: 'rgba(56, 189, 248, 0.3)', color: '#38bdf8', border: '1px solid #38bdf8' }}>
+                      ★ 고객 체감가 직접 차감 혜택
+                    </span>
+                  </div>
+                  {Number(subPurchaseBenefit) > 0 && (
+                    <span style={{ fontSize: '0.86rem', fontWeight: 900, color: '#67e8f9' }}>
+                      - {formatWon(subPurchaseBenefit)} 즉시 차감
+                    </span>
+                  )}
+                </div>
 
-            {/* 구독 전용 서비스 혜택 금액: 맨 위칸(무상서비스 합계) + 두 번째 칸(케어서비스 합계) (비교 모드 전용, 복합 모드는 모델별로 설정) */}
-            {!isMixedMode && (
-            <div
-              style={{
-                padding: '0.9rem',
-                borderRadius: '12px',
-                background: 'rgba(16, 185, 129, 0.07)',
-                border: '1px solid rgba(52, 211, 153, 0.3)'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.4rem' }}>
-                <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#6ee7b7' }}>
-                  구독 전용 서비스 혜택 금액
-                </span>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.77rem', color: '#a7f3d0', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={includeServiceInFinal}
-                    onChange={(e) => setIncludeServiceInFinal(e.target.checked)}
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <MoneyInput
+                    value={subPurchaseBenefit}
+                    onChange={setSubPurchaseBenefit}
+                    placeholder="삼성AI구독 캐시백 금액 입력 (차차월 5~7일 지급, 예: 200,000)"
+                    compact
+                    accentColor="#38bdf8"
                   />
-                  최종 체감가에 차감 반영
-                </label>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                {/* 1) 무상 A/S 연장 이용료(혜택) - 1번 2900원 72개월, 2번 1900원 60개월 ... 간소화 입력 */}
-                <div
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.65)',
-                    border: '1px solid rgba(52, 211, 153, 0.35)',
-                    borderRadius: '12px',
-                    padding: '0.85rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.4rem' }}>
-                    <label style={{ ...labelStyle, color: '#d1fae5', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0, fontWeight: 700, fontSize: '0.88rem' }}>
-                      <ShieldCheck size={15} style={{ color: '#34d399' }} /> 무상 A/S 연장 이용료(혜택)
-                    </label>
-                    <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#6ee7b7' }}>
-                      총 혜택 합계: - {formatWon(subFreeServiceAmount)}
-                      {validFreeServiceCount > 0 && ` (총 ${validFreeServiceCount}개 품목 · ${totalFreeServiceQuantity}대)`}
-                    </span>
-                  </div>
-
-                  {/* 품목별 목록 (1번 금액 x 대수 x 개월수 ...) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {subFreeServiceItems.map((item, idx) => {
-                      const itemQty = item.quantity === '' ? 1 : Number(item.quantity) || 1;
-                      const itemTotal = (Number(item.monthlyFee) || 0) * itemQty * (Number(item.months) || 72);
-                      return (
-                        <div
-                          key={item.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            background: 'rgba(255, 255, 255, 0.04)',
-                            border: '1px solid rgba(52, 211, 153, 0.2)',
-                            borderRadius: '8px',
-                            padding: '0.45rem 0.65rem',
-                            flexWrap: 'wrap'
-                          }}
-                        >
-                          {/* 품목 번호 배지 */}
-                          <span
-                            style={{
-                              background: 'rgba(52, 211, 153, 0.2)',
-                              border: '1px solid rgba(52, 211, 153, 0.45)',
-                              color: '#6ee7b7',
-                              fontSize: '0.76rem',
-                              fontWeight: 800,
-                              padding: '0.2rem 0.55rem',
-                              borderRadius: '6px',
-                              flexShrink: 0
-                            }}
-                          >
-                            {idx + 1}번
-                          </span>
-
-                          {/* 월 이용료 입력 */}
-                          <div style={{ flex: '1 1 110px', minWidth: '105px' }}>
-                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={item.monthlyFee ? Number(item.monthlyFee).toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const raw = e.target.value.replace(/[^0-9]/g, '');
-                                  handleUpdateFreeServiceItem(item.id, 'monthlyFee', raw ? parseInt(raw, 10) : 0);
-                                }}
-                                placeholder="월 금액 (예: 2,900)"
-                                style={{
-                                  ...textInputStyle,
-                                  padding: '0.45rem 1.6rem 0.45rem 0.65rem',
-                                  fontSize: '0.86rem',
-                                  textAlign: 'right'
-                                }}
-                              />
-                              <span style={{ position: 'absolute', right: '0.55rem', color: '#94a3b8', fontSize: '0.76rem', pointerEvents: 'none' }}>
-                                원
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* 곱하기 기호 × */}
-                          <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0 }}>×</span>
-
-                          {/* 대수 입력 */}
-                          <div style={{ width: '75px', flexShrink: 0 }}>
-                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={item.quantity !== undefined ? item.quantity : 1}
-                                onChange={(e) => {
-                                  const raw = e.target.value.replace(/[^0-9]/g, '');
-                                  handleUpdateFreeServiceItem(item.id, 'quantity', raw === '' ? '' : parseInt(raw, 10));
-                                }}
-                                placeholder="1"
-                                style={{
-                                  ...textInputStyle,
-                                  padding: '0.45rem 1.4rem 0.45rem 0.5rem',
-                                  fontSize: '0.86rem',
-                                  textAlign: 'right'
-                                }}
-                              />
-                              <span style={{ position: 'absolute', right: '0.45rem', color: '#94a3b8', fontSize: '0.76rem', pointerEvents: 'none' }}>
-                                대
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* 곱하기 기호 × */}
-                          <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0 }}>×</span>
-
-                          {/* 약정 개월수 선택/입력 */}
-                          <div style={{ width: '95px', flexShrink: 0 }}>
-                            <select
-                              value={item.months || 72}
-                              onChange={(e) => handleUpdateFreeServiceItem(item.id, 'months', parseInt(e.target.value, 10))}
-                              style={{
-                                ...textInputStyle,
-                                padding: '0.45rem 0.5rem',
-                                fontSize: '0.86rem',
-                                background: '#0f172a',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              <option value="72">72개월</option>
-                              <option value="60">60개월</option>
-                              <option value="48">48개월</option>
-                              <option value="36">36개월</option>
-                            </select>
-                          </div>
-
-                          {/* 계산 금액 라벨 */}
-                          <div style={{ minWidth: '95px', textAlign: 'right', fontSize: '0.8rem', color: '#a7f3d0', fontWeight: 700, flexShrink: 0 }}>
-                            = {formatWon(itemTotal)}
-                          </div>
-
-                          {/* 삭제 버튼 */}
-                          {subFreeServiceItems.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveFreeServiceItem(item.id)}
-                              title="이 품목 삭제"
-                              style={{
-                                background: 'rgba(239, 68, 68, 0.12)',
-                                border: '1px solid rgba(239, 68, 68, 0.3)',
-                                color: '#fca5a5',
-                                borderRadius: '6px',
-                                padding: '0.35rem 0.45rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0
-                              }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* 품목 추가 버튼 */}
-                  <button
-                    type="button"
-                    onClick={handleAddFreeServiceItem}
-                    style={{
-                      marginTop: '0.55rem',
-                      width: '100%',
-                      padding: '0.45rem 0.75rem',
-                      borderRadius: '8px',
-                      border: '1px dashed rgba(52, 211, 153, 0.55)',
-                      background: 'rgba(16, 185, 129, 0.08)',
-                      color: '#6ee7b7',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.35rem'
-                    }}
-                  >
-                    <Plus size={14} /> 무상 A/S 연장 품목 추가 (2번, 3번...)
-                  </button>
                 </div>
-                {/* 2) 케어서비스 혜택(방문관리·소모품) - 1번 소모품비용, 2번 방문케어 세부설정 */}
-                <div
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.65)',
-                    border: '1px solid rgba(52, 211, 153, 0.35)',
-                    borderRadius: '12px',
-                    padding: '0.85rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.4rem' }}>
-                    <label style={{ ...labelStyle, color: '#d1fae5', display: 'flex', alignItems: 'center', gap: '0.35rem', margin: 0, fontWeight: 700, fontSize: '0.88rem' }}>
-                      <Wrench size={15} style={{ color: '#34d399' }} /> 케어서비스 혜택(방문관리·소모품)
-                    </label>
-                    <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#6ee7b7' }}>
-                      총 혜택 합계: - {formatWon(subCareServiceAmount)}
-                      {validCareServiceCount > 0 && ` (총 ${validCareServiceCount}개 항목)`}
-                    </span>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>
+                    ※ 구독 가입 시 지급되는 현금성 캐시백(차차월 5~7일 지급) 혜택을 입력하시면 고객 체감가에서 즉시 차감됩니다.
+                  </span>
+                  <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                    {[100000, 200000, 300000, 500000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setSubPurchaseBenefit((prev) => (Number(prev) || 0) + amt)}
+                        style={{
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '5px',
+                          border: '1px solid rgba(56, 189, 248, 0.45)',
+                          background: 'rgba(56, 189, 248, 0.15)',
+                          color: '#bae6fd',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        +{amt / 10000}만
+                      </button>
+                    ))}
+                    {Number(subPurchaseBenefit) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSubPurchaseBenefit(0)}
+                        style={{
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '5px',
+                          border: '1px solid rgba(248, 113, 113, 0.45)',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#fca5a5',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        초기화
+                      </button>
+                    )}
                   </div>
-
-                  {/* 케어서비스 항목 목록 (1번 소모품비용 갯수, 2번 방문케어 횟수 ...) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {subCareServiceItems.map((item, idx) => {
-                      const itemUnit = item.unit || (item.name?.includes('소모품') ? '개' : '회');
-                      const itemTotal = (Number(item.amount) || 0) * (Number(item.count) || 1);
-                      return (
-                        <div
-                          key={item.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.45rem',
-                            background: 'rgba(255, 255, 255, 0.04)',
-                            border: '1px solid rgba(52, 211, 153, 0.2)',
-                            borderRadius: '8px',
-                            padding: '0.45rem 0.65rem',
-                            flexWrap: 'wrap'
-                          }}
-                        >
-                          {/* 번호 배지 */}
-                          <span
-                            style={{
-                              background: 'rgba(52, 211, 153, 0.2)',
-                              border: '1px solid rgba(52, 211, 153, 0.45)',
-                              color: '#6ee7b7',
-                              fontSize: '0.76rem',
-                              fontWeight: 800,
-                              padding: '0.2rem 0.55rem',
-                              borderRadius: '6px',
-                              flexShrink: 0
-                            }}
-                          >
-                            {idx + 1}번
-                          </span>
-
-                          {/* 항목명 입력 (기본: 소모품비용, 방문케어) */}
-                          <div style={{ flex: '1 1 100px', minWidth: '90px' }}>
-                            <input
-                              type="text"
-                              value={item.name}
-                              onChange={(e) => handleUpdateCareServiceItem(item.id, 'name', e.target.value)}
-                              placeholder="항목명"
-                              style={{
-                                ...textInputStyle,
-                                padding: '0.45rem 0.65rem',
-                                fontSize: '0.85rem',
-                                color: '#e2e8f0',
-                                fontWeight: 600
-                              }}
-                            />
-                          </div>
-
-                          {/* 금액 (단가) 입력 */}
-                          <div style={{ flex: '1.2 1 115px', minWidth: '105px' }}>
-                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={item.amount ? Number(item.amount).toLocaleString() : ''}
-                                onChange={(e) => {
-                                  const raw = e.target.value.replace(/[^0-9]/g, '');
-                                  handleUpdateCareServiceItem(item.id, 'amount', raw ? parseInt(raw, 10) : 0);
-                                }}
-                                placeholder="금액 (예: 50,000)"
-                                style={{
-                                  ...textInputStyle,
-                                  padding: '0.45rem 1.6rem 0.45rem 0.65rem',
-                                  fontSize: '0.85rem',
-                                  textAlign: 'right',
-                                  color: '#a7f3d0',
-                                  fontWeight: 700
-                                }}
-                              />
-                              <span
-                                style={{
-                                  position: 'absolute',
-                                  right: '0.55rem',
-                                  fontSize: '0.78rem',
-                                  color: '#94a3b8',
-                                  pointerEvents: 'none'
-                                }}
-                              >
-                                원
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* 갯수 / 횟수 입력 */}
-                          <div style={{ width: '82px', flexShrink: 0 }}>
-                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={item.count !== undefined ? item.count : 1}
-                                onChange={(e) => {
-                                  const raw = e.target.value.replace(/[^0-9]/g, '');
-                                  handleUpdateCareServiceItem(item.id, 'count', raw ? parseInt(raw, 10) : '');
-                                }}
-                                placeholder="1"
-                                title={itemUnit === '개' ? '소모품 갯수' : '방문케어 횟수'}
-                                style={{
-                                  ...textInputStyle,
-                                  padding: '0.45rem 1.6rem 0.45rem 0.5rem',
-                                  fontSize: '0.85rem',
-                                  textAlign: 'center',
-                                  color: '#e2e8f0',
-                                  fontWeight: 700
-                                }}
-                              />
-                              <span
-                                style={{
-                                  position: 'absolute',
-                                  right: '0.5rem',
-                                  fontSize: '0.78rem',
-                                  color: '#34d399',
-                                  fontWeight: 700,
-                                  pointerEvents: 'none'
-                                }}
-                              >
-                                {itemUnit}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* 계산 금액 라벨 */}
-                          <div
-                            style={{
-                              minWidth: '95px',
-                              textAlign: 'right',
-                              fontSize: '0.82rem',
-                              color: '#a7f3d0',
-                              fontWeight: 700,
-                              flexShrink: 0
-                            }}
-                          >
-                            = {formatWon(itemTotal)}
-                          </div>
-
-                          {/* 삭제 버튼 */}
-                          {subCareServiceItems.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveCareServiceItem(item.id)}
-                              title="이 항목 삭제"
-                              style={{
-                                background: 'rgba(239, 68, 68, 0.12)',
-                                border: '1px solid rgba(239, 68, 68, 0.3)',
-                                color: '#fca5a5',
-                                borderRadius: '6px',
-                                padding: '0.35rem 0.45rem',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0
-                              }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* 항목 추가 버튼 */}
-                  <button
-                    type="button"
-                    onClick={handleAddCareServiceItem}
-                    style={{
-                      marginTop: '0.55rem',
-                      width: '100%',
-                      padding: '0.45rem 0.75rem',
-                      borderRadius: '8px',
-                      border: '1px dashed rgba(52, 211, 153, 0.55)',
-                      background: 'rgba(16, 185, 129, 0.08)',
-                      color: '#6ee7b7',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.35rem'
-                    }}
-                  >
-                    <Plus size={14} /> 케어서비스 항목 추가 (3번, 4번...)
-                  </button>
                 </div>
               </div>
-            </div>
             )}
           </div>
 
@@ -6929,35 +9953,105 @@ export default function BenefitCalculator({ onBack }) {
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.45rem', color: '#cbd5e1' }}>
-                  <span>총 혜택 합계 (할인 + 서비스)</span>
+                  <span>총 할인 합계</span>
                   <strong style={{ color: '#93c5fd' }}>- {formatWon(mixedSubOnlyDiscount)}</strong>
                 </div>
+                {includeServiceInFinal && mixedSubServiceBenefit > 0 && (
+                  (mixedApplianceRepairTotal > 0 && mixedMobileRepairTotal > 0) ? (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.81rem', marginBottom: '0.22rem', color: '#6ee7b7' }}>
+                        <span>• 무상수리 연장 (가전)</span>
+                        <strong>{formatWon(mixedApplianceRepairTotal)} 상당</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.81rem', marginBottom: '0.22rem', color: '#6ee7b7' }}>
+                        <span>• 모바일 무상수리+파손보험</span>
+                        <strong>{formatWon(mixedMobileRepairTotal)} 상당</strong>
+                      </div>
+                      {mixedSubCareTotal > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.81rem', marginBottom: '0.45rem', color: '#6ee7b7' }}>
+                          <span>• 케어서비스 혜택</span>
+                          <strong>{formatWon(mixedSubCareTotal)} 상당</strong>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.81rem', marginBottom: '0.45rem', color: '#6ee7b7' }}>
+                      <span>무상·케어 서비스 혜택 {mixedMobileRepairTotal > 0 ? '(무상수리+파손보험)' : '(체감가 반영)'}</span>
+                      <strong>{formatWon(mixedSubServiceBenefit)} 상당</strong>
+                    </div>
+                  )
+                )}
               </>
             ) : isMultiPeriod ? (
               subSegments.map((seg, idx) => (
                 <div
                   key={seg.endMonth}
-                  style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.24rem', color: '#cbd5e1' }}
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', marginBottom: '0.24rem' }}
                 >
-                  <span>
-                    {idx === 0
-                      ? `${seg.duration}개월간 월 실납부액 (1~${seg.endMonth}개월)`
-                      : `나머지 ${seg.duration}개월 월 실납부액 (${seg.startMonth}~${seg.endMonth}개월)`}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <strong style={{ color: '#f8fafc', fontWeight: 800 }}>
+                      {idx === 0
+                        ? `${seg.duration}개월간 월 실납부액`
+                        : `나머지 ${seg.duration}개월 월 실납부액`}
+                    </strong>
+                    <span style={{ fontSize: '0.70rem', color: '#94a3b8', fontWeight: 500 }}>
+                      ({idx === 0 ? `1~${seg.endMonth}개월` : `${seg.startMonth}~${seg.endMonth}개월`})
+                    </span>
                   </span>
-                  <strong style={{ color: 'white' }}>월 {formatWon(seg.netMonthly)}</strong>
+                  <strong style={{ color: 'white', fontSize: '0.94rem', fontWeight: 900 }}>월 {formatWon(seg.netMonthly)}</strong>
                 </div>
               ))
             ) : (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.28rem', color: '#cbd5e1' }}>
-                <span>제휴카드 적용 월 실납부액</span>
-                <strong style={{ color: 'white' }}>월 {formatWon(subMonthlyAfterCard)}</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.86rem', marginBottom: '0.28rem' }}>
+                <strong style={{ color: '#f8fafc', fontWeight: 800 }}>제휴카드 적용 월 실납부액</strong>
+                <strong style={{ color: 'white', fontSize: '0.94rem', fontWeight: 900 }}>월 {formatWon(subMonthlyAfterCard)}</strong>
               </div>
             )}
             {!isMixedMode && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.45rem', color: '#cbd5e1' }}>
-                <span>총 혜택 합계 (할인·혜택 + 서비스)</span>
-                <strong style={{ color: '#93c5fd' }}>- {formatWon(subTotalBenefitSum)}</strong>
-              </div>
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.86rem', marginBottom: '0.45rem', color: '#cbd5e1' }}>
+                  <strong style={{ color: '#cbd5e1', fontWeight: 700 }}>총 할인 합계</strong>
+                  <strong style={{ color: '#93c5fd', fontSize: '0.94rem', fontWeight: 900 }}>- {formatWon(subTotalBenefitSum)}</strong>
+                </div>
+                {includeServiceInFinal && subServiceTotal > 0 && (
+                  isCombinedFreeService ? (
+                    <>
+                      {applianceFreeServiceAmount > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.81rem', marginBottom: '0.22rem' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <strong style={{ color: '#6ee7b7', fontWeight: 800 }}>• 무상수리 연장</strong>
+                            <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 500 }}>(가전 {applianceFreeServiceQuantity}대)</span>
+                          </span>
+                          <strong style={{ color: '#6ee7b7', fontWeight: 800 }}>{formatWon(applianceFreeServiceAmount)} 상당</strong>
+                        </div>
+                      )}
+                      {mobileFreeServiceAmount > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.81rem', marginBottom: '0.22rem' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <strong style={{ color: '#38bdf8', fontWeight: 800 }}>• 모바일 무상수리+파손보험</strong>
+                            <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 500 }}>({mobileFreeServiceQuantity}대)</span>
+                          </span>
+                          <strong style={{ color: '#38bdf8', fontWeight: 800 }}>{formatWon(mobileFreeServiceAmount)} 상당</strong>
+                        </div>
+                      )}
+                      {subCareServiceAmount > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.81rem', marginBottom: '0.45rem' }}>
+                          <strong style={{ color: '#6ee7b7', fontWeight: 800 }}>• 케어서비스 혜택</strong>
+                          <strong style={{ color: '#6ee7b7', fontWeight: 800 }}>{formatWon(subCareServiceAmount)} 상당</strong>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.81rem', marginBottom: '0.45rem' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <strong style={{ color: '#6ee7b7', fontWeight: 800 }}>무상·케어 서비스 혜택</strong>
+                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 500 }}>{hasAnyFreeServiceMobile ? '(무상수리+파손보험)' : '(체감가 반영)'}</span>
+                      </span>
+                      <strong style={{ color: '#6ee7b7', fontWeight: 800 }}>{formatWon(subServiceTotal)} 상당</strong>
+                    </div>
+                  )
+                )}
+              </>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.12)' }}>
               <span style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.25 }}>
@@ -7423,7 +10517,7 @@ export default function BenefitCalculator({ onBack }) {
                       color: 'white'
                     }}
                   >
-                    총 혜택 - {formatWon(mixedGrandBenefit)} ({mixedGrandBenefitRate}%)
+                    총 할인 합계 - {formatWon(mixedGrandBenefit)} ({mixedGrandBenefitRate}%)
                   </span>
                 )}
               </div>
@@ -7535,6 +10629,9 @@ export default function BenefitCalculator({ onBack }) {
           {isMixedMode ? '스마트 견적서 보기 (A4 출력)' : '비교 결과 보기 (A4 출력)'} <ChevronRight size={20} />
         </button>
       </div>
+
+      {/* 직원 전용 캐셔 POS 결제 및 사은행사 지시서 모달 */}
+      {renderPosCashierModal()}
     </section>
   );
 }

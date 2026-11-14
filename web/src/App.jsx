@@ -5,6 +5,7 @@ import AdminSchedule from './components/AdminSchedule';
 import About from './components/About';
 import WhySamsung from './components/WhySamsung';
 import BenefitCalculator from './components/BenefitCalculator';
+import { BRAND_LOGO_B64 } from './constants/brandAssets';
 import './index.css';
 
 function App() {
@@ -44,7 +45,7 @@ function App() {
           }}
         >
           <img 
-            src="/images/logo_new.png" 
+            src={BRAND_LOGO_B64} 
             alt="JINCENCHO" 
             style={{ 
               height: '100%', 
