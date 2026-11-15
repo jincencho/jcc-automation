@@ -427,6 +427,32 @@ function getDeductedSpendDesc(rawSpendStr, monthlyFeeWon, cardName) {
   return `${cleanBase} 사용`;
 }
 
+// 제휴카드별 적용 대상 구독 모델 인덱스 배열 추출 헬퍼 (다중 모델 선택 지원)
+function getCardSelectedIndices(cardItem, cardIdx, totalCount, isSingleCard = false) {
+  if (totalCount <= 1) return [0];
+  if (Array.isArray(cardItem?.targetModelIndices) && cardItem.targetModelIndices.length > 0) {
+    const valid = cardItem.targetModelIndices
+      .map(Number)
+      .filter((i) => !isNaN(i) && i >= 0 && i < totalCount);
+    if (valid.length > 0) {
+      return [...new Set(valid)].sort((a, b) => a - b);
+    }
+  }
+  if (cardItem?.targetModelIndex !== undefined && cardItem?.targetModelIndex !== null) {
+    const idx = Number(cardItem.targetModelIndex);
+    if (idx === -1) {
+      return Array.from({ length: totalCount }, (_, i) => i);
+    }
+    if (idx >= 0 && idx < totalCount) {
+      return [idx];
+    }
+  }
+  if (isSingleCard) {
+    return Array.from({ length: totalCount }, (_, i) => i);
+  }
+  return [cardIdx < totalCount ? cardIdx : 0];
+}
+
 // 100% 오프라인 작동 순수 JS QR코드(Version 5-L, 37x37) SVG Path 생성기
 const QR_PATH_CACHE = {};
 function getOfflineQrSvgPath(text) {
@@ -873,9 +899,56 @@ export default function BenefitCalculator({ onBack }) {
     });
   };
 
+  const handleUpdateModelSelection = (cardId, nextIndices) => {
+    const availableModels = isMixedMode ? mixedSubItems : activePlans;
+    const totalModelsCount = availableModels.length;
+
+    const validIndices = nextIndices
+      .map(Number)
+      .filter((i) => !isNaN(i) && i >= 0 && i < totalModelsCount)
+      .sort((a, b) => a - b);
+
+    if (validIndices.length === 0) return;
+
+    const selectedItems = validIndices.map((i) => availableModels[i]).filter(Boolean);
+    const targetMonthly = isMixedMode
+      ? selectedItems.reduce((sum, item) => sum + getItemMonthly(item) * getSubQty(item.quantity), 0)
+      : selectedItems.reduce((sum, item) => sum + (item.rowMonthly || 0), 0);
+    const targetMonths = selectedItems.length > 0
+      ? Math.max(...selectedItems.map((item) => Number(item.months) || 72))
+      : subMonths;
+
+    setSubCards((prev) =>
+      prev.map((c) => {
+        if (c.id !== cardId) return c;
+        const trimmedName = (c.cardName || '').trim();
+        const isSamsung = checkIsSamsungCard(trimmedName);
+        const patch = {
+          targetModelIndices: validIndices,
+          targetModelIndex: validIndices.length === totalModelsCount ? -1 : validIndices[0],
+          months: c.months || targetMonths
+        };
+
+        if (isSamsung) {
+          if (targetMonthly >= 70000) {
+            patch.minSpend = '70만';
+            patch.monthly = 26000;
+          } else {
+            patch.minSpend = '30만';
+            patch.monthly = 16000;
+          }
+        }
+        return { ...c, ...patch };
+      })
+    );
+  };
+
   const handleAddCard = (defaultMonths) => {
     setSubCards((prev) => {
       const nextId = (prev.reduce((maxId, c) => Math.max(maxId, c.id), 0) || 0) + 1;
+      const availableModels = isMixedMode ? mixedSubItems : subPlans;
+      const totalModelsCount = availableModels.length;
+
       if (prev.length === 0) {
         const defaultCardName = '삼성전자 AI구독 삼성카드';
         const defaultSpend = '30만';
@@ -883,6 +956,7 @@ export default function BenefitCalculator({ onBack }) {
         setSubCardName(defaultCardName);
         setSubCardMinSpend(defaultSpend);
         setSubCardMonthly(defaultMonthly);
+        const allIndices = availableModels.map((_, i) => i);
         return [
           {
             id: nextId,
@@ -891,28 +965,35 @@ export default function BenefitCalculator({ onBack }) {
             monthly: defaultMonthly,
             months: defaultMonths || null,
             targetModelIndex: -1,
+            targetModelIndices: allIndices,
             segmentCardOverrides: {},
             segmentSpendOverrides: {}
           }
         ];
       }
-      const targetIdx = prev.length;
-      const targetModel = isMixedMode ? mixedSubItems[targetIdx] : subPlans[targetIdx];
-      const m = defaultMonths || (targetModel ? Number(targetModel.months) || 72 : (subPlans[prev.length]?.months || 72));
+
+      // 복수 카드로 확장될 때, 기존 카드들의 targetModelIndices 설정
+      const updatedPrev = prev.map((c, i) => {
+        if (!Array.isArray(c.targetModelIndices) || c.targetModelIndices.length === 0) {
+          const currentIndices = getCardSelectedIndices(c, i, totalModelsCount, false);
+          return {
+            ...c,
+            targetModelIndices: currentIndices
+          };
+        }
+        return c;
+      });
+
+      const usedIndices = new Set(updatedPrev.flatMap((c) => c.targetModelIndices || []));
+      let fallbackIdx = availableModels.findIndex((_, idx) => !usedIndices.has(idx));
+      if (fallbackIdx < 0) fallbackIdx = prev.length < totalModelsCount ? prev.length : 0;
+
+      const targetModel = availableModels[fallbackIdx];
+      const m = defaultMonths || (targetModel ? Number(targetModel.months) || 72 : 72);
       const firstIsSamsung = checkIsSamsungCard(prev[0]?.cardName || subCardName || '');
       const newCardName = firstIsSamsung ? '구독엔로카 AMEX' : '삼성전자 AI구독 삼성카드';
       const newSpend = firstIsSamsung ? '50만' : '70만';
       const newMonthly = firstIsSamsung ? 16000 : 26000;
-
-      // 1개 카드에서 복수 카드로 확장될 때, 기존 1번 카드는 1번 모델(index 0)에 매핑
-      const updatedPrev = prev.map((c, i) => {
-        if (i === 0 && (c.targetModelIndex === -1 || c.targetModelIndex === undefined)) {
-          const m0 = isMixedMode ? mixedSubItems[0] : subPlans[0];
-          const m0Months = Number(m0?.months) || 72;
-          return { ...c, targetModelIndex: 0, months: m0Months };
-        }
-        return c;
-      });
 
       return [
         ...updatedPrev,
@@ -922,7 +1003,8 @@ export default function BenefitCalculator({ onBack }) {
           minSpend: newSpend,
           monthly: newMonthly,
           months: m,
-          targetModelIndex: targetIdx,
+          targetModelIndex: fallbackIdx,
+          targetModelIndices: [fallbackIdx],
           segmentCardOverrides: {},
           segmentSpendOverrides: {}
         }
@@ -1335,30 +1417,21 @@ export default function BenefitCalculator({ onBack }) {
     const cardItem = subCards.find((c) => c.id === cardId);
     const cardIdx = subCards.findIndex((c) => c.id === cardId);
     const isSingleCard = subCards.length === 1;
-    const targetIdx = isSingleCard
-      ? -1
-      : (cardItem?.targetModelIndex !== undefined && cardItem?.targetModelIndex !== null
-          ? Number(cardItem.targetModelIndex)
-          : (cardIdx < (isMixedMode ? mixedSubItems.length : activePlans.length) ? cardIdx : 0));
+
+    const availableModels = isMixedMode ? mixedSubItems : activePlans;
+    const totalModelsCount = availableModels.length;
+    const selectedIndices = getCardSelectedIndices(cardItem, cardIdx, totalModelsCount, isSingleCard);
 
     let targetMonthly = 0;
     let targetMonths = subMonths;
     if (isMixedMode) {
-      if (targetIdx >= 0 && mixedSubItems[targetIdx]) {
-        targetMonthly = getItemMonthly(mixedSubItems[targetIdx]) * getSubQty(mixedSubItems[targetIdx].quantity);
-        targetMonths = Number(mixedSubItems[targetIdx].months) || 72;
-      } else {
-        targetMonthly = mixedSubMonthlyFeeTotal;
-        targetMonths = subMonths;
-      }
+      const selectedItems = selectedIndices.map((i) => mixedSubItems[i]).filter(Boolean);
+      targetMonthly = selectedItems.reduce((sum, item) => sum + getItemMonthly(item) * getSubQty(item.quantity), 0);
+      targetMonths = selectedItems.length > 0 ? Math.max(...selectedItems.map((item) => Number(item.months) || 72)) : subMonths;
     } else {
-      if (targetIdx >= 0 && activePlans[targetIdx]) {
-        targetMonthly = activePlans[targetIdx].rowMonthly || 0;
-        targetMonths = Number(activePlans[targetIdx].months) || 72;
-      } else {
-        targetMonthly = effectiveMonthlyBase;
-        targetMonths = subMonths;
-      }
+      const selectedItems = selectedIndices.map((i) => activePlans[i]).filter(Boolean);
+      targetMonthly = selectedItems.reduce((sum, item) => sum + (item.rowMonthly || 0), 0);
+      targetMonths = selectedItems.length > 0 ? Math.max(...selectedItems.map((item) => Number(item.months) || 72)) : subMonths;
     }
 
     const defaultSpend = isSamsung ? (targetMonthly >= 70000 ? '70만' : '30만') : isLotte ? '50만' : '30만';
@@ -1369,7 +1442,8 @@ export default function BenefitCalculator({ onBack }) {
       minSpend: defaultSpend,
       monthly: defaultMonthly,
       months: targetMonths,
-      targetModelIndex: isSingleCard ? -1 : targetIdx,
+      targetModelIndices: selectedIndices,
+      targetModelIndex: selectedIndices.length === totalModelsCount ? -1 : selectedIndices[0],
       segmentSpendOverrides: {},
       segmentCardOverrides: {}
     });
@@ -1395,38 +1469,46 @@ export default function BenefitCalculator({ onBack }) {
     const company = getCardCompanyShort(trimmedName);
     const policy = getAffiliateCardPolicy(trimmedName);
 
-    // 대상 구독 모델 매칭 (단일 카드일 때는 전체 모델 자동 반영!)
-    const targetIdx = isSingleCardMode
-      ? -1
-      : ((c.targetModelIndex !== undefined && c.targetModelIndex !== null && Number(c.targetModelIndex) >= 0)
-          ? Number(c.targetModelIndex)
-          : (cardIdx < (isMixedMode ? mixedSubItems.length : activePlans.length) ? cardIdx : 0));
+    const availableModels = isMixedMode ? mixedSubItems : activePlans;
+    const totalModelsCount = availableModels.length;
+    const selectedIndices = getCardSelectedIndices(c, cardIdx, totalModelsCount, isSingleCardMode);
+    const isAllSelected = selectedIndices.length === totalModelsCount;
 
     let targetModelTitle = '';
     let planMonthlyFee = 0;
     let modelMonths = subMonths;
 
     if (isMixedMode) {
-      if (targetIdx >= 0 && mixedSubItems[targetIdx]) {
-        const mItem = mixedSubItems[targetIdx];
-        targetModelTitle = (mItem.name || '').trim() || `${targetIdx + 1}번 구독 모델`;
-        planMonthlyFee = getItemMonthly(mItem) * getSubQty(mItem.quantity);
-        modelMonths = Number(mItem.months) || 72;
-      } else {
+      if (isAllSelected) {
         targetModelTitle = isSingleCardMode ? '' : '전체 구독 모델';
         planMonthlyFee = mixedSubMonthlyFeeTotal;
         modelMonths = subMonths;
+      } else if (selectedIndices.length === 1) {
+        const mItem = mixedSubItems[selectedIndices[0]];
+        targetModelTitle = (mItem?.name || '').trim() || `${selectedIndices[0] + 1}번 구독 모델`;
+        planMonthlyFee = mItem ? getItemMonthly(mItem) * getSubQty(mItem.quantity) : 0;
+        modelMonths = Number(mItem?.months) || 72;
+      } else {
+        const selectedItems = selectedIndices.map((i) => mixedSubItems[i]).filter(Boolean);
+        targetModelTitle = `${selectedIndices.map((i) => `${i + 1}번`).join('·')} 모델`;
+        planMonthlyFee = selectedItems.reduce((sum, item) => sum + getItemMonthly(item) * getSubQty(item.quantity), 0);
+        modelMonths = selectedItems.length > 0 ? Math.max(...selectedItems.map((item) => Number(item.months) || 72)) : subMonths;
       }
     } else {
-      if (targetIdx >= 0 && activePlans[targetIdx]) {
-        const pItem = activePlans[targetIdx];
-        targetModelTitle = (pItem.name || '').trim() || `품목 ${targetIdx + 1}`;
-        planMonthlyFee = pItem.rowMonthly || 0;
-        modelMonths = Number(pItem.months) || 72;
-      } else {
+      if (isAllSelected) {
         targetModelTitle = isSingleCardMode ? '' : '전체 품목';
         planMonthlyFee = effectiveMonthlyBase;
         modelMonths = subMonths;
+      } else if (selectedIndices.length === 1) {
+        const pItem = activePlans[selectedIndices[0]];
+        targetModelTitle = (pItem?.name || '').trim() || `품목 ${selectedIndices[0] + 1}`;
+        planMonthlyFee = pItem?.rowMonthly || 0;
+        modelMonths = Number(pItem?.months) || 72;
+      } else {
+        const selectedItems = selectedIndices.map((i) => activePlans[i]).filter(Boolean);
+        targetModelTitle = `${selectedIndices.map((i) => `${i + 1}번`).join('·')} 품목`;
+        planMonthlyFee = selectedItems.reduce((sum, item) => sum + (item.rowMonthly || 0), 0);
+        modelMonths = selectedItems.length > 0 ? Math.max(...selectedItems.map((item) => Number(item.months) || 72)) : subMonths;
       }
     }
 
@@ -9154,270 +9236,264 @@ export default function BenefitCalculator({ onBack }) {
                           </button>
                         </div>
 
-                      {/* 적용 대상 구독 모델: 카드가 1개만 활성화되었을 때는 전체 모델 자동 반영 */}
-                      {subCards.length === 1 ? (
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            background: 'rgba(59, 130, 246, 0.12)',
-                            border: '1px solid rgba(96, 165, 250, 0.35)',
-                            borderRadius: '7px',
-                            padding: '0.45rem 0.65rem',
-                            flexWrap: 'wrap',
-                            gap: '0.5rem'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8' }}>
-                              🎯 적용 구독 모델:
-                            </span>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f1f5f9' }}>
-                              전체 구독 모델 자동 반영 (총 {(isMixedMode ? validMixedSubItems : activePlans).length}개 모델 합산)
-                            </span>
-                          </div>
+                      {/* 적용 대상 구독 모델 선택 영역 (다중 선택 지원) */}
+                      {(() => {
+                        const availableModels = isMixedMode ? mixedSubItems : activePlans;
+                        const totalModelsCount = availableModels.length;
+                        const selectedIndices = getCardSelectedIndices(cardItem, cardIdx, totalModelsCount, subCards.length === 1);
+                        const isAllSelected = selectedIndices.length === totalModelsCount;
 
-                          {/* 제휴카드 1 약정개월수 직접 입력 & 프리셋 */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '0.74rem', color: '#93c5fd', fontWeight: 800 }}>약정기간:</span>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                              <input
-                                type="number"
-                                min="1"
-                                max="120"
-                                value={cardItem.months ?? ''}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10) || 0);
-                                  handleUpdateCard(cardItem.id, { months: val });
-                                }}
-                                placeholder={isMultiPeriod ? '자동' : String(subMonths)}
-                                title="제휴카드 약정개월수 직접 입력 (비워두면 구독기간 연동)"
-                                style={{
-                                  width: '56px',
-                                  padding: '0.22rem 0.4rem',
-                                  borderRadius: '6px',
-                                  background: '#0f172a',
-                                  border: cardItem.months ? '1.5px solid #38bdf8' : '1px solid rgba(96, 165, 250, 0.4)',
-                                  color: cardItem.months ? '#38bdf8' : '#cbd5e1',
-                                  fontSize: '0.8rem',
-                                  fontWeight: 800,
-                                  textAlign: 'center'
-                                }}
-                              />
-                              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>개월</span>
-                            </div>
-                            <div style={{ display: 'inline-flex', gap: '0.2rem' }}>
-                              {[72, 60, 48, 36].map((m) => (
-                                <button
-                                  key={m}
-                                  type="button"
-                                  onClick={() => handleUpdateCard(cardItem.id, { months: cardItem.months === m ? null : m })}
-                                  style={{
-                                    padding: '0.18rem 0.45rem',
-                                    borderRadius: '4px',
-                                    border: cardItem.months === m ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.14)',
-                                    background: cardItem.months === m ? 'rgba(56, 189, 248, 0.28)' : 'rgba(255,255,255,0.06)',
-                                    color: cardItem.months === m ? '#38bdf8' : '#cbd5e1',
-                                    fontSize: '0.71rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  {m}
-                                </button>
-                              ))}
-                              {cardItem.months && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateCard(cardItem.id, { months: null })}
-                                  title="구독 기본기간 자동 연동으로 초기화"
-                                  style={{
-                                    padding: '0.18rem 0.42rem',
-                                    borderRadius: '4px',
-                                    border: '1px solid rgba(248, 113, 113, 0.4)',
-                                    background: 'rgba(239, 68, 68, 0.15)',
-                                    color: '#fca5a5',
-                                    fontSize: '0.69rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  자동
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            background: 'rgba(59, 130, 246, 0.1)',
-                            border: '1px solid rgba(96, 165, 250, 0.3)',
-                            borderRadius: '7px',
-                            padding: '0.35rem 0.55rem',
-                            flexWrap: 'wrap'
-                          }}
-                        >
-                          <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#38bdf8' }}>
-                            🎯 적용 구독 모델:
-                          </span>
-                          <select
-                            value={cardItem.targetModelIndex !== undefined && cardItem.targetModelIndex !== null ? cardItem.targetModelIndex : cardIdx}
-                            onChange={(e) => {
-                              const selectedIdx = Number(e.target.value);
-                              let targetMonths = 72;
-                              let targetMonthly = 0;
-                              if (isMixedMode) {
-                                if (selectedIdx >= 0 && mixedSubItems[selectedIdx]) {
-                                  targetMonths = Number(mixedSubItems[selectedIdx].months) || 72;
-                                  targetMonthly = getItemMonthly(mixedSubItems[selectedIdx]) * getSubQty(mixedSubItems[selectedIdx].quantity);
-                                } else {
-                                  targetMonths = subMonths;
-                                  targetMonthly = mixedSubMonthlyFeeTotal;
-                                }
-                              } else {
-                                if (selectedIdx >= 0 && activePlans[selectedIdx]) {
-                                  targetMonths = Number(activePlans[selectedIdx].months) || 72;
-                                  targetMonthly = activePlans[selectedIdx].rowMonthly || 0;
-                                } else {
-                                  targetMonths = subMonths;
-                                  targetMonthly = effectiveMonthlyBase;
-                                }
-                              }
+                        const selectedItems = selectedIndices.map((i) => availableModels[i]).filter(Boolean);
+                        const cardPlanMonthlyFee = isMixedMode
+                          ? selectedItems.reduce((sum, item) => sum + getItemMonthly(item) * getSubQty(item.quantity), 0)
+                          : selectedItems.reduce((sum, item) => sum + (item.rowMonthly || 0), 0);
+                        const cardModelMonths = selectedItems.length > 0
+                          ? Math.max(...selectedItems.map((item) => Number(item.months) || 72))
+                          : subMonths;
 
-                              const patch = {
-                                targetModelIndex: selectedIdx,
-                                months: targetMonths
-                              };
-                              if (isSamsung) {
-                                if (targetMonthly >= 70000) {
-                                  patch.minSpend = '70만';
-                                  patch.monthly = 26000;
-                                } else {
-                                  patch.minSpend = '30만';
-                                  patch.monthly = 16000;
-                                }
-                              }
-                              handleUpdateCard(cardItem.id, patch);
-                            }}
+                        const selectedModelTitle = isAllSelected
+                          ? (subCards.length === 1 ? '전체 구독 모델 자동 반영' : `전체 모델 (${totalModelsCount}개 품목)`)
+                          : selectedIndices.length === 1
+                          ? ((selectedItems[0]?.name || '').trim() || `${selectedIndices[0] + 1}번 모델`)
+                          : `${selectedIndices.map((i) => `${i + 1}번`).join('·')} 모델 (총 ${selectedIndices.length}개)`;
+
+                        if (totalModelsCount <= 1) {
+                          return (
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: 'rgba(59, 130, 246, 0.12)',
+                                border: '1px solid rgba(96, 165, 250, 0.35)',
+                                borderRadius: '7px',
+                                padding: '0.45rem 0.65rem',
+                                flexWrap: 'wrap',
+                                gap: '0.5rem'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8' }}>
+                                  🎯 적용 구독 모델:
+                                </span>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f1f5f9' }}>
+                                  1번 모델 자동 반영 (월 {formatWon(cardPlanMonthlyFee)})
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.74rem', color: '#93c5fd', fontWeight: 800 }}>약정기간:</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="120"
+                                  value={cardItem.months ?? ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10) || 0);
+                                    handleUpdateCard(cardItem.id, { months: val });
+                                  }}
+                                  placeholder={String(cardModelMonths)}
+                                  style={{
+                                    width: '54px',
+                                    padding: '0.2rem 0.35rem',
+                                    borderRadius: '5px',
+                                    background: '#0f172a',
+                                    border: cardItem.months ? '1.5px solid #60a5fa' : '1px solid rgba(255,255,255,0.2)',
+                                    color: cardItem.months ? '#93c5fd' : '#cbd5e1',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 800,
+                                    textAlign: 'center'
+                                  }}
+                                />
+                                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>개월</span>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
                             style={{
-                              flex: 1,
-                              minWidth: '180px',
-                              padding: '0.24rem 0.5rem',
-                              borderRadius: '6px',
-                              background: '#0f172a',
-                              border: '1px solid #38bdf8',
-                              color: '#ffffff',
-                              fontSize: '0.76rem',
-                              fontWeight: 700,
-                              cursor: 'pointer'
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.45rem',
+                              background: 'rgba(59, 130, 246, 0.1)',
+                              border: '1px solid rgba(96, 165, 250, 0.3)',
+                              borderRadius: '8px',
+                              padding: '0.55rem 0.7rem'
                             }}
                           >
-                            {isMixedMode ? (
-                              <>
-                                {mixedSubItems.map((p, pIdx) => {
-                                  const title = (p.name || '').trim() || `구독 모델 ${pIdx + 1}`;
-                                  const m = Number(p.months) || 72;
-                                  const monthly = getItemMonthly(p) * getSubQty(p.quantity);
-                                  return (
-                                    <option key={p.id || pIdx} value={pIdx}>
-                                      {pIdx + 1}번: {title} ({m}개월 · 월 {formatWon(monthly)})
-                                    </option>
-                                  );
-                                })}
-                                <option value={-1}>
-                                  전체 구독 모델 합산 (월 {formatWon(mixedSubMonthlyFeeTotal)})
-                                </option>
-                              </>
-                            ) : (
-                              <>
-                                {activePlans.map((p, pIdx) => (
-                                  <option key={p.id || pIdx} value={pIdx}>
-                                    {pIdx + 1}번: {p.name || `품목 ${pIdx + 1}`} ({p.months}개월 · 월 {formatWon(p.rowMonthly)})
-                                  </option>
-                                ))}
-                                <option value={-1}>
-                                  전체 품목 합산 (월 {formatWon(effectiveMonthlyBase)})
-                                </option>
-                              </>
-                            )}
-                          </select>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.76rem', fontWeight: 800, color: '#38bdf8' }}>
+                                  🎯 적용 구독 모델 선택 (다중 선택 가능):
+                                </span>
+                                <span style={{ fontSize: '0.70rem', color: '#93c5fd', fontWeight: 700 }}>
+                                  {isAllSelected
+                                    ? `(전체 ${totalModelsCount}개 모델 적용)`
+                                    : `(${selectedIndices.map((i) => `${i + 1}번`).join('·')} 적용 · 총 ${selectedIndices.length}개)`}
+                                </span>
+                              </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700 }}>약정기간:</span>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                              <input
-                                type="number"
-                                min="1"
-                                max="120"
-                                value={cardItem.months ?? ''}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10) || 0);
-                                  handleUpdateCard(cardItem.id, { months: val });
-                                }}
-                                placeholder={String(isMixedMode ? (mixedSubItems[cardItem.targetModelIndex !== undefined ? cardItem.targetModelIndex : cardIdx]?.months || 72) : 72)}
-                                title="제휴카드 약정개월수 직접 입력 (비워두면 모델기간 연동)"
-                                style={{
-                                  width: '54px',
-                                  padding: '0.2rem 0.35rem',
-                                  borderRadius: '6px',
-                                  background: '#0f172a',
-                                  border: cardItem.months ? '1.5px solid #60a5fa' : '1px solid rgba(255,255,255,0.2)',
-                                  color: cardItem.months ? '#93c5fd' : '#cbd5e1',
-                                  fontSize: '0.78rem',
-                                  fontWeight: 800,
-                                  textAlign: 'center'
-                                }}
-                              />
-                              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>개월</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const allIndices = availableModels.map((_, i) => i);
+                                    handleUpdateModelSelection(cardItem.id, allIndices);
+                                  }}
+                                  style={{
+                                    padding: '0.15rem 0.5rem',
+                                    borderRadius: '5px',
+                                    border: isAllSelected ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.2)',
+                                    background: isAllSelected ? 'rgba(56, 189, 248, 0.28)' : 'rgba(255,255,255,0.06)',
+                                    color: isAllSelected ? '#38bdf8' : '#cbd5e1',
+                                    fontSize: '0.70rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {isAllSelected ? '✓ 전체선택됨' : '전체선택'}
+                                </button>
+
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                  <span style={{ fontSize: '0.71rem', color: '#cbd5e1', fontWeight: 700 }}>약정기간:</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="120"
+                                    value={cardItem.months ?? ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value === '' ? null : Math.max(1, parseInt(e.target.value, 10) || 0);
+                                      handleUpdateCard(cardItem.id, { months: val });
+                                    }}
+                                    placeholder={String(cardModelMonths)}
+                                    title="제휴카드 약정개월수 직접 입력 (비워두면 선택 모델 최장기간 연동)"
+                                    style={{
+                                      width: '50px',
+                                      padding: '0.18rem 0.35rem',
+                                      borderRadius: '5px',
+                                      background: '#0f172a',
+                                      border: cardItem.months ? '1.5px solid #60a5fa' : '1px solid rgba(255,255,255,0.2)',
+                                      color: cardItem.months ? '#93c5fd' : '#cbd5e1',
+                                      fontSize: '0.76rem',
+                                      fontWeight: 800,
+                                      textAlign: 'center'
+                                    }}
+                                  />
+                                  <span style={{ fontSize: '0.70rem', color: '#94a3b8' }}>개월</span>
+                                </div>
+                                <div style={{ display: 'inline-flex', gap: '0.18rem' }}>
+                                  {[72, 60, 48, 36].map((m) => (
+                                    <button
+                                      key={m}
+                                      type="button"
+                                      onClick={() => handleUpdateCard(cardItem.id, { months: cardItem.months === m ? null : m })}
+                                      style={{
+                                        padding: '0.14rem 0.38rem',
+                                        borderRadius: '4px',
+                                        border: cardItem.months === m ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.12)',
+                                        background: cardItem.months === m ? 'rgba(59, 130, 246, 0.28)' : 'rgba(255,255,255,0.05)',
+                                        color: cardItem.months ? '#93c5fd' : '#cbd5e1',
+                                        fontSize: '0.69rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      {m}
+                                    </button>
+                                  ))}
+                                  {cardItem.months && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateCard(cardItem.id, { months: null })}
+                                      title="모델 기본기간 자동 연동으로 초기화"
+                                      style={{
+                                        padding: '0.14rem 0.35rem',
+                                        borderRadius: '4px',
+                                        border: '1px solid rgba(248, 113, 113, 0.4)',
+                                        background: 'rgba(239, 68, 68, 0.15)',
+                                        color: '#fca5a5',
+                                        fontSize: '0.67rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      자동
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <div style={{ display: 'inline-flex', gap: '0.2rem' }}>
-                              {[72, 60, 48, 36].map((m) => (
-                                <button
-                                  key={m}
-                                  type="button"
-                                  onClick={() => handleUpdateCard(cardItem.id, { months: cardItem.months === m ? null : m })}
-                                  style={{
-                                    padding: '0.16rem 0.4rem',
-                                    borderRadius: '4px',
-                                    border: cardItem.months === m ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.12)',
-                                    background: cardItem.months === m ? 'rgba(59, 130, 246, 0.28)' : 'rgba(255,255,255,0.05)',
-                                    color: cardItem.months === m ? '#93c5fd' : '#cbd5e1',
-                                    fontSize: '0.7rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  {m}
-                                </button>
-                              ))}
-                              {cardItem.months && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpdateCard(cardItem.id, { months: null })}
-                                  title="모델 기본기간 자동 연동으로 초기화"
-                                  style={{
-                                    padding: '0.16rem 0.38rem',
-                                    borderRadius: '4px',
-                                    border: '1px solid rgba(248, 113, 113, 0.4)',
-                                    background: 'rgba(239, 68, 68, 0.15)',
-                                    color: '#fca5a5',
-                                    fontSize: '0.68rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  자동
-                                </button>
-                              )}
+
+                            {/* 개별 모델 선택 칩들 */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.1rem' }}>
+                              {availableModels.map((p, pIdx) => {
+                                const isSelected = selectedIndices.includes(pIdx);
+                                const title = (p.name || '').trim() || (isMixedMode ? `구독 모델 ${pIdx + 1}` : `품목 ${pIdx + 1}`);
+                                const m = Number(p.months) || 72;
+                                const monthly = isMixedMode ? getItemMonthly(p) * getSubQty(p.quantity) : (p.rowMonthly || 0);
+
+                                return (
+                                  <button
+                                    key={p.id || pIdx}
+                                    type="button"
+                                    onClick={() => {
+                                      let nextIndices;
+                                      if (isSelected) {
+                                        if (selectedIndices.length <= 1) {
+                                          alert('최소 1개 이상의 구독 모델이 선택되어야 합니다.');
+                                          return;
+                                        }
+                                        nextIndices = selectedIndices.filter((i) => i !== pIdx);
+                                      } else {
+                                        nextIndices = [...selectedIndices, pIdx].sort((a, b) => a - b);
+                                      }
+                                      handleUpdateModelSelection(cardItem.id, nextIndices);
+                                    }}
+                                    style={{
+                                      padding: '0.24rem 0.55rem',
+                                      borderRadius: '6px',
+                                      border: isSelected ? '1.5px solid #38bdf8' : '1px solid rgba(255,255,255,0.14)',
+                                      background: isSelected ? 'rgba(56, 189, 248, 0.22)' : 'rgba(15, 23, 42, 0.55)',
+                                      color: isSelected ? '#ffffff' : '#94a3b8',
+                                      fontSize: '0.74rem',
+                                      fontWeight: isSelected ? 800 : 500,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.3rem',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <span style={{ color: isSelected ? '#38bdf8' : '#64748b', fontSize: '0.8rem', fontWeight: 900 }}>
+                                      {isSelected ? '☑' : '☐'}
+                                    </span>
+                                    <span>{pIdx + 1}번: {title}</span>
+                                    <span style={{ fontSize: '0.68rem', color: isSelected ? '#bae6fd' : '#64748b' }}>
+                                      ({m}개월 · 월 {formatWon(monthly)})
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* 선택 합계 안내 바 */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: '#cbd5e1', paddingTop: '0.25rem', borderTop: '1px dashed rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: '0.3rem' }}>
+                              <span>
+                                선택 적용 모델: <strong style={{ color: '#38bdf8' }}>{selectedModelTitle}</strong>
+                              </span>
+                              <span>
+                                해당 모델 월 구독료 합계: <strong style={{ color: '#6ee7b7' }}>월 {formatWon(cardPlanMonthlyFee)}</strong>
+                                {isSamsung && (
+                                  <span style={{ fontSize: '0.67rem', color: cardPlanMonthlyFee >= 70000 ? '#6ee7b7' : '#fde68a', marginLeft: '4px' }}>
+                                    ({cardPlanMonthlyFee >= 70000 ? '7만원 이상: 최대 26,000원 할인' : '7만원 미만: 최대 16,000원 할인 한도'})
+                                  </span>
+                                )}
+                              </span>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* 1번째: 카드 이름 직접 입력 및 프리셋 */}
                       <div>
@@ -9703,18 +9779,13 @@ export default function BenefitCalculator({ onBack }) {
                         </div>
                       ) : (
                         (() => {
-                          const targetIdx = isSingleCardMode
-                            ? -1
-                            : (cardItem.targetModelIndex !== undefined && cardItem.targetModelIndex !== null && Number(cardItem.targetModelIndex) >= 0
-                                ? Number(cardItem.targetModelIndex)
-                                : (cardIdx < (isMixedMode ? mixedSubItems.length : activePlans.length) ? cardIdx : 0));
+                          const availableModels = isMixedMode ? mixedSubItems : activePlans;
+                          const totalModelsCount = availableModels.length;
+                          const selectedIndices = getCardSelectedIndices(cardItem, cardIdx, totalModelsCount, isSingleCardMode);
+                          const selectedItems = selectedIndices.map((i) => availableModels[i]).filter(Boolean);
                           const pFee = isMixedMode
-                            ? (targetIdx >= 0 && mixedSubItems[targetIdx]
-                                ? getItemMonthly(mixedSubItems[targetIdx]) * getSubQty(mixedSubItems[targetIdx].quantity)
-                                : mixedSubMonthlyFeeTotal)
-                            : (targetIdx >= 0 && activePlans[targetIdx]
-                                ? activePlans[targetIdx].rowMonthly || 0
-                                : effectiveMonthlyBase);
+                            ? selectedItems.reduce((sum, item) => sum + getItemMonthly(item) * getSubQty(item.quantity), 0)
+                            : selectedItems.reduce((sum, item) => sum + (item.rowMonthly || 0), 0);
                           const isSamsungFeeUnder70k = isSamsung && pFee < 70000;
                           const deducted = getDeductedSpendDesc(cardItem.minSpend, pFee, cardItem.cardName);
                           const cleanExpected = (cardItem.minSpend && cardItem.minSpend.startsWith('월') ? cardItem.minSpend : `월 ${cardItem.minSpend || ''}`).replace(/\s*사용$/, '') + ' 사용';
@@ -10685,18 +10756,13 @@ export default function BenefitCalculator({ onBack }) {
                   }
                 }
               } else {
-                const targetIdx = isSingleCardMode
-                  ? -1
-                  : (c.targetModelIndex !== undefined && c.targetModelIndex !== null && Number(c.targetModelIndex) >= 0
-                      ? Number(c.targetModelIndex)
-                      : (cardIdx < (isMixedMode ? mixedSubItems.length : activePlans.length) ? cardIdx : 0));
+                const availableModels = isMixedMode ? mixedSubItems : activePlans;
+                const totalModelsCount = availableModels.length;
+                const selectedIndices = getCardSelectedIndices(c, cardIdx, totalModelsCount, isSingleCardMode);
+                const selectedItems = selectedIndices.map((i) => availableModels[i]).filter(Boolean);
                 const pFee = isMixedMode
-                  ? (targetIdx >= 0 && mixedSubItems[targetIdx]
-                      ? getItemMonthly(mixedSubItems[targetIdx]) * getSubQty(mixedSubItems[targetIdx].quantity)
-                      : mixedSubMonthlyFeeTotal)
-                  : (targetIdx >= 0 && activePlans[targetIdx]
-                      ? activePlans[targetIdx].rowMonthly || 0
-                      : effectiveMonthlyBase);
+                  ? selectedItems.reduce((sum, item) => sum + getItemMonthly(item) * getSubQty(item.quantity), 0)
+                  : selectedItems.reduce((sum, item) => sum + (item.rowMonthly || 0), 0);
 
                 if (pFee < 70000) {
                   if (isSpend70kOrMore(c.minSpend) || (Number(c.monthly) || 0) > 16000) {
