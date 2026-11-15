@@ -1208,6 +1208,63 @@ export default function BenefitCalculator({ onBack }) {
     const base = Number(it.baseMonthlyFee) || 0;
     return base > 0 ? base : Number(it.discountMonthlyFee) || 0;
   };
+  const getMixedSubItemCalc = (it) => {
+    const qty = getSubQty(it.quantity);
+    const months = Number(it.months) || 72;
+    const rawBase = Number(it.baseMonthlyFee) || 0;
+    const rawDisc = Number(it.discountMonthlyFee) || 0;
+    const prepay = Number(it.prepay) || 0;
+
+    const baseMonthly = rawBase > 0 ? rawBase : rawDisc;
+    const monthly = rawDisc > 0 ? rawDisc : rawBase;
+    const monthlyTotal = monthly * months * qty;
+
+    // 기본 구독 총액(할인 전 기준총액): 기본구독료 입력 시 (기본구독료 × 약정개월수 × 수량)
+    const rawBaseGross = rawBase > 0 ? rawBase * months * qty : prepay + monthlyTotal;
+    // 선납금 + 할인구독료 적용 총액: 할인구독료 입력 시 (선납금 + 할인구독료 × 약정개월수 × 수량)
+    const discountedGross = rawDisc > 0 ? prepay + monthlyTotal : rawBaseGross;
+    const baseGross = Math.max(rawBaseGross, discountedGross);
+
+    // 구독료 할인 (기본 구독 총액 - 선납포함 할인 구독 총액 차액)
+    const feeDiscount = Math.max(0, baseGross - discountedGross);
+
+    const freeRepair = (Number(it.freeRepairFee) || 0) * months * qty;
+    const selfCare = (Number(it.selfCareFee) || 0) * qty;
+    const visitCare = (Number(it.visitCareFee) || 0) * qty;
+    const careTotal = selfCare + visitCare;
+    const serviceTotal = freeRepair + careTotal;
+
+    const serviceParts = [];
+    if (freeRepair > 0) {
+      serviceParts.push(it.isMobile ? '무상수리+파손보험' : '무상수리연장');
+    }
+    if (selfCare > 0 && visitCare > 0) {
+      serviceParts.push('소모품·방문케어');
+    } else if (visitCare > 0) {
+      serviceParts.push('방문케어');
+    } else if (selfCare > 0) {
+      serviceParts.push('소모품케어');
+    }
+    const serviceLabel = serviceParts.length > 0 ? serviceParts.join(' + ') : '무상수리연장 + 방문케어';
+
+    return {
+      qty,
+      months,
+      baseMonthly,
+      monthly,
+      prepay,
+      monthlyTotal,
+      baseGross,
+      discountedGross,
+      feeDiscount,
+      freeRepair,
+      selfCare,
+      visitCare,
+      careTotal,
+      serviceTotal,
+      serviceLabel
+    };
+  };
   const mixedSubMonthlyFeeTotal = mixedSubItems.reduce(
     (sum, it) => sum + getItemMonthly(it) * getSubQty(it.quantity),
     0
@@ -1803,10 +1860,11 @@ export default function BenefitCalculator({ onBack }) {
   );
   const mixedLumpGross = mixedLumpItems.reduce((sum, it) => sum + getMixedLumpItemCalc(it).gross, 0);
   const mixedLumpModelDiscountTotal = mixedLumpItems.reduce((sum, it) => sum + getMixedLumpItemCalc(it).totalDiscount, 0);
+  const mixedLumpNet = Math.max(0, mixedLumpGross - mixedLumpModelDiscountTotal);
   const mixedLumpQtyTotal = validMixedLumpItems.reduce((sum, it) => sum + getMixedLumpItemCalc(it).qty, 0);
 
   // 갤러리아 백화점 스마트 계산 엔진 (가전 907 vs 자급제 606 수수료 분리 · 마지노선 역산 · 1인 3분할 · 2인 카드 슬라이더)
-  const deptApplianceGross = deptCustomGross !== null ? Number(deptCustomGross) || 0 : mixedLumpGross;
+  const deptApplianceGross = deptCustomGross !== null ? Number(deptCustomGross) || 0 : mixedLumpNet;
   const deptPhoneGross = deptHasPhone && Number(deptPhoneAmount) > 0 ? Number(deptPhoneAmount) : 0;
   const deptEffectiveGross = deptApplianceGross + deptPhoneGross;
   const deptPhoneGcash = Math.floor(deptPhoneGross / 1000000) * 40000;
@@ -2667,10 +2725,16 @@ export default function BenefitCalculator({ onBack }) {
     ? (deptCardDiscount + deptVoucherDiscount)
     : roadSpecificDiscount;
 
+  // 백화점 상품권(G캐시) 차감 모드 여부 ('instant' | 'partial' | 'full' 모두 차감으로 인식)
+  const isDeptVoucherDeduct =
+    mixedDeptVoucherMode === 'instant' ||
+    mixedDeptVoucherMode === 'partial' ||
+    mixedDeptVoucherMode === 'full';
+
   // 결제 시점에서 즉시 차감되는 금액:
-  // 백화점 상품권의 경우: 'instant'는 결제 즉시 차감, 'reward'는 사후 적립(고객이 나중에 사용하므로 결제 시점에는 미차감)
+  // 백화점 상품권의 경우: 차감 모드(instant/partial/full)는 결제 즉시 차감, 'reward'는 사후 적립(결제 시점 미차감)
   const mixedLumpInstantPaymentDiscount = mixedChannelType === 'dept'
-    ? (deptCardDiscount + ((mixedDeptVoucherMode === 'instant' || mixedDeptVoucherMode === 'partial' || mixedDeptVoucherMode === 'full') ? deptVoucherDiscount : 0))
+    ? (deptCardDiscount + (isDeptVoucherDeduct ? deptVoucherDiscount : 0))
     : roadSpecificDiscount;
 
   const mixedSpecialDiscountProof =
@@ -2695,21 +2759,33 @@ export default function BenefitCalculator({ onBack }) {
 
   // ---------------- 스마트 견적기 구독 모델 및 전용 서비스 통합 계산 ----------------
 
-  // 통합 구독 기준총액 (기본 월 구독료 × 개월수 × 수량)
+  // 통합 구독 기준총액 (할인 전 기본 월 구독료 × 개월수 × 수량)
   const mixedSubGrossTotal = mixedSubItems.reduce(
-    (sum, it) => sum + getItemBaseMonthly(it) * (Number(it.months) || 72) * getSubQty(it.quantity),
+    (sum, it) => sum + getMixedSubItemCalc(it).baseGross,
     0
   );
 
-  // 구독료 할인 혜택 총액 (기본구독료 - 할인구독료 차액 총합)
-  const mixedSubFeeDiscountTotal = mixedSubItems.reduce((sum, it) => {
-    const diff = getItemBaseMonthly(it) - getItemMonthly(it);
-    return sum + (diff > 0 ? diff * (Number(it.months) || 72) * getSubQty(it.quantity) : 0);
-  }, 0);
+  // 선납금 + 할인구독료 적용 후 구독 총액
+  const mixedSubDiscountedGrossTotal = mixedSubItems.reduce(
+    (sum, it) => sum + getMixedSubItemCalc(it).discountedGross,
+    0
+  );
+
+  // 구독료 할인 혜택 총액 (기본 구독 총액 - 선납포함 할인 구독 총액 차액 합산)
+  const mixedSubFeeDiscountTotal = mixedSubItems.reduce(
+    (sum, it) => sum + getMixedSubItemCalc(it).feeDiscount,
+    0
+  );
 
   // 해당 모델들 선납금 총액
   const mixedSubPrepayTotal = mixedSubItems.reduce(
-    (sum, it) => sum + (Number(it.prepay) || 0),
+    (sum, it) => sum + getMixedSubItemCalc(it).prepay,
+    0
+  );
+
+  // 해당 모델들 월 구독료(약정기간 전체) 합계 (할인구독료 × 개월수 × 수량)
+  const mixedSubMonthlyTotalSum = mixedSubItems.reduce(
+    (sum, it) => sum + getMixedSubItemCalc(it).monthlyTotal,
     0
   );
 
@@ -2745,17 +2821,43 @@ export default function BenefitCalculator({ onBack }) {
   const mixedSubMonthsList = [...new Set(validMixedSubItems.map((it) => Number(it.months) || 72))].sort((a, b) => b - a);
   const mixedSubPeriodSummary = mixedSubMonthsList.join('·') || '72';
 
+  // 약정기간별 구독료 그룹화 (약정기간이 서로 다른 복수 품목일 때 견적서 표시용)
+  const mixedSubMonthsGroups = (() => {
+    const map = {};
+    validMixedSubItems.forEach((it) => {
+      const calc = getMixedSubItemCalc(it);
+      const m = calc.months || 72;
+      if (!map[m]) {
+        map[m] = {
+          months: m,
+          monthlyFee: 0,
+          monthlyTotal: 0,
+          prepay: 0,
+          discountedGross: 0,
+          count: 0
+        };
+      }
+      map[m].monthlyFee += calc.monthly * calc.qty;
+      map[m].monthlyTotal += calc.monthlyTotal;
+      map[m].prepay += calc.prepay;
+      map[m].discountedGross += calc.discountedGross;
+      map[m].count += calc.qty;
+    });
+    return Object.values(map).sort((a, b) => b.months - a.months);
+  })();
+
   // 구독 총 혜택 (카드 청구할인 + 구독료 할인만 합산! 무상수리 및 케어서비스는 제외)
   const mixedSubOnlyDiscount = subCardTotalDiscount + mixedSubFeeDiscountTotal;
 
-  // 구독 월 납부 체감합계: 총 혜택(직접할인) + (서비스 혜택 가치)까지 반영하여 최종 체감가 계산!
+  // 구독 최종 체감 소계: 기준총액 - (구독료할인 + 카드할인) - (서비스혜택 체감가 차감 반영 시 서비스혜택)
+  // ※ mixedSubGrossTotal - mixedSubFeeDiscountTotal (= mixedSubDiscountedGrossTotal)에 이미 선납금이 포함되어 있으므로 중복 합산하지 않음
   const mixedSubPerceivedPrice = Math.max(
     0,
     mixedSubGrossTotal - mixedSubOnlyDiscount - (includeServiceInFinal ? mixedSubServiceBenefit : 0)
   );
 
-  // 구독 최종 체감 소계 (선납금액 합산!)
-  const mixedSubFinalPrice = mixedSubPerceivedPrice + mixedSubPrepayTotal;
+  // 구독 최종 체감 소계 (선납금 포함)
+  const mixedSubFinalPrice = mixedSubPerceivedPrice;
 
   // 월 카드 적용 후 실납부액
   const mixedSubMonthlyAfterCard = Math.max(0, mixedSubMonthlyFeeTotal - startingTotalCardMonthly);
@@ -4778,26 +4880,28 @@ export default function BenefitCalculator({ onBack }) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.24rem' }}>
                       {validMixedSubItems.map((p, idx) => {
                         const modelTitle = (p.name || '').trim() || `삼성AI구독 모델 ${idx + 1}`;
-                        const qty = getSubQty(p.quantity);
-                        const itemMonths = Number(p.months) || 72;
                         const itemCycle = Number(p.serviceCycle) || 12;
-                        const itemBase = getItemBaseMonthly(p);
-                        const itemMonthly = getItemMonthly(p);
+                        const {
+                          qty,
+                          months: itemMonths,
+                          baseMonthly: itemBase,
+                          monthly: itemMonthly,
+                          prepay: itemPrepay,
+                          baseGross: itemBaseGross,
+                          discountedGross: itemDiscountedGross,
+                          feeDiscount: feeDiscountTotal,
+                          selfCare: itemSelfCare,
+                          visitCare: itemVisitCare,
+                          serviceTotal: itemServiceTotal,
+                          serviceLabel: itemServiceLabel
+                        } = getMixedSubItemCalc(p);
                         const diff = itemBase - itemMonthly;
-                        const itemFreeRepair = (Number(p.freeRepairFee) || 0) * itemMonths * qty;
-                        const itemCare = ((Number(p.selfCareFee) || 0) + (Number(p.visitCareFee) || 0)) * qty;
-                        const feeDiscountTotal = diff > 0 ? diff * itemMonths * qty : 0;
-                        const itemBenefitTotal = feeDiscountTotal + itemFreeRepair + itemCare;
-
-                        // 혜택 구성 태그 (요금할인, 무상수리, 케어서비스)
-                        const benefitParts = [];
-                        if (diff > 0) benefitParts.push(`구독료 월 -${formatWon(diff * qty)} 추가할인`);
-                        if (itemFreeRepair > 0) benefitParts.push('무상수리 연장');
-                        if (itemCare > 0) {
-                          const hasSelf = (Number(p.selfCareFee) || 0) > 0;
-                          const hasVisit = (Number(p.visitCareFee) || 0) > 0;
-                          benefitParts.push(hasSelf && hasVisit ? '소모품+방문케어' : hasSelf ? '소모품' : '방문케어');
-                        }
+                        const careTypeBadgeLabel =
+                          itemVisitCare > 0 && itemSelfCare > 0
+                            ? '방문케어+소모품'
+                            : itemSelfCare > 0 && itemVisitCare === 0
+                              ? '소모품'
+                              : '방문케어';
 
                         return (
                           <div
@@ -4806,23 +4910,70 @@ export default function BenefitCalculator({ onBack }) {
                               display: 'flex',
                               flexDirection: 'column',
                               gap: '0.08rem',
-                              paddingBottom: '0.2rem',
+                              paddingBottom: '0.24rem',
                               borderBottom: idx < validMixedSubItems.length - 1 ? '1px dashed rgba(37, 99, 235, 0.15)' : 'none'
                             }}
                           >
-                            {/* 첫번째 줄: 1.모델명 (약정 무상수리 + 방문케어 주기) | (선납금액 00만) 월 기준료(취소선) 할인료 */}
-                            <div className="a4-row" style={{ alignItems: 'baseline' }}>
-                              <span style={{ flex: 1, minWidth: 0, whiteSpace: 'normal', wordBreak: 'keep-all' }}>
-                                {idx + 1}. <strong>{modelTitle}</strong>
-                                {qty > 1 ? ` × ${qty}대` : ''}{' '}
-                                <span style={{ color: '#475569', fontSize: '0.74rem', fontWeight: 500 }}>
-                                  ({itemMonths}개월 무상수리 + 방문케어 주기 {itemCycle}개월)
+                            {/* 첫번째 줄: 1.모델명 + (72개월약정) (방문케어/셀프케어/소모품) (주기) 테두리 배지 | (선납금액) 월 기준료(취소선) 할인료 */}
+                            <div className="a4-row" style={{ alignItems: 'center' }}>
+                              <span style={{ flex: 1, minWidth: 0, display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.28rem', wordBreak: 'keep-all' }}>
+                                <span>
+                                  {idx + 1}. <strong>{modelTitle}</strong>
+                                  {qty > 1 ? ` × ${qty}대` : ''}
+                                </span>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 800,
+                                    color: '#1e40af',
+                                    background: '#eff6ff',
+                                    border: '1.5px solid #60a5fa',
+                                    borderRadius: '5px',
+                                    padding: '1px 6px',
+                                    lineHeight: 1.35
+                                  }}
+                                >
+                                  {itemMonths}개월약정
+                                </span>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 800,
+                                    color: '#065f46',
+                                    background: '#ecfdf5',
+                                    border: '1.5px solid #34d399',
+                                    borderRadius: '5px',
+                                    padding: '1px 6px',
+                                    lineHeight: 1.35
+                                  }}
+                                >
+                                  {careTypeBadgeLabel}
+                                </span>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    fontSize: '0.68rem',
+                                    fontWeight: 800,
+                                    color: '#0369a1',
+                                    background: '#f0f9ff',
+                                    border: '1.5px solid #38bdf8',
+                                    borderRadius: '5px',
+                                    padding: '1px 6px',
+                                    lineHeight: 1.35
+                                  }}
+                                >
+                                  {itemCycle}개월주기
                                 </span>
                               </span>
                               <strong style={{ flexShrink: 0, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                                {(Number(p.prepay) || 0) > 0 && (
+                                {itemPrepay > 0 && (
                                   <span style={{ fontSize: '0.7rem', color: '#1e3a8a', fontWeight: 700, background: '#eff6ff', padding: '1px 5px', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
-                                    선납금액 {formatWon(p.prepay)}
+                                    선납금액 {formatWon(itemPrepay)}
                                   </span>
                                 )}
                                 {diff > 0 ? (
@@ -4842,84 +4993,170 @@ export default function BenefitCalculator({ onBack }) {
                               </strong>
                             </div>
 
-                            {/* 두번째 줄: 구독 혜택 | 우측 끝에 혜택합계만 표시 */}
-                            {itemBenefitTotal > 0 ? (
+                            {/* 복수 모델일 때만 모델별 서브 요약 노출 (단일 모델은 하단 통합 박스에서 순서대로 상세 표기) */}
+                            {validMixedSubItems.length > 1 && (feeDiscountTotal > 0 || itemServiceTotal > 0) && (
                               <div
                                 style={{
                                   display: 'flex',
                                   justifyContent: 'space-between',
                                   alignItems: 'center',
-                                  fontSize: '0.72rem',
+                                  fontSize: '0.71rem',
                                   color: '#0369a1',
                                   paddingLeft: '0.85rem',
-                                  paddingTop: '0.04rem'
+                                  paddingTop: '0.04rem',
+                                  flexWrap: 'wrap',
+                                  gap: '0.3rem'
                                 }}
                               >
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
                                   <span style={{ color: '#2563eb', fontWeight: 800 }}>↳</span>
-                                  <strong style={{ color: '#1e40af' }}>구독 혜택</strong>
-                                  {benefitParts.length > 0 && (
-                                    <span style={{ fontSize: '0.66rem', color: '#64748b' }}>
-                                      ({benefitParts.join(' · ')})
+                                  {feeDiscountTotal > 0 && (
+                                    <span>
+                                      <strong style={{ color: '#1e40af' }}>구독료 할인 -{formatWon(feeDiscountTotal)}</strong>{' '}
+                                      <span style={{ fontSize: '0.66rem', color: '#64748b' }}>
+                                        (기준 {formatWon(itemBaseGross)} → {formatWon(itemDiscountedGross)})
+                                      </span>
                                     </span>
                                   )}
+                                  {feeDiscountTotal > 0 && itemServiceTotal > 0 && <span style={{ color: '#94a3b8' }}>·</span>}
+                                  {itemServiceTotal > 0 && (
+                                    <strong style={{ color: '#0284c7' }}>
+                                      {itemServiceLabel} {formatWon(itemServiceTotal)} 상당 혜택
+                                    </strong>
+                                  )}
                                 </span>
-                                <strong style={{ color: '#2563eb', fontWeight: 800, fontSize: '0.76rem' }}>
-                                  - {formatWon(itemBenefitTotal)}
-                                </strong>
                               </div>
-                            ) : null}
+                            )}
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* 구독 전용 혜택 및 서비스 내역 (한 테두리 통합 박스) */}
+                    {/* 구독 전용 혜택 및 서비스 내역 (요청 순서: 1.할인전 구독총금액 -> 2.구독료 할인 -> 3.선납금합계 -> 4.구독료합계 -> 5.제휴카드 할인정리 -> 6.무상수리+방문케어) */}
                     <div
                       className="a4-benefit-list"
                       style={{
                         minHeight: 'auto',
-                        padding: '0.48rem 0.65rem',
+                        padding: '0.5rem 0.68rem',
                         background: 'rgba(37, 99, 235, 0.035)',
                         border: '1px solid rgba(37, 99, 235, 0.22)',
                         borderRadius: '7px',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '0.22rem'
+                        gap: '0.24rem'
                       }}
                     >
-                      {/* 할인 전 구독 총금액 & 구독료 추가할인 합계 */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
+                      {/* 1) 할인전 구독총금액 */}
+                      <div className="a4-benefit-row" style={{ alignItems: 'center', fontSize: '0.78rem' }}>
                         <span style={{ color: '#1e3a8a', fontWeight: 800 }}>
-                          할인 전 구독 총금액 (기준총액 합계)
+                          <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                          할인전 구독총금액
+                          <span style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 600, marginLeft: '5px' }}>
+                            (기본 구독료 × 약정기간 기준)
+                          </span>
                         </span>
                         <strong
                           style={{
-                            color: '#64748b',
-                            fontSize: '0.86rem',
-                            fontWeight: 700,
-                            textDecoration: 'line-through'
+                            color: mixedSubFeeDiscountTotal > 0 ? '#64748b' : '#0f172a',
+                            fontSize: '0.85rem',
+                            fontWeight: 800,
+                            textDecoration: mixedSubFeeDiscountTotal > 0 ? 'line-through' : 'none'
                           }}
                         >
                           {formatWon(mixedSubGrossTotal)}
                         </strong>
                       </div>
+
+                      {/* 2) 구독료 할인 */}
                       {mixedSubFeeDiscountTotal > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem' }}>
-                          <span style={{ color: '#2563eb', fontWeight: 700, paddingLeft: '0.25rem' }}>
-                            ↳ 구독료 추가할인 합계 (약정기간 합산)
+                        <div className="a4-benefit-row" style={{ alignItems: 'center', fontSize: '0.78rem' }}>
+                          <span>
+                            <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                            <strong style={{ fontWeight: 900, color: '#1e40af' }}>구독료 할인</strong>
+                            <span style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 600, marginLeft: '5px' }}>
+                              (기준 {formatWon(mixedSubGrossTotal)} - 할인적용 {formatWon(mixedSubDiscountedGrossTotal)} 차액)
+                            </span>
                           </span>
-                          <strong style={{ color: '#2563eb', fontWeight: 800 }}>
+                          <strong className="a4-minus-blue" style={{ fontSize: '0.84rem', fontWeight: 900 }}>
                             - {formatWon(mixedSubFeeDiscountTotal)}
                           </strong>
                         </div>
                       )}
 
-                      {/* 제휴카드 혜택 */}
+                      {/* 3) 선납금 합계 */}
+                      {mixedSubPrepayTotal > 0 && (
+                        <div className="a4-benefit-row" style={{ alignItems: 'center', fontSize: '0.78rem' }}>
+                          <span>
+                            <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>선납금 합계</strong>
+                            <span style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 600, marginLeft: '5px' }}>
+                              (초기 일시불 납부)
+                            </span>
+                          </span>
+                          <strong style={{ color: '#1e3a8a', fontSize: '0.82rem', fontWeight: 800 }}>
+                            {formatWon(mixedSubPrepayTotal)}
+                          </strong>
+                        </div>
+                      )}
+
+                      {/* 4) 구독료 합계 */}
+                      {mixedSubMonthsGroups.length > 1 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.12rem' }}>
+                          <div className="a4-benefit-row" style={{ alignItems: 'center', fontSize: '0.78rem' }}>
+                            <span>
+                              <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                              <strong style={{ fontWeight: 900, color: '#0f172a' }}>구독료 합계</strong>
+                              <span style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 600, marginLeft: '5px' }}>
+                                (약정기간별 개별 합산)
+                              </span>
+                            </span>
+                            <strong style={{ color: '#1d4ed8', fontSize: '0.84rem', fontWeight: 900 }}>
+                              {formatWon(mixedSubMonthlyTotalSum)}
+                            </strong>
+                          </div>
+                          {/* 약정기간별 상세 내역 (들여쓰기) */}
+                          <div style={{ paddingLeft: '0.9rem', display: 'flex', flexDirection: 'column', gap: '0.08rem' }}>
+                            {mixedSubMonthsGroups.map((grp) => (
+                              <div
+                                key={grp.months}
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  fontSize: '0.71rem',
+                                  color: '#475569'
+                                }}
+                              >
+                                <span>
+                                  <span style={{ color: '#3b82f6', marginRight: '4px', fontWeight: 700 }}>↳</span>
+                                  <strong style={{ color: '#1e40af' }}>{grp.months}개월 약정 ({grp.count}대)</strong>: 월 {formatWon(grp.monthlyFee)} × {grp.months}개월
+                                </span>
+                                <span style={{ fontWeight: 700, color: '#1e3a8a' }}>
+                                  = {formatWon(grp.monthlyTotal)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="a4-benefit-row" style={{ alignItems: 'center', fontSize: '0.78rem' }}>
+                          <span>
+                            <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>구독료 합계</strong>
+                            <span style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 600, marginLeft: '5px' }}>
+                              (월 {formatWon(mixedSubMonthlyFeeTotal)} × {mixedSubPeriodSummary}개월)
+                            </span>
+                          </span>
+                          <strong style={{ color: '#1d4ed8', fontSize: '0.84rem', fontWeight: 900 }}>
+                            {formatWon(mixedSubMonthlyTotalSum)}
+                          </strong>
+                        </div>
+                      )}
+
+                      {/* 5) 제휴카드 할인정리 */}
                       {subCardTotalDiscount > 0 && (
                         <>
-                          {/* 내부 구분선 */}
-                          <div style={{ borderTop: '1px dashed rgba(37, 99, 235, 0.18)', margin: '0.12rem 0 0.08rem 0' }} />
+                          <div style={{ borderTop: '1px dashed rgba(37, 99, 235, 0.18)', margin: '0.1rem 0 0.06rem 0' }} />
                           <div className="a4-benefit-row" style={{ alignItems: 'center', lineHeight: 1.28 }}>
                             <span style={{ fontSize: '0.78rem', flex: 1, wordBreak: 'keep-all' }}>
                               <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
@@ -4942,42 +5179,21 @@ export default function BenefitCalculator({ onBack }) {
                         </>
                       )}
 
-                      {/* 무상수리 연장 혜택 (가전/모바일 복합 시 분리 표시) */}
-                      {mixedApplianceRepairTotal > 0 && (
+                      {/* 6) 무상수리연장 + 방문케어 통합 혜택 */}
+                      {mixedSubServiceBenefit > 0 && (
                         <div className="a4-benefit-row" style={{ alignItems: 'center' }}>
                           <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
                             <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>무상수리 연장 이용료</strong>
-                            <span style={{ fontSize: '0.67rem', color: '#2563eb', fontWeight: 700, marginLeft: '4px' }}>(가전)</span>
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>
+                              {mixedSubFreeRepairTotal > 0 && mixedSubCareTotal > 0
+                                ? (mixedMobileRepairTotal > 0 && mixedApplianceRepairTotal === 0 ? '무상수리+파손보험 + 방문케어' : '무상수리연장 + 방문케어')
+                                : mixedSubFreeRepairTotal > 0
+                                  ? (mixedMobileRepairTotal > 0 && mixedApplianceRepairTotal === 0 ? '모바일 무상수리 + 파손보험' : '무상수리연장')
+                                  : '방문케어 서비스'}
+                            </strong>
                           </span>
                           <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem' }}>
-                            {formatWon(mixedApplianceRepairTotal)} 상당
-                          </strong>
-                        </div>
-                      )}
-
-                      {mixedMobileRepairTotal > 0 && (
-                        <div className="a4-benefit-row" style={{ alignItems: 'center' }}>
-                          <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
-                            <span style={{ color: '#0284c7', marginRight: '4px', fontWeight: 800 }}>•</span>
-                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>모바일 무상수리 + 파손보험</strong>
-                          </span>
-                          <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem' }}>
-                            {formatWon(mixedMobileRepairTotal)} 상당
-                          </strong>
-                        </div>
-                      )}
-
-                      {/* 케어서비스 혜택 */}
-                      {mixedSubCareTotal > 0 && (
-                        <div className="a4-benefit-row" style={{ alignItems: 'center' }}>
-                          <span style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>
-                            <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>케어서비스 이용료</strong>
-                            <span style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 500, marginLeft: '4px' }}>(소모품·방문)</span>
-                          </span>
-                          <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem' }}>
-                            {formatWon(mixedSubCareTotal)} 상당
+                            {formatWon(mixedSubServiceBenefit)} 상당 혜택
                           </strong>
                         </div>
                       )}
@@ -5010,22 +5226,61 @@ export default function BenefitCalculator({ onBack }) {
                         </strong>
                       </div>
 
-                      {/* 우측: 월납입금 강조 */}
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginLeft: 'auto' }}>
-                        <span style={{ fontSize: '0.78rem', color: '#1e3a8a', fontWeight: 700 }}>
-                          {subCardTotalDiscount > 0 ? '제휴카드 적용 월 실납부액:' : '월 납부액:'}
-                        </span>
-                        <strong
-                          style={{
-                            fontSize: '1.14rem',
-                            fontWeight: 900,
-                            color: '#1d4ed8',
-                            letterSpacing: '-0.02em',
-                            textShadow: '0 1px 2px rgba(29, 78, 216, 0.1)'
-                          }}
-                        >
-                          월 {formatWon(mixedSubMonthlyAfterCard)}
-                        </strong>
+                      {/* 우측: 월납입금 강조 (약정기간 서로 다를 때 구간별 분리 노출) */}
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginLeft: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        {mixedSubPrepayTotal > 0 && (
+                          <span style={{ fontSize: '0.74rem', color: '#1e40af', fontWeight: 800, background: '#dbeafe', padding: '2px 7px', borderRadius: '4px', border: '1px solid #bfdbfe', marginRight: '4px' }}>
+                            선납포함 총 {formatWon(mixedSubDiscountedGrossTotal)}
+                          </span>
+                        )}
+                        {subSegments.length > 1 ? (
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.45rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '0.78rem', color: '#1e3a8a', fontWeight: 700 }}>
+                              {subCardTotalDiscount > 0 ? '제휴카드 적용 월 실납부액:' : '월 납부액:'}
+                            </span>
+                            {subSegments.map((seg, sIdx) => {
+                              const segCard = seg.appliedCard;
+                              const segNet = seg.netMonthly;
+                              return (
+                                <span key={seg.endMonth} style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.2rem' }}>
+                                  <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>
+                                    {sIdx === 0 ? `[1~${seg.endMonth}개월]` : `[${seg.startMonth}~${seg.endMonth}개월]`}
+                                  </span>
+                                  <strong
+                                    style={{
+                                      fontSize: sIdx === 0 ? '1.12rem' : '1.02rem',
+                                      fontWeight: 900,
+                                      color: '#1d4ed8',
+                                      letterSpacing: '-0.02em'
+                                    }}
+                                  >
+                                    월 {formatWon(segNet)}
+                                  </strong>
+                                  {sIdx < subSegments.length - 1 && (
+                                    <span style={{ color: '#cbd5e1', margin: '0 2px' }}>/</span>
+                                  )}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: '0.78rem', color: '#1e3a8a', fontWeight: 700 }}>
+                              {subCardTotalDiscount > 0 ? '제휴카드 적용 월 실납부액:' : '월 납부액:'}
+                            </span>
+                            <strong
+                              style={{
+                                fontSize: '1.14rem',
+                                fontWeight: 900,
+                                color: '#1d4ed8',
+                                letterSpacing: '-0.02em',
+                                textShadow: '0 1px 2px rgba(29, 78, 216, 0.1)'
+                              }}
+                            >
+                              월 {formatWon(mixedSubMonthlyAfterCard)}
+                            </strong>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -5136,9 +5391,13 @@ export default function BenefitCalculator({ onBack }) {
                               <span>
                                 <span style={{ color: '#d97706', marginRight: '4px', fontWeight: 800 }}>•</span>
                                 <strong>갤러리아 상품권(G캐시)</strong>
-                                {mixedDeptVoucherMode === 'instant' ? (
+                                {isDeptVoucherDeduct ? (
                                   <span style={{ display: 'inline-block', fontSize: '0.68rem', fontWeight: 800, color: '#047857', background: '#d1fae5', border: '1px solid #6ee7b7', padding: '1px 6px', borderRadius: '4px', marginLeft: '6px', verticalAlign: 'middle' }}>
-                                    결제 즉시차감
+                                    {mixedDeptVoucherMode === 'full'
+                                      ? '결제 전액 즉시차감'
+                                      : mixedDeptVoucherMode === 'partial'
+                                        ? '결제 부분 즉시차감'
+                                        : '결제 즉시차감'}
                                   </span>
                                 ) : (
                                   <span style={{ display: 'inline-block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', padding: '1px 6px', borderRadius: '4px', marginLeft: '6px', verticalAlign: 'middle' }}>
@@ -5183,10 +5442,16 @@ export default function BenefitCalculator({ onBack }) {
                     {/* 일반구매 소계 바 (단일 라인) */}
                     <div className="a4-mixed-subtotal-bar subtotal-bar-lump" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        {mixedChannelType === 'dept' && deptVoucherDiscount > 0 && mixedDeptVoucherMode === 'reward' && (
-                          <span style={{ fontSize: '0.76rem', color: '#92400e', fontWeight: 800, background: '#fef3c7', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '4px' }}>
-                            상품권 {formatWon(deptVoucherDiscount)} 지급
-                          </span>
+                        {mixedChannelType === 'dept' && deptVoucherDiscount > 0 && (
+                          isDeptVoucherDeduct ? (
+                            <span style={{ fontSize: '0.76rem', color: '#047857', fontWeight: 800, background: '#d1fae5', border: '1px solid #6ee7b7', padding: '2px 8px', borderRadius: '4px' }}>
+                              G캐시 {formatWon(deptVoucherDiscount)} 결제 즉시차감
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.76rem', color: '#92400e', fontWeight: 800, background: '#fef3c7', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: '4px' }}>
+                              상품권(G캐시) {formatWon(deptVoucherDiscount)} 적립 지급
+                            </span>
+                          )
                         )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginLeft: 'auto' }}>
@@ -5238,7 +5503,9 @@ export default function BenefitCalculator({ onBack }) {
                                 1. 삼성AI구독 체감가
                               </span>
                               <span style={{ fontSize: '0.72rem', color: '#64748b', marginLeft: '6px' }}>
-                                (월 실납부 {formatWon(mixedSubMonthlyAfterCard)} × {mixedActiveMonths[0] || 72}개월)
+                                {mixedSubMonthsGroups.length > 1
+                                  ? `(약정기간 ${mixedSubPeriodSummary}개월 혼합 · 선납포함)`
+                                  : `(월 실납부 ${formatWon(mixedSubMonthlyAfterCard)} × ${mixedActiveMonths[0] || 72}개월)`}
                               </span>
                             </span>
                             {mixedSubPrepayTotal > 0 && (
@@ -6906,11 +7173,11 @@ export default function BenefitCalculator({ onBack }) {
                                 color: deptCustomGross === null ? '#fff' : '#94a3b8'
                               }}
                             >
-                              견적 품목 합계 ({formatWon(mixedLumpGross)}) 연동
+                              견적 품목 합계 ({formatWon(mixedLumpNet)}) 연동
                             </button>
                             <button
                               type="button"
-                              onClick={() => { if (deptCustomGross === null) setDeptCustomGross(mixedLumpGross || 26008000); }}
+                              onClick={() => { if (deptCustomGross === null) setDeptCustomGross(mixedLumpNet || 26008000); }}
                               style={{
                                 padding: '3px 8px',
                                 borderRadius: '5px',
@@ -6949,8 +7216,8 @@ export default function BenefitCalculator({ onBack }) {
                         ) : (
                           <div style={{ fontSize: '0.86rem', color: '#93c5fd', display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
                             <span>현재 가전 견적금액:</span>
-                            <strong style={{ fontSize: '1.15rem', color: '#f8fafc' }}>{formatWon(mixedLumpGross)}</strong>
-                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>(상단 품목표 금액과 실시간 동기화)</span>
+                            <strong style={{ fontSize: '1.15rem', color: '#f8fafc' }}>{formatWon(mixedLumpNet)}</strong>
+                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>(상단 일반구매 할인적용 합계와 실시간 동기화)</span>
                           </div>
                         )}
 
@@ -7370,7 +7637,17 @@ export default function BenefitCalculator({ onBack }) {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', gap: '0.75rem' }}>
                           {/* 1) 💰 1. 전부 적립 플랜 */}
                           <div
-                            onClick={() => setDeptStrategy('reward')}
+                            onClick={() => {
+                              setDeptStrategy('reward');
+                              setMixedDeptVoucherMode('reward');
+                              if (deptEnginePlan.effectiveGross > 0) {
+                                setMixedChannelType('dept');
+                                const cDisc = deptEnginePlan.rewardPlan?.totalCardDiscount ?? deptEnginePlan.rewardCardDiscount ?? 0;
+                                setMixedDeptCardDiscount(cDisc);
+                                setMixedDeptDiscount(cDisc);
+                                setMixedDeptVoucherDiscount(deptEnginePlan.rewardPlan?.safeReward ?? deptEnginePlan.totalGcash ?? 0);
+                              }
+                            }}
                             style={{
                               background: deptStrategy === 'reward' ? 'rgba(16, 185, 129, 0.16)' : 'rgba(0,0,0,0.28)',
                               border: deptStrategy === 'reward' ? '2px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
@@ -7423,7 +7700,18 @@ export default function BenefitCalculator({ onBack }) {
 
                           {/* 2) 🛡️ 2. 부분 차감 플랜 (마지노선 방어) */}
                           <div
-                            onClick={() => setDeptStrategy('partial')}
+                            onClick={() => {
+                              setDeptStrategy('partial');
+                              setMixedDeptVoucherMode('partial');
+                              if (deptEnginePlan.effectiveGross > 0) {
+                                setMixedChannelType('dept');
+                                const cDisc = deptEnginePlan.partialPlan?.totalCardDiscount ?? deptEnginePlan.instantCardDiscount ?? 0;
+                                setMixedDeptCardDiscount(cDisc);
+                                setMixedDeptDiscount(cDisc);
+                                const deductAmt = deptEnginePlan.partialPlan?.safeDeduct ?? deptEnginePlan.instantSafeDeduct ?? 0;
+                                setMixedDeptVoucherDiscount(deductAmt > 0 ? deductAmt : (deptEnginePlan.totalGcash ?? 0));
+                              }
+                            }}
                             style={{
                               background: (deptStrategy === 'partial' || deptStrategy === 'instant') ? 'rgba(56, 189, 248, 0.16)' : 'rgba(0,0,0,0.28)',
                               border: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '2px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
@@ -7482,7 +7770,17 @@ export default function BenefitCalculator({ onBack }) {
 
                           {/* 3) ⚡ 3. 전부 차감 플랜 (G캐시 0원 올인) */}
                           <div
-                            onClick={() => setDeptStrategy('full')}
+                            onClick={() => {
+                              setDeptStrategy('full');
+                              setMixedDeptVoucherMode('full');
+                              if (deptEnginePlan.effectiveGross > 0) {
+                                setMixedChannelType('dept');
+                                const cDisc = deptEnginePlan.fullPlan?.totalCardDiscount ?? 0;
+                                setMixedDeptCardDiscount(cDisc);
+                                setMixedDeptDiscount(cDisc);
+                                setMixedDeptVoucherDiscount(deptEnginePlan.fullPlan?.safeDeduct ?? deptEnginePlan.totalGcash ?? 0);
+                              }
+                            }}
                             style={{
                               background: deptStrategy === 'full' ? 'rgba(245, 158, 11, 0.16)' : 'rgba(0,0,0,0.28)',
                               border: deptStrategy === 'full' ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
@@ -7828,7 +8126,10 @@ export default function BenefitCalculator({ onBack }) {
                         <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.8)', padding: '2px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)' }}>
                           <button
                             type="button"
-                            onClick={() => setMixedDeptVoucherMode('instant')}
+                            onClick={() => {
+                              setMixedDeptVoucherMode('instant');
+                              if (deptStrategy === 'reward') setDeptStrategy('full');
+                            }}
                             style={{
                               padding: '2px 7px',
                               borderRadius: '4px',
@@ -7836,8 +8137,8 @@ export default function BenefitCalculator({ onBack }) {
                               fontSize: '0.67rem',
                               fontWeight: 800,
                               cursor: 'pointer',
-                              background: mixedDeptVoucherMode === 'instant' ? '#059669' : 'transparent',
-                              color: mixedDeptVoucherMode === 'instant' ? '#ffffff' : '#94a3b8',
+                              background: isDeptVoucherDeduct ? '#059669' : 'transparent',
+                              color: isDeptVoucherDeduct ? '#ffffff' : '#94a3b8',
                               transition: 'all 0.15s ease'
                             }}
                           >
@@ -7845,7 +8146,10 @@ export default function BenefitCalculator({ onBack }) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setMixedDeptVoucherMode('reward')}
+                            onClick={() => {
+                              setMixedDeptVoucherMode('reward');
+                              setDeptStrategy('reward');
+                            }}
                             style={{
                               padding: '2px 7px',
                               borderRadius: '4px',
@@ -7853,8 +8157,8 @@ export default function BenefitCalculator({ onBack }) {
                               fontSize: '0.67rem',
                               fontWeight: 800,
                               cursor: 'pointer',
-                              background: mixedDeptVoucherMode === 'reward' ? '#b45309' : 'transparent',
-                              color: mixedDeptVoucherMode === 'reward' ? '#ffffff' : '#94a3b8',
+                              background: !isDeptVoucherDeduct ? '#b45309' : 'transparent',
+                              color: !isDeptVoucherDeduct ? '#ffffff' : '#94a3b8',
                               transition: 'all 0.15s ease'
                             }}
                           >
@@ -7869,15 +8173,15 @@ export default function BenefitCalculator({ onBack }) {
                         compact
                         accentColor="#fcd34d"
                       />
-                      <div style={{ fontSize: '0.68rem', color: mixedDeptVoucherMode === 'instant' ? '#a7f3d0' : '#fde68a' }}>
-                        {mixedDeptVoucherMode === 'instant'
+                      <div style={{ fontSize: '0.68rem', color: isDeptVoucherDeduct ? '#a7f3d0' : '#fde68a' }}>
+                        {isDeptVoucherDeduct
                           ? '⚡ 결제 시 즉시 차감되어 결제금액이 줄어듭니다.'
                           : '📱 결제 시 미차감 / 추후 고객에게 적립되어 사용합니다.'}
                       </div>
                     </div>
 
                     <div style={{ fontSize: '0.7rem', color: '#cbd5e1', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '0.35rem' }}>
-                      💳 결제: <strong style={{ color: '#fde68a' }}>갤러리아 제휴카드 {mixedDeptVoucherDiscount > 0 && mixedDeptVoucherMode === 'instant' ? '+ 상품권 즉시결제' : '(사은행사)'}</strong>
+                      💳 결제: <strong style={{ color: '#fde68a' }}>갤러리아 제휴카드 {mixedDeptVoucherDiscount > 0 && isDeptVoucherDeduct ? '+ 상품권(G캐시) 즉시차감' : '(사은행사)'}</strong>
                     </div>
                   </div>
 
@@ -7997,9 +8301,14 @@ export default function BenefitCalculator({ onBack }) {
                   {formatWon(mixedLumpBenefitSub)}
                 </strong>
               </div>
-              {mixedChannelType === 'dept' && deptVoucherDiscount > 0 && mixedDeptVoucherMode === 'reward' && (
+              {mixedChannelType === 'dept' && deptVoucherDiscount > 0 && (
                 <div style={{ textAlign: 'right', fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                  실결제금액: <strong style={{ color: '#f8fafc' }}>{formatWon(mixedLumpPaySub)}</strong> <span style={{ color: '#fde68a', fontWeight: 700 }}>↳ 상품권 {formatWon(deptVoucherDiscount)} 지급</span>
+                  실결제금액: <strong style={{ color: '#f8fafc' }}>{formatWon(mixedLumpPaySub)}</strong>{' '}
+                  {isDeptVoucherDeduct ? (
+                    <span style={{ color: '#34d399', fontWeight: 700 }}>↳ G캐시 {formatWon(deptVoucherDiscount)} 즉시차감 반영</span>
+                  ) : (
+                    <span style={{ color: '#fde68a', fontWeight: 700 }}>↳ 상품권(G캐시) {formatWon(deptVoucherDiscount)} 적립 지급</span>
+                  )}
                 </div>
               )}
             </div>
@@ -8246,17 +8555,18 @@ export default function BenefitCalculator({ onBack }) {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                   {mixedSubItems.map((item, idx) => {
-                    const itemQty = getSubQty(item.quantity);
-                    const itemMonths = Number(item.months) || 72;
-                    const itemBase = getItemBaseMonthly(item);
-                    const itemMonthly = getItemMonthly(item);
-                    const itemGross = itemBase * itemMonths * itemQty;
-                    const itemFeeDiscount = itemBase - itemMonthly > 0 ? (itemBase - itemMonthly) * itemMonths * itemQty : 0;
-                    const itemServiceTotal =
-                      ((Number(item.freeRepairFee) || 0) * itemMonths +
-                        (Number(item.selfCareFee) || 0) +
-                        (Number(item.visitCareFee) || 0)) *
-                      itemQty;
+                    const {
+                      qty: itemQty,
+                      months: itemMonths,
+                      baseMonthly: itemBase,
+                      monthly: itemMonthly,
+                      prepay: itemPrepay,
+                      baseGross: itemGross,
+                      discountedGross: itemDiscountedGross,
+                      feeDiscount: itemFeeDiscount,
+                      serviceTotal: itemServiceTotal,
+                      serviceLabel: itemServiceLabel
+                    } = getMixedSubItemCalc(item);
 
                     return (
                       <div
@@ -8383,7 +8693,7 @@ export default function BenefitCalculator({ onBack }) {
                             >
                               {[6, 12, 36].map((c) => (
                                 <option key={c} value={c} style={{ background: '#0f172a', color: 'white' }}>
-                                  {c}개월 주기
+                                  {c}개월마다
                                 </option>
                               ))}
                             </select>
@@ -8477,15 +8787,28 @@ export default function BenefitCalculator({ onBack }) {
                         </div>
 
                         {/* 4행: 개별 모델 실시간 산출 피드백 */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem', color: '#cbd5e1', paddingTop: '0.2rem', borderTop: '1px dashed rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: '0.3rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem', color: '#cbd5e1', paddingTop: '0.2rem', borderTop: '1px dashed rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: '0.35rem' }}>
                           <span>
                             기준총액: <strong style={{ color: '#bfdbfe' }}>{formatWon(itemGross)}</strong> (월 {formatWon(itemBase * itemQty)} × {itemMonths}개월)
+                            {(itemFeeDiscount > 0 || itemPrepay > 0) && (
+                              <span style={{ color: '#93c5fd', marginLeft: '5px' }}>
+                                → 할인적용 총액: <strong style={{ color: '#ffffff' }}>{formatWon(itemDiscountedGross)}</strong>
+                                {itemPrepay > 0 ? ` (선납 ${formatWon(itemPrepay)} + 월 ${formatWon(itemMonthly * itemQty)}×${itemMonths}개월)` : ''}
+                              </span>
+                            )}
                           </span>
                           <span>
                             실납부: <strong style={{ color: '#60a5fa' }}>월 {formatWon(itemMonthly * itemQty)}</strong>
-                            {itemFeeDiscount > 0 && <span style={{ color: '#86efac', marginLeft: '3px' }}>(-{formatWon(itemFeeDiscount)} 할인)</span>}
-                            {itemServiceTotal > 0 && <span style={{ color: '#6ee7b7', marginLeft: '4px' }}>· 서비스혜택 +{formatWon(itemServiceTotal)}</span>}
-                            {(Number(item.prepay) || 0) > 0 && <span style={{ color: '#fde68a', marginLeft: '4px' }}>· 선납 {formatWon(item.prepay)}</span>}
+                            {itemFeeDiscount > 0 && (
+                              <span style={{ color: '#86efac', fontWeight: 700, marginLeft: '5px' }}>
+                                (구독료 할인 -{formatWon(itemFeeDiscount)})
+                              </span>
+                            )}
+                            {itemServiceTotal > 0 && (
+                              <span style={{ color: '#6ee7b7', fontWeight: 700, marginLeft: '6px' }}>
+                                · {itemServiceLabel} {formatWon(itemServiceTotal)} 상당 혜택
+                              </span>
+                            )}
                           </span>
                         </div>
                       </div>
@@ -10095,49 +10418,49 @@ export default function BenefitCalculator({ onBack }) {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.28rem', color: '#cbd5e1' }}>
-              <span>총 구독 기준금액</span>
+              <span>{isMixedMode ? '1. 할인전 구독총금액' : '총 구독 기준금액'}</span>
               <span>{formatWon(isMixedMode ? mixedSubGrossTotal : subGrossTotal)}</span>
             </div>
             {isMixedMode ? (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.28rem', color: '#cbd5e1' }}>
-                  <span>{subCardTotalDiscount > 0 ? '제휴카드 적용 월 실납부액' : '월 실납부액'}</span>
-                  <strong style={{ color: 'white' }}>월 {formatWon(mixedSubMonthlyAfterCard)}</strong>
-                </div>
+                {mixedSubFeeDiscountTotal > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.28rem', color: '#93c5fd' }}>
+                    <span>2. 구독료 할인 (기준총액 대비 차액)</span>
+                    <strong style={{ color: '#60a5fa' }}>- {formatWon(mixedSubFeeDiscountTotal)}</strong>
+                  </div>
+                )}
                 {mixedSubPrepayTotal > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.28rem', color: '#cbd5e1' }}>
-                    <span>선납금 합계 (초기 일시불)</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.28rem', color: '#cbd5e1' }}>
+                    <span>3. 선납금 합계 (초기 일시불)</span>
                     <strong style={{ color: '#fde68a' }}>{formatWon(mixedSubPrepayTotal)}</strong>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.45rem', color: '#cbd5e1' }}>
-                  <span>총 할인 합계</span>
-                  <strong style={{ color: '#93c5fd' }}>- {formatWon(mixedSubOnlyDiscount)}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.28rem', color: '#cbd5e1' }}>
+                  <span>
+                    {mixedSubPrepayTotal > 0 ? '4. ' : ''}구독료 합계 (월 {formatWon(mixedSubMonthlyFeeTotal)} × {mixedSubPeriodSummary}개월)
+                  </span>
+                  <strong style={{ color: '#e2e8f0' }}>
+                    {formatWon(mixedSubMonthlyTotalSum)}
+                    {mixedSubPrepayTotal > 0 ? ` (선납포함 ${formatWon(mixedSubDiscountedGrossTotal)})` : ''}
+                  </strong>
                 </div>
-                {includeServiceInFinal && mixedSubServiceBenefit > 0 && (
-                  (mixedApplianceRepairTotal > 0 && mixedMobileRepairTotal > 0) ? (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.81rem', marginBottom: '0.22rem', color: '#6ee7b7' }}>
-                        <span>• 무상수리 연장 (가전)</span>
-                        <strong>{formatWon(mixedApplianceRepairTotal)} 상당</strong>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.81rem', marginBottom: '0.22rem', color: '#6ee7b7' }}>
-                        <span>• 모바일 무상수리+파손보험</span>
-                        <strong>{formatWon(mixedMobileRepairTotal)} 상당</strong>
-                      </div>
-                      {mixedSubCareTotal > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.81rem', marginBottom: '0.45rem', color: '#6ee7b7' }}>
-                          <span>• 케어서비스 혜택</span>
-                          <strong>{formatWon(mixedSubCareTotal)} 상당</strong>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.81rem', marginBottom: '0.45rem', color: '#6ee7b7' }}>
-                      <span>무상·케어 서비스 혜택 {mixedMobileRepairTotal > 0 ? '(무상수리+파손보험)' : '(체감가 반영)'}</span>
-                      <strong>{formatWon(mixedSubServiceBenefit)} 상당</strong>
-                    </div>
-                  )
+                {subCardTotalDiscount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.28rem', color: '#93c5fd' }}>
+                    <span>• 제휴카드 청구할인 ({cardCompanySummary || '제휴카드'})</span>
+                    <strong style={{ color: '#60a5fa' }}>- {formatWon(subCardTotalDiscount)}</strong>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.28rem', color: '#cbd5e1' }}>
+                  <span>{subCardTotalDiscount > 0 ? '• 제휴카드 적용 월 실납부액' : '• 월 실납부액'}</span>
+                  <strong style={{ color: 'white' }}>월 {formatWon(mixedSubMonthlyAfterCard)}</strong>
+                </div>
+                {mixedSubServiceBenefit > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.83rem', marginBottom: '0.45rem', color: '#6ee7b7' }}>
+                    <span>
+                      • 무상수리연장 + 방문케어 {includeServiceInFinal ? '(체감가 반영)' : ''}
+                    </span>
+                    <strong>{formatWon(mixedSubServiceBenefit)} 상당 혜택</strong>
+                  </div>
                 )}
               </>
             ) : isMultiPeriod ? (
