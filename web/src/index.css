@@ -1059,17 +1059,29 @@ html {
     background: #ffffff !important;
   }
 
-  * {
+  *, *::before, *::after {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     box-shadow: none !important;
     text-shadow: none !important;
-    font-family: 'Noto Sans KR', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif !important;
+    letter-spacing: 0 !important;
+    word-spacing: 0 !important;
+    font-feature-settings: normal !important;
+    font-variant: normal !important;
+    text-rendering: auto !important;
+    font-weight: 400 !important;
+  }
+
+  strong, b, h1, h2, h3, h4, th, .a4-header h1, .a4-plan-title, [class*="bold"],
+  [style*="font-weight: 700"], [style*="font-weight: 800"], [style*="font-weight: 900"], [style*="font-weight: 600"] {
+    font-weight: 700 !important;
   }
 
   [style*="line-through"], .a4-print-sheet [style*="line-through"] {
     text-decoration: line-through !important;
     text-decoration-thickness: 1px !important;
+    text-decoration-skip-ink: none !important;
   }
 
   html, body, #root, .app-container, main, section, .calc-result-section, .a4-sheet-wrapper {

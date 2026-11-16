@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as htmlToImage from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import { DEPT_POS_BARCODES } from '../constants/deptBarcodes';
 import { BRAND_LOGO_B64, MANAGER_PROFILE_B64 } from '../constants/brandAssets';
 import {
@@ -41,7 +42,8 @@ import {
   Check,
   Minus,
   Crown,
-  ArrowRight
+  ArrowRight,
+  FileDown
 } from 'lucide-react';
 import { fetchCloudQuotes, saveCloudQuote, deleteCloudQuote } from '../utils/cloudQuoteService.js';
 
@@ -3592,6 +3594,7 @@ export default function BenefitCalculator({ onBack }) {
   };
 
   const [isExportingImage, setIsExportingImage] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [imageModalData, setImageModalData] = useState(null);
   const [mobileFitMode, setMobileFitMode] = useState(false);
 
@@ -3701,6 +3704,78 @@ export default function BenefitCalculator({ onBack }) {
     await handleExportAsImage(0, '1페이지');
     await new Promise((r) => setTimeout(r, 600));
     await handleExportAsImage(1, '2페이지');
+  };
+
+  // 태블릿/모바일/PC 공통: 안드로이드 인쇄 오류(X박스/폰트 깨짐) 완전 방지 고화질 2P 직출력 PDF 생성기
+  const handleExportAsPdf = async () => {
+    const nodes = document.querySelectorAll('.a4-print-sheet');
+    if (!nodes || nodes.length === 0 || isExportingPdf) return;
+    setIsExportingPdf(true);
+    showTempNotice('📄 고화질 견적서 PDF를 생성 중입니다. 잠시만 기다려 주세요...');
+
+    try {
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        if (i > 0) pdf.addPage('a4', 'p');
+
+        const dataUrl = await htmlToImage.toPng(node, {
+          quality: 0.98,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          skipFonts: true,
+          style: {
+            margin: '0',
+            boxShadow: 'none',
+            transform: 'none',
+            transformOrigin: 'top left'
+          }
+        });
+
+        pdf.addImage(dataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
+      }
+
+      const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
+      const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
+      const filename = `JCC_견적서_${safeCustomer}_${safeDate}.pdf`;
+
+      // 모바일 공유 지원 여부 확인
+      const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+      let shared = false;
+      if (isMobile && navigator.canShare) {
+        try {
+          const pdfBlob = pdf.output('blob');
+          const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
+          if (navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({
+              files: [pdfFile],
+              title: `JCC 맞춤 견적서 (${safeCustomer} 고객님)`,
+              text: `[JCC 진센조] ${safeCustomer} 고객님 맞춤 가전 혜택 견적서 PDF입니다.`
+            });
+            shared = true;
+          }
+        } catch (shareErr) {
+          if (shareErr.name === 'AbortError') shared = true;
+        }
+      }
+
+      if (!shared) {
+        pdf.save(filename);
+      }
+
+      showTempNotice(`📄 고화질 견적서 PDF(${filename}) 생성이 완료되었습니다.`);
+    } catch (err) {
+      console.error('고화질 PDF 생성 오류:', err);
+      alert('고화질 PDF 생성 중 일시적 오류가 발생했습니다. 아래 [A4 2장 인쇄 / PDF 저장] 버튼을 이용해 주세요.');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const handlePrint = () => {
@@ -4588,6 +4663,28 @@ export default function BenefitCalculator({ onBack }) {
 
             <button
               type="button"
+              onClick={handleExportAsPdf}
+              disabled={isExportingPdf}
+              style={{
+                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                border: '1px solid #60a5fa',
+                color: '#ffffff',
+                padding: '0.85rem 1.6rem',
+                borderRadius: '12px',
+                cursor: isExportingPdf ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                fontWeight: 800,
+                fontSize: '1rem',
+                boxShadow: '0 4px 16px rgba(37, 99, 235, 0.35)'
+              }}
+            >
+              <FileDown size={19} /> {isExportingPdf ? 'PDF 생성 중...' : '📥 고화질 PDF 다운로드 (태블릿 추천)'}
+            </button>
+
+            <button
+              type="button"
               onClick={handlePrint}
               className="btn-primary pulse"
               style={{ padding: '0.85rem 1.8rem', fontSize: '1rem' }}
@@ -4895,8 +4992,9 @@ export default function BenefitCalculator({ onBack }) {
                                 className={`a4-status-tag ${
                                   f.status === 'O' ? 'tag-o' : f.status === 'X' ? 'tag-x' : 'tag-tri'
                                 }`}
+                                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                               >
-                                {f.status}
+                                {f.status === 'O' ? <Check size={10} strokeWidth={3} /> : f.status === 'X' ? <X size={10} strokeWidth={3} /> : <Minus size={10} strokeWidth={3} />}
                               </span>
                               <span className="a4-card-feature-label">{f.label}</span>
                               <span className="a4-card-feature-text">{f.text}</span>
@@ -4910,7 +5008,7 @@ export default function BenefitCalculator({ onBack }) {
 
                 {hasMemo && (
                   <div className="a4-memo-box" style={{ marginTop: hasCardPolicies ? '0.45rem' : '0' }}>
-                    <div className="a4-memo-title">📋 맞춤 상담 메모 및 안내사항</div>
+                    <div className="a4-memo-title">맞춤 상담 메모 및 안내사항</div>
                     <div className="a4-memo-content">{memo.trim()}</div>
                   </div>
                 )}
@@ -4918,7 +5016,7 @@ export default function BenefitCalculator({ onBack }) {
                 {!hasCardPolicies && !hasMemo && (
                   <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.65rem 0.9rem' }}>
                     <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>
-                      💡 스마트 결제 및 혜택 수령 체크포인트
+                      스마트 결제 및 혜택 수령 체크포인트
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', fontSize: '0.72rem', color: '#64748b' }}>
                       <div style={{ background: '#ffffff', padding: '0.45rem', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
@@ -4955,7 +5053,7 @@ export default function BenefitCalculator({ onBack }) {
               return (
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.45rem 0.75rem', marginTop: '0.35rem' }}>
                   <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#334155', marginBottom: '0.2rem' }}>
-                    💡 스마트 결제 및 혜택 수령 체크포인트
+                    스마트 결제 및 혜택 수령 체크포인트
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', fontSize: '0.68rem', color: '#64748b' }}>
                     <div style={{ background: '#ffffff', padding: '0.35rem', borderRadius: '5px', border: '1px solid #f1f5f9' }}>
@@ -5024,7 +5122,7 @@ export default function BenefitCalculator({ onBack }) {
             if (hasMemo) {
               return (
                 <div className="a4-memo-box" style={{ marginTop: '0.35rem' }}>
-                  <div className="a4-memo-title">📋 맞춤 상담 메모 및 안내사항</div>
+                  <div className="a4-memo-title">맞춤 상담 메모 및 안내사항</div>
                   <div className="a4-memo-content">{memo.trim()}</div>
                 </div>
               );
@@ -6405,6 +6503,27 @@ export default function BenefitCalculator({ onBack }) {
             }}
           >
             <Camera size={19} /> {isExportingImage ? '사진 생성 중...' : '견적서 사진(이미지) 저장'}
+          </button>
+          <button
+            type="button"
+            onClick={handleExportAsPdf}
+            disabled={isExportingPdf}
+            style={{
+              background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+              border: '1px solid #60a5fa',
+              color: '#ffffff',
+              padding: '0.85rem 1.6rem',
+              borderRadius: '12px',
+              cursor: isExportingPdf ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              fontWeight: 800,
+              fontSize: '1rem',
+              boxShadow: '0 4px 16px rgba(37, 99, 235, 0.35)'
+            }}
+          >
+            <FileDown size={19} /> {isExportingPdf ? 'PDF 생성 중...' : '📥 고화질 PDF 다운로드 (태블릿 추천)'}
           </button>
           <button
             type="button"
