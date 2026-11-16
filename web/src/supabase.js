@@ -1,8 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Vite environment variables. If not defined, we fall back to a mock system for testing.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Environment variables with fallback to live Supabase project
+let envUrl = '';
+let envKey = '';
+try {
+  if (typeof process !== 'undefined' && process.env) {
+    envUrl = process.env.VITE_SUPABASE_URL;
+    envKey = process.env.VITE_SUPABASE_ANON_KEY;
+  }
+} catch {}
+
+const supabaseUrl = envUrl || 'https://nuptkcozqdwirafrbfyx.supabase.co';
+const supabaseAnonKey = envKey || 'sb_publishable_qEjEObM6m8ICxhY2d62Nog_-WIVl4A5';
 
 export const isSupabaseConfigured = supabaseUrl !== '' && supabaseAnonKey !== '';
 

@@ -35,8 +35,11 @@ import {
   Layers,
   ShoppingBag,
   Receipt,
-  Sliders
+  Sliders,
+  Cloud,
+  RefreshCw
 } from 'lucide-react';
+import { fetchCloudQuotes, saveCloudQuote, deleteCloudQuote } from '../utils/cloudQuoteService.js';
 
 // 숫자를 한국어 단위(억/만/원) 보조 텍스트로 변환
 function formatKoreanCurrencyHint(num) {
@@ -3088,6 +3091,58 @@ export default function BenefitCalculator({ onBack }) {
     }
   };
 
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'synced' | 'error'
+
+  const syncQuotesWithCloud = async (targetMode = isMixedMode ? 'mixed' : 'compare', showToast = true) => {
+    setIsCloudSyncing(true);
+    setCloudSyncStatus('syncing');
+    try {
+      const res = await fetchCloudQuotes(targetMode);
+      if (res.success && Array.isArray(res.data)) {
+        const cloudList = res.data;
+        const currentLocal = targetMode === 'mixed' ? savedQuotesMixed : savedQuotesCompare;
+
+        // 1. 로컬에만 있고 클라우드에 아직 없는 항목은 클라우드로 자동 백업 업로드
+        const cloudIdSet = new Set(cloudList.map((q) => q.id));
+        const missingInCloud = currentLocal.filter((l) => !cloudIdSet.has(l.id));
+        if (missingInCloud.length > 0) {
+          await Promise.all(missingInCloud.map((item) => saveCloudQuote(item)));
+        }
+
+        // 2. 클라우드와 로컬 병합 (클라우드 우선 및 중복 제거)
+        const mergedMap = new Map();
+        cloudList.forEach((q) => mergedMap.set(q.id, q));
+        currentLocal.forEach((q) => {
+          if (!mergedMap.has(q.id)) mergedMap.set(q.id, q);
+        });
+        const finalMerged = Array.from(mergedMap.values());
+
+        if (targetMode === 'mixed') {
+          setSavedQuotesMixed(finalMerged);
+        } else {
+          setSavedQuotesCompare(finalMerged);
+        }
+        setCloudSyncStatus('synced');
+        if (showToast) {
+          showTempNotice(`☁️ 클라우드 동기화 완료 (${finalMerged.length}건 연동)`);
+        }
+      } else {
+        setCloudSyncStatus('error');
+      }
+    } catch (err) {
+      console.error('[CloudSync] Error:', err);
+      setCloudSyncStatus('error');
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
+
+  // 컴포넌트 마운트 및 모드 전환 시 클라우드 자동 동기화
+  useEffect(() => {
+    syncQuotesWithCloud(isMixedMode ? 'mixed' : 'compare', false);
+  }, [isMixedMode]);
+
   const showTempNotice = (msg) => {
     setSaveNotice(msg);
     setTimeout(() => {
@@ -3364,7 +3419,13 @@ export default function BenefitCalculator({ onBack }) {
     setSavedQuotes((prev) => [snapshot, ...prev]);
     setActiveQuoteId(snapshot.id);
     setQuoteTitleInput(snapshot.title);
-    showTempNotice(`✓ '${snapshot.title}' 견적이 ${isMixedMode ? '2번 보관함' : '1번 보관함'}에 저장되었습니다.`);
+    showTempNotice(`✓ '${snapshot.title}' 견적이 저장되었습니다. (클라우드 동기화 중...)`);
+    saveCloudQuote(snapshot).then((res) => {
+      if (res.success) {
+        setCloudSyncStatus('synced');
+        showTempNotice(`✓ '${snapshot.title}' 견적이 클라우드에 실시간 동기화되었습니다.`);
+      }
+    });
   };
 
   const handleOverwriteActiveQuote = () => {
@@ -3386,11 +3447,18 @@ export default function BenefitCalculator({ onBack }) {
       return;
     }
     const snapshot = buildCurrentQuoteSnapshot();
+    const updatedSnapshot = { ...snapshot, id: targetId };
     setSavedQuotes((prev) =>
-      prev.map((q) => (q.id === targetId ? { ...snapshot, id: targetId } : q))
+      prev.map((q) => (q.id === targetId ? updatedSnapshot : q))
     );
     setQuoteTitleInput(snapshot.title);
-    showTempNotice(`✓ '${snapshot.title}' 견적이 ${isMixedMode ? '2번 보관함' : '1번 보관함'}에 수정 저장되었습니다.`);
+    showTempNotice(`✓ '${snapshot.title}' 견적이 수정되었습니다. (클라우드 동기화 중...)`);
+    saveCloudQuote(updatedSnapshot).then((res) => {
+      if (res.success) {
+        setCloudSyncStatus('synced');
+        showTempNotice(`✓ '${snapshot.title}' 견적이 클라우드에 수정 반영되었습니다.`);
+      }
+    });
   };
 
   const handleLoadQuote = (quote) => {
@@ -3406,6 +3474,7 @@ export default function BenefitCalculator({ onBack }) {
       setActiveQuoteId(null);
     }
     showTempNotice(`'${title}' 견적이 삭제되었습니다.`);
+    deleteCloudQuote(id).catch((e) => console.error(e));
   };
 
   const handleExportQuoteFile = () => {
@@ -6806,7 +6875,7 @@ export default function BenefitCalculator({ onBack }) {
             marginBottom: '0.85rem'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <FolderOpen size={19} style={{ color: '#34d399' }} />
             <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#a7f3d0', margin: 0 }}>
               {isMixedMode ? '2번 견적 보관함 (구독 포함 전용)' : '1번 견적 보관함 (구독 비교 전용)'}
@@ -6824,9 +6893,55 @@ export default function BenefitCalculator({ onBack }) {
             >
               보관 {savedQuotes.length}건
             </span>
+            <span
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '0.16rem 0.55rem',
+                borderRadius: '999px',
+                background: cloudSyncStatus === 'error' ? 'rgba(239, 68, 68, 0.16)' : 'rgba(59, 130, 246, 0.16)',
+                border: cloudSyncStatus === 'error' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)',
+                color: cloudSyncStatus === 'error' ? '#fca5a5' : '#93c5fd',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.28rem'
+              }}
+              title="어느 기기(스마트폰, 다른 PC, 태블릿)에서 접속하더라도 실시간 자동 동기화됩니다."
+            >
+              <Cloud size={12} />
+              {isCloudSyncing ? '클라우드 동기화 중...' : '클라우드 실시간 연동'}
+            </span>
           </div>
 
           <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => syncQuotesWithCloud(isMixedMode ? 'mixed' : 'compare', true)}
+              disabled={isCloudSyncing}
+              title="다른 기기에서 저장한 최신 견적을 즉시 새로고침하여 불러옵니다."
+              style={{
+                background: 'rgba(16, 185, 129, 0.14)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                color: '#6ee7b7',
+                borderRadius: '8px',
+                padding: '0.42rem 0.75rem',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: isCloudSyncing ? 'wait' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
+            >
+              <RefreshCw
+                size={13}
+                style={{
+                  transform: isCloudSyncing ? 'rotate(360deg)' : 'none',
+                  transition: isCloudSyncing ? 'transform 1s linear infinite' : 'none'
+                }}
+              />
+              <span>클라우드 동기화</span>
+            </button>
             <button
               type="button"
               onClick={handleExportQuoteFile}
