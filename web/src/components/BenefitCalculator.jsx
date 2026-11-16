@@ -4480,10 +4480,10 @@ export default function BenefitCalculator({ onBack }) {
       className="container no-print"
       style={{
         maxWidth: '1100px',
-        marginBottom: '1.25rem',
+        marginBottom: '1rem',
         display: 'flex',
-        gap: '0.6rem',
-        padding: '0.4rem',
+        gap: '0.5rem',
+        padding: '0.35rem',
         background: 'rgba(15, 23, 42, 0.85)',
         border: '1px solid var(--glass-border)',
         borderRadius: '12px',
@@ -4500,23 +4500,24 @@ export default function BenefitCalculator({ onBack }) {
         }}
         style={{
           flex: 1,
-          padding: '0.75rem 1rem',
+          height: '42px',
+          padding: '0 1rem',
           borderRadius: '8px',
           border: 'none',
           background: calculatorMode === 'compare' ? 'linear-gradient(135deg, #1e3a8a, #2563eb)' : 'transparent',
           color: calculatorMode === 'compare' ? '#ffffff' : 'var(--text-secondary)',
           fontWeight: 800,
-          fontSize: 'clamp(0.82rem, 2vw, 0.95rem)',
+          fontSize: '0.90rem',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '0.5rem',
+          gap: '0.45rem',
           boxShadow: calculatorMode === 'compare' ? '0 4px 12px rgba(37, 99, 235, 0.35)' : 'none',
           transition: 'all 0.2s'
         }}
       >
-        <Scale size={18} /> 1번 구독 비교 계산기
+        <Scale size={17} /> 1번 구독 비교 계산기
       </button>
       <button
         type="button"
@@ -4528,23 +4529,24 @@ export default function BenefitCalculator({ onBack }) {
         }}
         style={{
           flex: 1,
-          padding: '0.75rem 1rem',
+          height: '42px',
+          padding: '0 1rem',
           borderRadius: '8px',
           border: 'none',
           background: calculatorMode === 'mixed' ? 'linear-gradient(135deg, #059669, #10b981)' : 'transparent',
           color: calculatorMode === 'mixed' ? '#ffffff' : 'var(--text-secondary)',
           fontWeight: 800,
-          fontSize: 'clamp(0.82rem, 2vw, 0.95rem)',
+          fontSize: '0.90rem',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '0.5rem',
+          gap: '0.45rem',
           boxShadow: calculatorMode === 'mixed' ? '0 4px 12px rgba(16, 185, 129, 0.35)' : 'none',
           transition: 'all 0.2s'
         }}
       >
-        <Layers size={18} /> 2번 구독 포함 계산기
+        <Layers size={17} /> 2번 구독 포함 계산기
       </button>
     </div>
   );
@@ -6956,119 +6958,172 @@ export default function BenefitCalculator({ onBack }) {
       {/* 계산기 카테고리 전환 상단 탭 바 */}
       {renderModeTabs()}
 
-      {/* 상단 내비게이션 & 잠금 버튼 & 견적서 출력 바로가기 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+      {/* 상단 내비게이션 & 액션 버튼 바 */}
+      <div
+        className="no-print"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1.25rem',
+          flexWrap: 'wrap',
+          gap: '0.55rem'
+        }}
+      >
         {onBack ? (
-          <button onClick={onBack} className="btn-back" style={{ marginBottom: 0 }}>
-            <span>←</span> 홈으로 돌아가기
+          <button
+            type="button"
+            onClick={onBack}
+            title="메인 홈 화면으로 이동합니다."
+            style={{
+              height: '38px',
+              padding: '0 0.95rem',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.14)',
+              color: '#cbd5e1',
+              fontWeight: 700,
+              fontSize: '0.83rem',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              whiteSpace: 'nowrap',
+              boxSizing: 'border-box',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span>←</span> 홈으로
           </button>
         ) : (
           <div />
         )}
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+
+        <div style={{ display: 'inline-flex', gap: '0.42rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             type="button"
             onClick={handleGoToResult}
-            className="btn-primary"
             title="현재 입력된 조건으로 A4 인쇄 / PDF 견적서를 확인합니다."
             style={{
+              height: '38px',
+              padding: '0 1.05rem',
+              borderRadius: '8px',
               background: isMixedMode
-                ? 'linear-gradient(135deg, #10b981, #059669)'
-                : 'linear-gradient(135deg, #d4af37, #b8860b)',
+                ? 'linear-gradient(135deg, #059669, #10b981)'
+                : 'linear-gradient(135deg, #1d4ed8, #2563eb)',
               color: '#ffffff',
-              border: 'none',
-              padding: '0.55rem 1.15rem',
-              borderRadius: '50px',
+              border: isMixedMode ? '1px solid #34d399' : '1px solid #3b82f6',
               cursor: 'pointer',
-              fontSize: '0.86rem',
+              fontSize: '0.84rem',
               fontWeight: 800,
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.4rem',
               boxShadow: isMixedMode
-                ? '0 4px 14px rgba(16, 185, 129, 0.4)'
-                : '0 4px 14px rgba(212, 175, 55, 0.35)'
+                ? '0 3px 12px rgba(16, 185, 129, 0.35)'
+                : '0 3px 12px rgba(37, 99, 235, 0.35)',
+              whiteSpace: 'nowrap',
+              boxSizing: 'border-box',
+              transition: 'all 0.2s ease'
             }}
           >
-            <Printer size={15} /> {isMixedMode ? '스마트 견적서 보기 (A4 출력)' : '비교 결과 보기 (A4 출력)'}
+            <Printer size={15} /> {isMixedMode ? '스마트 견적서 보기' : '비교 견적서 보기'}
           </button>
           <button
             type="button"
             onClick={handleSaveNewQuote}
             title="현재 입력된 견적을 보관함에 새로 저장합니다."
             style={{
-              background: 'rgba(16, 185, 129, 0.16)',
-              border: '1px solid rgba(16, 185, 129, 0.55)',
+              height: '38px',
+              padding: '0 0.82rem',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.16)',
               color: '#6ee7b7',
-              padding: '0.55rem 0.95rem',
-              borderRadius: '50px',
               cursor: 'pointer',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               fontWeight: 700,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.35rem'
+              gap: '0.35rem',
+              whiteSpace: 'nowrap',
+              boxSizing: 'border-box',
+              transition: 'all 0.2s ease'
             }}
           >
-            <Save size={15} /> 견적 저장
+            <Save size={14} /> 견적 저장
           </button>
           <button
             type="button"
             onClick={handleOverwriteActiveQuote}
             title={activeQuoteId ? '현재 선택된 보관 견적에 수정사항을 덮어씁니다.' : '보관 견적에 덮어쓰거나 수정 저장합니다.'}
             style={{
-              background: activeQuoteId ? 'rgba(212, 175, 55, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-              border: activeQuoteId ? '1px solid var(--accent-gold)' : '1px solid var(--glass-border)',
-              color: activeQuoteId ? 'var(--accent-gold-light)' : '#e2e8f0',
-              padding: '0.55rem 0.95rem',
-              borderRadius: '50px',
+              height: '38px',
+              padding: '0 0.82rem',
+              borderRadius: '8px',
+              background: activeQuoteId ? 'rgba(212, 175, 55, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+              border: activeQuoteId ? '1px solid rgba(212, 175, 55, 0.5)' : '1px solid rgba(255, 255, 255, 0.14)',
+              color: activeQuoteId ? 'var(--accent-gold-light)' : '#94a3b8',
               cursor: 'pointer',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               fontWeight: 700,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.35rem'
+              gap: '0.35rem',
+              whiteSpace: 'nowrap',
+              boxSizing: 'border-box',
+              transition: 'all 0.2s ease'
             }}
           >
-            <RotateCcw size={14} /> 덮어쓰기
+            <RotateCcw size={13} /> 덮어쓰기
           </button>
           <button
             type="button"
             onClick={handleResetAll}
+            title="입력된 모든 값을 초기화합니다."
             style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid var(--glass-border)',
-              color: 'var(--text-secondary)',
-              padding: '0.55rem 1rem',
-              borderRadius: '50px',
+              height: '38px',
+              padding: '0 0.78rem',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.14)',
+              color: '#cbd5e1',
               cursor: 'pointer',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               fontWeight: 600,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.35rem'
+              gap: '0.35rem',
+              whiteSpace: 'nowrap',
+              boxSizing: 'border-box',
+              transition: 'all 0.2s ease'
             }}
           >
-            <RotateCcw size={15} /> 초기화
+            <RotateCcw size={13} /> 초기화
           </button>
           <button
             type="button"
             onClick={handleLock}
+            title="입력 실수 방지를 위해 화면을 잠급니다."
             style={{
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.35)',
+              height: '38px',
+              padding: '0 0.78rem',
+              borderRadius: '8px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
               color: '#fca5a5',
-              padding: '0.55rem 1rem',
-              borderRadius: '50px',
               cursor: 'pointer',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               fontWeight: 600,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.35rem'
+              gap: '0.35rem',
+              whiteSpace: 'nowrap',
+              boxSizing: 'border-box',
+              transition: 'all 0.2s ease'
             }}
           >
-            <Lock size={15} /> 잠금
+            <Lock size={13} /> 잠금
           </button>
         </div>
       </div>
@@ -7166,34 +7221,37 @@ export default function BenefitCalculator({ onBack }) {
             </span>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'inline-flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               type="button"
               onClick={() => syncQuotesWithCloud(isMixedMode ? 'mixed' : 'compare', true)}
               disabled={isCloudSyncing}
               title="다른 기기에서 저장한 최신 견적을 즉시 새로고침하여 불러옵니다."
               style={{
-                background: 'rgba(16, 185, 129, 0.14)',
+                height: '32px',
+                background: 'rgba(16, 185, 129, 0.12)',
                 border: '1px solid rgba(16, 185, 129, 0.4)',
                 color: '#6ee7b7',
-                borderRadius: '8px',
-                padding: '0.42rem 0.75rem',
+                borderRadius: '6px',
+                padding: '0 0.7rem',
                 fontSize: '0.78rem',
                 fontWeight: 700,
                 cursor: isCloudSyncing ? 'wait' : 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.35rem'
+                gap: '0.35rem',
+                whiteSpace: 'nowrap',
+                boxSizing: 'border-box'
               }}
             >
               <RefreshCw
-                size={13}
+                size={12}
                 style={{
                   transform: isCloudSyncing ? 'rotate(360deg)' : 'none',
                   transition: isCloudSyncing ? 'transform 1s linear infinite' : 'none'
                 }}
               />
-              <span>클라우드 동기화</span>
+              <span>동기화</span>
             </button>
             <button
               type="button"
@@ -7204,39 +7262,45 @@ export default function BenefitCalculator({ onBack }) {
                   : "현재 입력된 1번 견적과 보관함 목록을 파일(.json)로 저장하여 다른 PC로 옮길 수 있습니다."
               }
               style={{
-                background: 'rgba(59, 130, 246, 0.14)',
+                height: '32px',
+                background: 'rgba(59, 130, 246, 0.12)',
                 border: '1px solid rgba(59, 130, 246, 0.4)',
                 color: '#93c5fd',
-                borderRadius: '8px',
-                padding: '0.42rem 0.75rem',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem'
-              }}
-            >
-              <Download size={14} /> {isMixedMode ? '2번 견적 파일로 내보내기 (.json)' : '1번 견적 파일로 내보내기 (.json)'}
-            </button>
-            <label
-              title={isMixedMode ? "저장해둔 2번 견적 파일(.json)을 불러옵니다." : "저장해둔 1번 견적 파일(.json)을 불러옵니다."}
-              style={{
-                background: 'rgba(255, 255, 255, 0.07)',
-                border: '1px solid var(--glass-border)',
-                color: '#e2e8f0',
-                borderRadius: '8px',
-                padding: '0.42rem 0.75rem',
+                borderRadius: '6px',
+                padding: '0 0.7rem',
                 fontSize: '0.78rem',
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.35rem',
+                whiteSpace: 'nowrap',
+                boxSizing: 'border-box'
+              }}
+            >
+              <Download size={13} /> 내보내기 (.json)
+            </button>
+            <label
+              title={isMixedMode ? "저장해둔 2번 견적 파일(.json)을 불러옵니다." : "저장해둔 1번 견적 파일(.json)을 불러옵니다."}
+              style={{
+                height: '32px',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid var(--glass-border)',
+                color: '#e2e8f0',
+                borderRadius: '6px',
+                padding: '0 0.7rem',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                whiteSpace: 'nowrap',
+                boxSizing: 'border-box',
                 margin: 0
               }}
             >
-              <Upload size={14} /> {isMixedMode ? '2번 견적 파일 불러오기' : '1번 견적 파일 불러오기'}
+              <Upload size={13} /> 가져오기
               <input
                 type="file"
                 accept=".json,application/json"
@@ -7257,47 +7321,54 @@ export default function BenefitCalculator({ onBack }) {
             style={{
               ...textInputStyle,
               flex: '1 1 260px',
-              padding: '0.6rem 0.85rem',
-              fontSize: '0.9rem'
+              height: '38px',
+              padding: '0 0.85rem',
+              fontSize: '0.86rem',
+              borderRadius: '8px',
+              boxSizing: 'border-box'
             }}
           />
           <button
             type="button"
             onClick={handleSaveNewQuote}
             style={{
+              height: '38px',
               background: 'linear-gradient(135deg, #10b981, #059669)',
               border: 'none',
               color: 'white',
-              borderRadius: '10px',
-              padding: '0.62rem 1.05rem',
-              fontSize: '0.86rem',
+              borderRadius: '8px',
+              padding: '0 1rem',
+              fontSize: '0.83rem',
               fontWeight: 800,
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.38rem',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              boxSizing: 'border-box'
             }}
           >
-            <Save size={15} /> 현재 견적 새로 저장
+            <Save size={14} /> 현재 견적 새로 저장
           </button>
           {activeQuoteId && (
             <button
               type="button"
               onClick={handleOverwriteActiveQuote}
               style={{
+                height: '38px',
                 background: 'rgba(212, 175, 55, 0.18)',
                 border: '1px solid var(--accent-gold)',
                 color: 'var(--accent-gold-light)',
-                borderRadius: '10px',
-                padding: '0.62rem 0.95rem',
-                fontSize: '0.84rem',
+                borderRadius: '8px',
+                padding: '0 0.9rem',
+                fontSize: '0.83rem',
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.35rem',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                boxSizing: 'border-box'
               }}
             >
               <Save size={14} /> 선택 견적 덮어쓰기
