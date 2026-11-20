@@ -3691,7 +3691,203 @@ export default function BenefitCalculator({ onBack }) {
   const [isExportingImage, setIsExportingImage] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [imageModalData, setImageModalData] = useState(null);
+  const [isExportingPosImage, setIsExportingPosImage] = useState(false);
+  const [isExportingPosPdf, setIsExportingPosPdf] = useState(false);
+  const [posImageModalData, setPosImageModalData] = useState(null);
   const [mobileFitMode, setMobileFitMode] = useState(false);
+
+  const captureFullPosSheetPng = async () => {
+    const node = document.getElementById('pos-cashier-print-area');
+    if (!node) return null;
+    const targetWidth = 790;
+    const prevOverflow = node.style.overflow;
+    const prevOverflowY = node.style.overflowY;
+    const prevMaxHeight = node.style.maxHeight;
+    const prevHeight = node.style.height;
+    const prevWidth = node.style.width;
+    const prevFlex = node.style.flex;
+    try {
+      node.style.overflow = 'visible';
+      node.style.overflowY = 'visible';
+      node.style.maxHeight = 'none';
+      node.style.height = 'auto';
+      node.style.width = `${targetWidth}px`;
+      node.style.flex = 'none';
+      const fullHeight = node.scrollHeight + 16;
+
+      return await htmlToImage.toPng(node, {
+        quality: 0.98,
+        pixelRatio: 2,
+        width: targetWidth,
+        height: fullHeight,
+        backgroundColor: '#ffffff',
+        skipFonts: true,
+        filter: (el) => !(el && el.classList && el.classList.contains('no-print')),
+        style: {
+          width: `${targetWidth}px`,
+          maxWidth: `${targetWidth}px`,
+          height: `${fullHeight}px`,
+          maxHeight: 'none',
+          overflow: 'visible',
+          margin: '0',
+          boxShadow: 'none',
+          background: '#ffffff'
+        }
+      });
+    } finally {
+      node.style.overflow = prevOverflow;
+      node.style.overflowY = prevOverflowY;
+      node.style.maxHeight = prevMaxHeight;
+      node.style.height = prevHeight;
+      node.style.width = prevWidth;
+      node.style.flex = prevFlex;
+    }
+  };
+
+  const handleExportPosAsImage = async () => {
+    const node = document.getElementById('pos-cashier-print-area');
+    if (!node || isExportingPosImage) return;
+    setIsExportingPosImage(true);
+    try {
+      const dataUrl = await captureFullPosSheetPng();
+      if (!dataUrl) return;
+
+      const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
+      const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
+      const filename = `JCC_POS지시서_${safeCustomer}_${safeDate}.png`;
+
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      let file = null;
+      try {
+        file = new File([blob], filename, { type: 'image/png' });
+      } catch (_) {}
+
+      let shared = false;
+      const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+      if (isMobile && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `JCC POS 결제 지시서 (${safeCustomer} 고객님)`,
+            text: `[JCC 진센조] ${safeCustomer} 고객님 POS 결제 및 사은행사 지시서입니다.`
+          });
+          shared = true;
+        } catch (shareErr) {
+          if (shareErr.name === 'AbortError') {
+            shared = true;
+          }
+        }
+      }
+
+      if (!shared) {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = dataUrl;
+        link.click();
+      }
+
+      let copied = false;
+      if (navigator.clipboard && window.ClipboardItem) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          copied = true;
+        } catch (_) {}
+      }
+
+      setPosImageModalData({
+        dataUrl,
+        filename,
+        file,
+        customer: safeCustomer
+      });
+
+      if (copied) {
+        showTempNotice('📷 POS 지시서 사진이 저장되었으며 클립보드에도 복사되었습니다. (카카오톡 Ctrl+V 가능)');
+      } else {
+        showTempNotice(`📷 POS 지시서 사진(${filename})이 생성되었습니다.`);
+      }
+    } catch (err) {
+      console.error('POS 지시서 사진 생성 오류:', err);
+      alert('POS 지시서 사진 생성 중 오류가 발생했습니다.');
+    } finally {
+      setIsExportingPosImage(false);
+    }
+  };
+
+  const handleExportPosAsPdf = async () => {
+    const node = document.getElementById('pos-cashier-print-area');
+    if (!node || isExportingPosPdf) return;
+    setIsExportingPosPdf(true);
+    try {
+      const dataUrl = await captureFullPosSheetPng();
+      if (!dataUrl) return;
+
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = dataUrl;
+      });
+
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+
+      const pageW = 210;
+      const pageH = 297;
+      const margin = 8;
+      const maxW = pageW - margin * 2;
+      const maxH = pageH - margin * 2;
+      const ratio = img.height / img.width;
+      let renderW = maxW;
+      let renderH = renderW * ratio;
+      if (renderH > maxH) {
+        renderH = maxH;
+        renderW = renderH / ratio;
+      }
+      const xOffset = (pageW - renderW) / 2;
+      pdf.addImage(dataUrl, 'PNG', xOffset, margin, renderW, renderH, undefined, 'FAST');
+
+      const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
+      const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
+      const filename = `JCC_POS지시서_${safeCustomer}_${safeDate}.pdf`;
+
+      const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+      let shared = false;
+      if (isMobile && navigator.canShare) {
+        try {
+          const pdfBlob = pdf.output('blob');
+          const pdfFile = new File([pdfBlob], filename, { type: 'application/pdf' });
+          if (navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({
+              files: [pdfFile],
+              title: `JCC POS 결제 지시서 (${safeCustomer} 고객님)`,
+              text: `[JCC 진센조] ${safeCustomer} 고객님 POS 결제 지시서 PDF입니다.`
+            });
+            shared = true;
+          }
+        } catch (shareErr) {
+          if (shareErr.name === 'AbortError') shared = true;
+        }
+      }
+
+      if (!shared) {
+        pdf.save(filename);
+      }
+      showTempNotice(`📄 POS 지시서 고화질 PDF(${filename}) 저장이 완료되었습니다.`);
+    } catch (err) {
+      console.error('POS 지시서 PDF 생성 오류:', err);
+      alert('POS 지시서 PDF 생성 중 오류가 발생했습니다. [사진으로 저장] 버튼을 이용해 주세요.');
+    } finally {
+      setIsExportingPosPdf(false);
+    }
+  };
 
   const handleExportAsImage = async (pageIndex = 0, pageLabel = '') => {
     const nodes = document.querySelectorAll('.a4-print-sheet');
@@ -4438,7 +4634,7 @@ export default function BenefitCalculator({ onBack }) {
             </div>
           </div>
 
-          {/* 모달 하단 버튼 바 */}
+          {/* 모달 하단 버튼 바 (모바일 사진 저장 / 고화질 PDF / PC 인쇄) */}
           <div
             style={{
               padding: '0.8rem 1.4rem',
@@ -4446,30 +4642,84 @@ export default function BenefitCalculator({ onBack }) {
               borderTop: '1px solid #cbd5e1',
               display: 'flex',
               justifyContent: 'flex-end',
-              gap: '0.75rem'
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '0.6rem'
             }}
           >
             <button
               type="button"
               onClick={() => setShowPosCashierModal(false)}
               style={{
-                padding: '0.55rem 1.1rem',
+                padding: '0.55rem 1.05rem',
                 borderRadius: '8px',
                 border: '1px solid #cbd5e1',
                 background: '#ffffff',
                 color: '#475569',
-                fontSize: '0.86rem',
+                fontSize: '0.84rem',
                 fontWeight: 700,
                 cursor: 'pointer'
               }}
             >
               닫기
             </button>
+
+            <button
+              type="button"
+              onClick={handleExportPosAsImage}
+              disabled={isExportingPosImage}
+              style={{
+                padding: '0.55rem 1.15rem',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #059669, #10b981)',
+                color: '#ffffff',
+                fontSize: '0.85rem',
+                fontWeight: 800,
+                cursor: isExportingPosImage ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                boxShadow: '0 3px 10px rgba(16, 185, 129, 0.3)'
+              }}
+            >
+              <Camera size={16} />
+              {isExportingPosImage ? '사진 생성 중...' : '사진(이미지) 저장'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportPosAsPdf}
+              disabled={isExportingPosPdf}
+              style={{
+                padding: '0.55rem 1.15rem',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                color: '#ffffff',
+                fontSize: '0.85rem',
+                fontWeight: 800,
+                cursor: isExportingPosPdf ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                boxShadow: '0 3px 10px rgba(37, 99, 235, 0.28)'
+              }}
+            >
+              <FileDown size={16} />
+              {isExportingPosPdf ? 'PDF 생성 중...' : 'PDF 다운로드'}
+            </button>
+
             <button
               type="button"
               onClick={() => {
+                const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
                 const printContents = document.getElementById('pos-cashier-print-area').innerHTML;
                 const printWindow = window.open('', '', 'width=850,height=950');
+                if (!printWindow) {
+                  handleExportPosAsPdf();
+                  return;
+                }
                 printWindow.document.write(`
                   <!DOCTYPE html>
                   <html>
@@ -4541,16 +4791,18 @@ export default function BenefitCalculator({ onBack }) {
                 printWindow.focus();
                 setTimeout(() => {
                   printWindow.print();
-                  printWindow.close();
+                  if (!isMobile) {
+                    printWindow.close();
+                  }
                 }, 250);
               }}
               style={{
-                padding: '0.55rem 1.3rem',
+                padding: '0.55rem 1.2rem',
                 borderRadius: '8px',
                 border: 'none',
                 background: '#0284c7',
                 color: '#ffffff',
-                fontSize: '0.86rem',
+                fontSize: '0.85rem',
                 fontWeight: 800,
                 cursor: 'pointer',
                 display: 'inline-flex',
@@ -4558,11 +4810,207 @@ export default function BenefitCalculator({ onBack }) {
                 gap: '0.35rem'
               }}
             >
-              <Receipt size={16} />
+              <Printer size={16} />
               POS 지시서 인쇄
             </button>
           </div>
         </div>
+
+        {/* POS 지시서 사진 미리보기 & 스마트폰 갤러리 저장 모달 */}
+        {posImageModalData && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="no-print"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.88)',
+              zIndex: 10020,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              backdropFilter: 'blur(6px)'
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPosImageModalData(null);
+            }}
+          >
+            <div
+              style={{
+                background: '#0f172a',
+                border: '1px solid rgba(52, 211, 153, 0.5)',
+                borderRadius: '16px',
+                maxWidth: '680px',
+                width: '100%',
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                boxShadow: '0 25px 60px rgba(0,0,0,0.9)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.85rem 1.25rem',
+                  borderBottom: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.03)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Camera size={18} style={{ color: '#34d399' }} />
+                  <span style={{ fontWeight: 800, fontSize: '0.96rem', color: '#f8fafc' }}>
+                    POS 결제 지시서 사진 생성 완료
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPosImageModalData(null)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div
+                style={{
+                  padding: '1rem',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  background: '#020617'
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    background: 'rgba(16, 185, 129, 0.14)',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    borderRadius: '10px',
+                    padding: '0.65rem 0.9rem',
+                    fontSize: '0.82rem',
+                    color: '#a7f3d0',
+                    marginBottom: '0.85rem',
+                    lineHeight: 1.45
+                  }}
+                >
+                  💡 <strong>스마트폰 사진 저장 안내:</strong> 아래 지시서 이미지를 <strong>1~2초간 꾹(길게) 터치</strong>하신 후 <strong>[사진 앱에 저장]</strong> 또는 <strong>[이미지 저장]</strong>을 선택하시면 갤러리에 즉시 저장됩니다.
+                </div>
+
+                <img
+                  src={posImageModalData.dataUrl}
+                  alt="POS 결제 지시서 사진"
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    borderRadius: '8px',
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
+                    border: '1px solid #334155',
+                    background: '#ffffff'
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.6rem',
+                  padding: '0.85rem 1.25rem',
+                  borderTop: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.03)',
+                  flexWrap: 'wrap',
+                  justifyContent: 'flex-end'
+                }}
+              >
+                {typeof navigator !== 'undefined' &&
+                  navigator.canShare &&
+                  posImageModalData.file &&
+                  navigator.canShare({ files: [posImageModalData.file] }) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.share({
+                            files: [posImageModalData.file],
+                            title: `JCC POS 결제 지시서 (${posImageModalData.customer} 고객님)`,
+                            text: `[JCC 진센조] ${posImageModalData.customer} 고객님 POS 결제 지시서입니다.`
+                          });
+                        } catch (_) {}
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '0.6rem 1.1rem',
+                        borderRadius: '10px',
+                        fontWeight: 700,
+                        fontSize: '0.86rem',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem'
+                      }}
+                    >
+                      <Share2 size={15} /> 카카오톡 / 앱으로 공유
+                    </button>
+                  )}
+
+                <a
+                  href={posImageModalData.dataUrl}
+                  download={posImageModalData.filename}
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    border: '1px solid rgba(59, 130, 246, 0.45)',
+                    color: '#93c5fd',
+                    padding: '0.6rem 1.1rem',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                    fontSize: '0.86rem',
+                    textDecoration: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <Download size={15} /> 사진 파일 다운로드
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => setPosImageModalData(null)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#f8fafc',
+                    padding: '0.6rem 1.1rem',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                    fontSize: '0.86rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
