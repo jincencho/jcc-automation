@@ -46,7 +46,13 @@ import {
   ArrowRight,
   FileDown
 } from 'lucide-react';
-import { fetchCloudQuotes, saveCloudQuote, deleteCloudQuote } from '../utils/cloudQuoteService.js';
+import {
+  fetchCloudQuotes,
+  saveCloudQuote,
+  deleteCloudQuote,
+  fetchCloudUserAccounts,
+  saveCloudUserAccounts
+} from '../utils/cloudQuoteService.js';
 
 // 인쇄 및 모바일 PDF 출력 안전 텍스트 정제 (보이지 않는 제로위드, BOM, 특수공백, 개행문자 완전 제거)
 function cleanPrintText(str) {
@@ -652,18 +658,125 @@ function CardEventQrSvg({ url, size = 72, label = '이벤트 대상 확인 QR코
   );
 }
 
+const AUTH_ACCOUNTS_STORAGE_KEY = 'jcc_auth_accounts_v1';
+const AUTH_SESSION_USER_KEY = 'jcc_calc_auth_user';
+
+const DEFAULT_USER_ACCOUNTS = [
+  {
+    uid: 'acc_admin_master',
+    id: 'admin',
+    pw: '08931121',
+    name: '조준석 총괄 관리자',
+    level: 'admin', // 'lv1' | 'lv2' | 'admin'
+    isMaster: true,
+    createdAt: '2026-11-21'
+  },
+  {
+    uid: 'acc_lv1_default',
+    id: 'lv1',
+    pw: '1111',
+    name: '매니저 (Lv.1 기본)',
+    level: 'lv1',
+    isMaster: false,
+    createdAt: '2026-11-21'
+  },
+  {
+    uid: 'acc_lv2_default',
+    id: 'lv2',
+    pw: '2222',
+    name: '수석 매니저 (Lv.2 전체)',
+    level: 'lv2',
+    isMaster: false,
+    createdAt: '2026-11-21'
+  }
+];
+
+function sanitizeUserAccounts(rawList) {
+  if (!Array.isArray(rawList) || rawList.length === 0) {
+    return DEFAULT_USER_ACCOUNTS;
+  }
+  const normalized = rawList
+    .filter((it) => it && typeof it.id === 'string' && it.id.trim())
+    .map((it, idx) => ({
+      uid: it.uid || `acc_${idx}_${Date.now()}`,
+      id: it.id.trim(),
+      pw: String(it.pw ?? ''),
+      name: (it.name || it.id).trim(),
+      level: it.level === 'admin' ? 'admin' : it.level === 'lv2' ? 'lv2' : 'lv1',
+      isMaster: Boolean(it.isMaster),
+      createdAt: it.createdAt || '2026-11-21'
+    }));
+
+  // 최소 1개 이상의 관리자(admin) 계정이 항상 존재하도록 보장
+  const hasAdmin = normalized.some((acc) => acc.level === 'admin');
+  if (!hasAdmin) {
+    return [DEFAULT_USER_ACCOUNTS[0], ...normalized];
+  }
+  return normalized;
+}
+
+function loadStoredUserAccounts() {
+  try {
+    const raw = localStorage.getItem(AUTH_ACCOUNTS_STORAGE_KEY);
+    if (!raw) return DEFAULT_USER_ACCOUNTS;
+    const parsed = JSON.parse(raw);
+    return sanitizeUserAccounts(parsed);
+  } catch {
+    return DEFAULT_USER_ACCOUNTS;
+  }
+}
+
+function loadSessionAuthUser() {
+  try {
+    const rawUser = sessionStorage.getItem(AUTH_SESSION_USER_KEY);
+    if (!rawUser) return null;
+    const parsed = JSON.parse(rawUser);
+    if (parsed && parsed.id && parsed.level) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export default function BenefitCalculator({ onBack }) {
-  // 인증 상태 (세션 유지)
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return sessionStorage.getItem('jcc_calc_auth') === 'true';
-  });
+  // 접속자 계정 목록 (로컬 + 클라우드 실시간 동기화)
+  const [userAccounts, setUserAccounts] = useState(() => loadStoredUserAccounts());
+  const [isAccountCloudSyncing, setIsAccountCloudSyncing] = useState(false);
+  const [accountSyncNotice, setAccountSyncNotice] = useState('');
+
+  // 현재 로그인한 사용자 정보 ({ uid, id, name, level, isMaster })
+  const [currentUser, setCurrentUser] = useState(() => loadSessionAuthUser());
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(loadSessionAuthUser()));
+  const [loginIdInput, setLoginIdInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [loginErrorMsg, setLoginErrorMsg] = useState('');
+
+  // 관리자 전용 계정 설정 모달 상태
+  const [showAdminAccountModal, setShowAdminAccountModal] = useState(false);
+  const [newAccId, setNewAccId] = useState('');
+  const [newAccPw, setNewAccPw] = useState('');
+  const [newAccName, setNewAccName] = useState('');
+  const [newAccLevel, setNewAccLevel] = useState('lv1');
+  const [editingAccUid, setEditingAccUid] = useState(null);
+  const [editAccId, setEditAccId] = useState('');
+  const [editAccPw, setEditAccPw] = useState('');
+  const [editAccName, setEditAccName] = useState('');
+  const [editAccLevel, setEditAccLevel] = useState('lv1');
+  const [showPasswordsInAdmin, setShowPasswordsInAdmin] = useState(true);
+
+  // 현재 접속자 권한 레벨 판별 ('lv1': 1번 계산기 전용 | 'lv2': 1+2번 전체 | 'admin': 전체 + 계정관리)
+  const currentUserLevel = currentUser?.level || 'lv1';
+  const isAdminUser = currentUserLevel === 'admin';
+  const canAccessLv2 = currentUserLevel === 'lv2' || currentUserLevel === 'admin';
 
   // 화면 전환 ('input' | 'result')
   const [step, setStep] = useState('input');
   // 계산기 모드 ('compare': 일반구매 vs 구독 비교 계산기 | 'mixed': 일반+구독 혼합 견적기)
   const [calculatorMode, setCalculatorMode] = useState('compare');
-  const isMixedMode = calculatorMode === 'mixed';
+  // Lv.1 계정은 어떠한 경우에도 2번 계산기(isMixedMode)가 활성화되거나 노출되지 않도록 원천 차단
+  const isMixedMode = canAccessLv2 && calculatorMode === 'mixed';
 
   // 스마트 견적기 전용: 구독 모델 및 전용 서비스 통합 항목군
   // (모델명 · 갯수 · 구독기간 · 서비스주기(6,12,36) · 기본구독료 · 할인구독료 · 선납금 · 무상수리 이용금액 · 소모품비용 · 방문케어비용)
@@ -1209,23 +1322,389 @@ export default function BenefitCalculator({ onBack }) {
   const [recommendMode, setRecommendMode] = useState('auto');
   const [checkpoints, setCheckpoints] = useState(DEFAULT_CHECKPOINTS);
 
-  // ---------------- 비밀번호 로그인 처리 ----------------
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (passwordInput === '08931121') {
-      sessionStorage.setItem('jcc_calc_auth', 'true');
-      setIsAuthenticated(true);
-      setPasswordInput('');
+  // ---------------- 접속 ID / PW 로그인 및 레벨(Lv.1 / Lv.2 / 관리자) 권한 관리 ----------------
+  const showAccountTempNotice = (msg) => {
+    setAccountSyncNotice(msg);
+    setTimeout(() => {
+      setAccountSyncNotice((prev) => (prev === msg ? '' : prev));
+    }, 3200);
+  };
+
+  const persistAndSyncUserAccounts = async (nextRawList, noticeMsg = '계정 및 권한 설정이 저장되었습니다.') => {
+    const sanitized = sanitizeUserAccounts(nextRawList);
+    setUserAccounts(sanitized);
+    try {
+      localStorage.setItem(AUTH_ACCOUNTS_STORAGE_KEY, JSON.stringify(sanitized));
+    } catch {}
+
+    // 현재 로그인 중인 본인의 계정 정보가 변경되었다면 세션에도 즉시 반영
+    if (currentUser) {
+      const myLatest =
+        sanitized.find((a) => a.uid === currentUser.uid) ||
+        sanitized.find((a) => a.id.toLowerCase() === currentUser.id.toLowerCase());
+      if (myLatest) {
+        const updatedSessionUser = {
+          uid: myLatest.uid,
+          id: myLatest.id,
+          name: myLatest.name,
+          level: myLatest.level,
+          isMaster: Boolean(myLatest.isMaster)
+        };
+        setCurrentUser(updatedSessionUser);
+        try {
+          sessionStorage.setItem(AUTH_SESSION_USER_KEY, JSON.stringify(updatedSessionUser));
+        } catch {}
+        if (updatedSessionUser.level === 'lv1') {
+          setCalculatorMode('compare');
+          setShowPosCashierModal(false);
+        }
+      }
+    }
+
+    setIsAccountCloudSyncing(true);
+    const res = await saveCloudUserAccounts(sanitized);
+    setIsAccountCloudSyncing(false);
+    if (res.success) {
+      showAccountTempNotice(`✓ ${noticeMsg} (로컬·HTML·온라인 클라우드 실시간 반영 완료)`);
     } else {
-      alert('비밀번호가 틀렸습니다.');
+      showAccountTempNotice(`✓ ${noticeMsg} (현재 기기에 저장됨)`);
+    }
+  };
+
+  const syncUserAccountsFromCloud = async (isManual = false) => {
+    setIsAccountCloudSyncing(true);
+    const res = await fetchCloudUserAccounts();
+    setIsAccountCloudSyncing(false);
+
+    if (res.success && Array.isArray(res.accounts) && res.accounts.length > 0) {
+      const sanitized = sanitizeUserAccounts(res.accounts);
+      setUserAccounts(sanitized);
+      try {
+        localStorage.setItem(AUTH_ACCOUNTS_STORAGE_KEY, JSON.stringify(sanitized));
+      } catch {}
+
+      if (currentUser) {
+        const myLatest =
+          sanitized.find((a) => a.uid === currentUser.uid) ||
+          sanitized.find((a) => a.id.toLowerCase() === currentUser.id.toLowerCase());
+        if (myLatest) {
+          const updatedSessionUser = {
+            uid: myLatest.uid,
+            id: myLatest.id,
+            name: myLatest.name,
+            level: myLatest.level,
+            isMaster: Boolean(myLatest.isMaster)
+          };
+          setCurrentUser(updatedSessionUser);
+          try {
+            sessionStorage.setItem(AUTH_SESSION_USER_KEY, JSON.stringify(updatedSessionUser));
+          } catch {}
+          if (updatedSessionUser.level === 'lv1') {
+            setCalculatorMode('compare');
+            setShowPosCashierModal(false);
+          }
+        }
+      }
+      if (isManual) {
+        showAccountTempNotice('✓ 클라우드에서 최신 접속자 계정 및 권한 목록을 동기화했습니다.');
+      }
+      return sanitized;
+    } else if (res.success && res.accounts === null) {
+      // 클라우드에 초기 데이터가 없을 경우 현재 계정 목록으로 시드 저장
+      await saveCloudUserAccounts(userAccounts);
+      if (isManual) {
+        showAccountTempNotice('✓ 현재 계정 목록을 클라우드에 초기 동기화했습니다.');
+      }
+    }
+    return userAccounts;
+  };
+
+  useEffect(() => {
+    syncUserAccountsFromCloud(false);
+  }, []);
+
+  // Lv.1 권한인 경우 어떠한 경로로도 2번 계산기나 POS 지시서, 관리자 모달이 열리지 않도록 강제 잠금
+  useEffect(() => {
+    if (!canAccessLv2) {
+      if (calculatorMode !== 'compare') {
+        setCalculatorMode('compare');
+      }
+      if (showPosCashierModal) {
+        setShowPosCashierModal(false);
+      }
+    }
+    if (!isAdminUser && showAdminAccountModal) {
+      setShowAdminAccountModal(false);
+    }
+  }, [canAccessLv2, isAdminUser, calculatorMode, showPosCashierModal, showAdminAccountModal]);
+
+  const findMatchedAccount = (list, rawId, rawPw) => {
+    const idLower = rawId.trim().toLowerCase();
+    const pwStr = String(rawPw);
+    const directMatch = list.find(
+      (acc) => acc.id.trim().toLowerCase() === idLower && String(acc.pw) === pwStr
+    );
+    if (directMatch) return directMatch;
+
+    // 마스터 관리자 보조 별칭 ('jcc') 지원
+    if (idLower === 'jcc' && pwStr === '08931121') {
+      return list.find((acc) => acc.isMaster || acc.level === 'admin') || null;
+    }
+    return null;
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginErrorMsg('');
+    const trimmedId = loginIdInput.trim();
+    const trimmedPw = passwordInput.trim();
+
+    if (!trimmedId) {
+      setLoginErrorMsg('접속 아이디(ID)를 입력해주세요.');
+      return;
+    }
+    if (!trimmedPw) {
+      setLoginErrorMsg('비밀번호(PW)를 입력해주세요.');
+      return;
+    }
+
+    let matched = findMatchedAccount(userAccounts, trimmedId, trimmedPw);
+    if (!matched) {
+      // 다른 환경(온라인/관리자 PC)에서 방금 생성·수정했을 수 있으므로 클라우드 즉시 조회 후 재검증
+      const latestList = await syncUserAccountsFromCloud(false);
+      matched = findMatchedAccount(latestList, trimmedId, trimmedPw);
+    }
+
+    if (matched) {
+      const sessionUser = {
+        uid: matched.uid,
+        id: matched.id,
+        name: matched.name || matched.id,
+        level: matched.level,
+        isMaster: Boolean(matched.isMaster)
+      };
+      try {
+        sessionStorage.setItem(AUTH_SESSION_USER_KEY, JSON.stringify(sessionUser));
+        sessionStorage.setItem('jcc_calc_auth', 'true');
+      } catch {}
+      setCurrentUser(sessionUser);
+      setIsAuthenticated(true);
+      setLoginIdInput('');
+      setPasswordInput('');
+      setLoginErrorMsg('');
+      if (sessionUser.level === 'lv1') {
+        setCalculatorMode('compare');
+        setShowPosCashierModal(false);
+      }
+    } else {
+      setLoginErrorMsg('아이디(ID) 또는 비밀번호(PW)가 일치하지 않습니다. 관리자에게 문의하세요.');
       setPasswordInput('');
     }
   };
 
   const handleLock = () => {
-    sessionStorage.removeItem('jcc_calc_auth');
+    try {
+      sessionStorage.removeItem('jcc_calc_auth');
+      sessionStorage.removeItem(AUTH_SESSION_USER_KEY);
+    } catch {}
+    setCurrentUser(null);
     setIsAuthenticated(false);
+    setShowAdminAccountModal(false);
+    setShowPosCashierModal(false);
     setStep('input');
+  };
+
+  // 관리자 전용: 새 계정 생성
+  const handleAdminAddAccount = async (e) => {
+    e.preventDefault();
+    if (!isAdminUser) return;
+    const trimmedId = newAccId.trim();
+    const trimmedPw = newAccPw.trim();
+    const trimmedName = newAccName.trim() || trimmedId;
+
+    if (!trimmedId) {
+      alert('생성할 접속 아이디(ID)를 입력해주세요.');
+      return;
+    }
+    if (!trimmedPw) {
+      alert('설정할 비밀번호(PW)를 입력해주세요.');
+      return;
+    }
+    if (userAccounts.some((acc) => acc.id.trim().toLowerCase() === trimmedId.toLowerCase())) {
+      alert(`이미 존재하는 아이디('${trimmedId}')입니다. 다른 아이디를 입력해주세요.`);
+      return;
+    }
+
+    const newAccount = {
+      uid: `acc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: trimmedId,
+      pw: trimmedPw,
+      name: trimmedName,
+      level: newAccLevel === 'admin' ? 'admin' : newAccLevel === 'lv2' ? 'lv2' : 'lv1',
+      isMaster: false,
+      createdAt: new Date().toISOString().slice(0, 10)
+    };
+
+    const nextList = [...userAccounts, newAccount];
+    setNewAccId('');
+    setNewAccPw('');
+    setNewAccName('');
+    setNewAccLevel('lv1');
+    await persistAndSyncUserAccounts(
+      nextList,
+      `'${trimmedName} (${trimmedId})' 계정이 [${newAccount.level.toUpperCase()}] 등급으로 등록되었습니다.`
+    );
+  };
+
+  // 관리자 전용: 원클릭 레벨(Lv.1 / Lv.2 / 관리자) 변경
+  const handleAdminChangeLevel = async (targetUid, nextLevel) => {
+    if (!isAdminUser) return;
+    const targetAcc = userAccounts.find((a) => a.uid === targetUid);
+    if (!targetAcc || targetAcc.level === nextLevel) return;
+
+    if (targetAcc.level === 'admin' && nextLevel !== 'admin') {
+      const remainingAdmins = userAccounts.filter((a) => a.level === 'admin' && a.uid !== targetUid);
+      if (remainingAdmins.length === 0) {
+        alert('최소 1개 이상의 관리자(Admin) 계정이 유지되어야 합니다.');
+        return;
+      }
+    }
+
+    const nextList = userAccounts.map((acc) =>
+      acc.uid === targetUid ? { ...acc, level: nextLevel } : acc
+    );
+    const levelLabel =
+      nextLevel === 'admin'
+        ? '관리자(전체+계정관리)'
+        : nextLevel === 'lv2'
+          ? 'Lv.2 (1·2번 전체 기능 허용)'
+          : 'Lv.1 (1번 계산기 전용 · Lv.2 비노출)';
+    await persistAndSyncUserAccounts(
+      nextList,
+      `'${targetAcc.name} (${targetAcc.id})' 계정의 권한이 [${levelLabel}]로 변경되었습니다.`
+    );
+  };
+
+  // 관리자 전용: 계정 ID / PW / 이름 수정 시작 및 저장
+  const handleAdminStartEdit = (acc) => {
+    setEditingAccUid(acc.uid);
+    setEditAccId(acc.id);
+    setEditAccPw(acc.pw);
+    setEditAccName(acc.name || acc.id);
+    setEditAccLevel(acc.level || 'lv1');
+  };
+
+  const handleAdminSaveEdit = async (targetUid) => {
+    if (!isAdminUser) return;
+    const trimmedId = editAccId.trim();
+    const trimmedPw = editAccPw.trim();
+    const trimmedName = editAccName.trim() || trimmedId;
+
+    if (!trimmedId || !trimmedPw) {
+      alert('아이디(ID)와 비밀번호(PW)를 모두 입력해주세요.');
+      return;
+    }
+
+    const duplicate = userAccounts.find(
+      (a) => a.uid !== targetUid && a.id.trim().toLowerCase() === trimmedId.toLowerCase()
+    );
+    if (duplicate) {
+      alert(`이미 사용 중인 아이디('${trimmedId}')입니다.`);
+      return;
+    }
+
+    const targetAcc = userAccounts.find((a) => a.uid === targetUid);
+    if (targetAcc?.level === 'admin' && editAccLevel !== 'admin') {
+      const remainingAdmins = userAccounts.filter((a) => a.level === 'admin' && a.uid !== targetUid);
+      if (remainingAdmins.length === 0) {
+        alert('최소 1개 이상의 관리자(Admin) 계정이 유지되어야 합니다.');
+        return;
+      }
+    }
+
+    const nextList = userAccounts.map((acc) =>
+      acc.uid === targetUid
+        ? {
+            ...acc,
+            id: trimmedId,
+            pw: trimmedPw,
+            name: trimmedName,
+            level: editAccLevel
+          }
+        : acc
+    );
+    setEditingAccUid(null);
+    await persistAndSyncUserAccounts(
+      nextList,
+      `'${trimmedName} (${trimmedId})' 계정 정보(ID/PW/레벨)가 수정되었습니다.`
+    );
+  };
+
+  // 관리자 전용: 계정 삭제
+  const handleAdminDeleteAccount = async (acc) => {
+    if (!isAdminUser) return;
+    if (acc.isMaster) {
+      alert('기본 총괄 관리자 계정은 삭제할 수 없습니다. (ID 및 비밀번호 수정은 가능합니다)');
+      return;
+    }
+    if (acc.uid === currentUser?.uid) {
+      alert('현재 로그인 중인 본인 계정은 삭제할 수 없습니다.');
+      return;
+    }
+    if (acc.level === 'admin') {
+      const remainingAdmins = userAccounts.filter((a) => a.level === 'admin' && a.uid !== acc.uid);
+      if (remainingAdmins.length === 0) {
+        alert('최소 1개 이상의 관리자 계정이 유지되어야 합니다.');
+        return;
+      }
+    }
+    if (!window.confirm(`'${acc.name} (ID: ${acc.id})' 계정을 삭제하시겠습니까?`)) {
+      return;
+    }
+    const nextList = userAccounts.filter((a) => a.uid !== acc.uid);
+    await persistAndSyncUserAccounts(nextList, `'${acc.name} (${acc.id})' 계정이 삭제되었습니다.`);
+  };
+
+  // 오프라인 백업/복원용 계정 설정 JSON 내보내기 / 불러오기
+  const handleExportAccountsJson = () => {
+    if (!isAdminUser) return;
+    const payload = {
+      type: 'JCC_AUTH_ACCOUNTS_CONFIG',
+      exportedAt: new Date().toISOString(),
+      accounts: userAccounts
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `JCC_접속계정_권한설정_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showAccountTempNotice('✓ 접속 계정 및 레벨 설정 파일(.json)이 다운로드되었습니다.');
+  };
+
+  const handleImportAccountsJson = (e) => {
+    if (!isAdminUser) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const parsed = JSON.parse(String(ev.target?.result || ''));
+        const list = Array.isArray(parsed) ? parsed : parsed?.accounts;
+        if (!Array.isArray(list) || list.length === 0) {
+          alert('유효한 계정 설정 파일이 아닙니다.');
+          return;
+        }
+        await persistAndSyncUserAccounts(list, `파일에서 계정 설정(${list.length}개)을 불러와 적용했습니다.`);
+      } catch {
+        alert('계정 설정 파일(.json) 형식이 올바르지 않습니다.');
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+    e.target.value = '';
   };
 
   // 복합 견적기 구독 항목 공통 헬퍼 (제휴카드 및 구간 계산에 필요)
@@ -3453,7 +3932,7 @@ export default function BenefitCalculator({ onBack }) {
     }
     setIncludeServiceInFinal(d.includeServiceInFinal !== undefined ? Boolean(d.includeServiceInFinal) : true);
     setRecommendMode(d.recommendMode || 'auto');
-    setCalculatorMode(d.calculatorMode === 'mixed' ? 'mixed' : 'compare');
+    setCalculatorMode(canAccessLv2 && d.calculatorMode === 'mixed' ? 'mixed' : 'compare');
     setMixedEventType(d.mixedEventType || 'wedding');
 
     if (Array.isArray(d.mixedCashbackItems) && d.mixedCashbackItems.length > 0) {
@@ -3645,9 +4124,13 @@ export default function BenefitCalculator({ onBack }) {
         }
 
         if (!isMixedMode && isIncomingMixed) {
-          alert(
-            "불러오기 실패: 선택하신 파일은 '2번 구독 포함 계산기' 전용 저장파일입니다.\n상단 탭에서 '2번 구독 포함 계산기'로 전환하신 후 불러와 주세요."
-          );
+          if (!canAccessLv2) {
+            alert('불러오기 실패: 현재 계정(Lv.1)은 1번 구독 비교 계산기 전용 권한입니다.');
+          } else {
+            alert(
+              "불러오기 실패: 선택하신 파일은 '2번 구독 포함 계산기' 전용 저장파일입니다.\n상단 탭에서 '2번 구독 포함 계산기'로 전환하신 후 불러와 주세요."
+            );
+          }
           e.target.value = '';
           return;
         }
@@ -5118,11 +5601,737 @@ export default function BenefitCalculator({ onBack }) {
   };
 
   // ============================================================================
-  // 1. 비밀번호 인증 화면
+  // 관리자 전용: 접속자 계정(ID/PW) 및 레벨(Lv.1 / Lv.2 / 관리자) 권한 설정 모달
+  // ============================================================================
+  const renderAdminAccountModal = () => {
+    if (!isAdminUser || !showAdminAccountModal) return null;
+
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="no-print"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(2, 6, 23, 0.86)',
+          zIndex: 10050,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+          backdropFilter: 'blur(8px)'
+        }}
+        onClick={() => setShowAdminAccountModal(false)}
+      >
+        <div
+          style={{
+            background: '#0f172a',
+            border: '1px solid rgba(212, 175, 55, 0.55)',
+            borderRadius: '18px',
+            maxWidth: '920px',
+            width: '100%',
+            maxHeight: '92vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 25px 70px rgba(0, 0, 0, 0.9)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* 모달 상단 헤더 */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '1rem 1.4rem',
+              background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.18), rgba(15, 23, 42, 0.95))',
+              borderBottom: '1px solid rgba(212, 175, 55, 0.35)',
+              flexWrap: 'wrap',
+              gap: '0.6rem'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <Crown size={22} color="#fbbf24" />
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.12rem', fontWeight: 900, color: '#fef3c7' }}>
+                  접속자 ID/PW 및 레벨(Lv.1 · Lv.2) 권한 관리
+                </h3>
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
+                  로컬 · 단독 HTML · 온라인(웹) 어디서든 계정과 권한 레벨이 클라우드로 실시간 통합 연동됩니다.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => syncUserAccountsFromCloud(true)}
+                disabled={isAccountCloudSyncing}
+                style={{
+                  height: '32px',
+                  padding: '0 0.75rem',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(56, 189, 248, 0.45)',
+                  background: 'rgba(14, 165, 233, 0.15)',
+                  color: '#7dd3fc',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: isAccountCloudSyncing ? 'wait' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <RefreshCw size={13} />
+                {isAccountCloudSyncing ? '동기화 중...' : '클라우드 동기화'}
+              </button>
+              <button
+                type="button"
+                onClick={handleExportAccountsJson}
+                title="완전 오프라인 PC 전달용 계정 설정 파일(.json) 다운로드"
+                style={{
+                  height: '32px',
+                  padding: '0 0.7rem',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.18)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#cbd5e1',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem'
+                }}
+              >
+                <Download size={13} /> 설정 백업
+              </button>
+              <label
+                title="계정 설정 파일(.json) 불러오기"
+                style={{
+                  height: '32px',
+                  padding: '0 0.7rem',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.18)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#cbd5e1',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  margin: 0
+                }}
+              >
+                <Upload size={13} /> 설정 복원
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleImportAccountsJson}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowAdminAccountModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <X size={22} />
+              </button>
+            </div>
+          </div>
+
+          {/* 모달 본문 */}
+          <div style={{ padding: '1.25rem 1.4rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+            {/* 알림 배너 */}
+            {accountSyncNotice && (
+              <div
+                style={{
+                  background: 'rgba(16, 185, 129, 0.16)',
+                  border: '1px solid rgba(16, 185, 129, 0.45)',
+                  color: '#6ee7b7',
+                  padding: '0.65rem 1rem',
+                  borderRadius: '10px',
+                  fontSize: '0.84rem',
+                  fontWeight: 700
+                }}
+              >
+                {accountSyncNotice}
+              </div>
+            )}
+
+            {/* 레벨별 기능 노출 정책 안내 */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: '0.65rem'
+              }}
+            >
+              <div
+                style={{
+                  background: 'rgba(37, 99, 235, 0.12)',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: '10px',
+                  padding: '0.75rem 0.9rem'
+                }}
+              >
+                <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#93c5fd', marginBottom: '4px' }}>
+                  🛡️ Lv.1 권한 (1번 계산기 전용)
+                </div>
+                <div style={{ fontSize: '0.77rem', color: '#cbd5e1', lineHeight: 1.45 }}>
+                  • <strong>1번 구독 비교 계산기</strong>만 사용 가능<br />
+                  • 관리자가 Lv.2 권한을 부여하기 전까지 <strong>2번 계산기 및 POS 지시서 등 Lv.2 기능이 화면에 일체 노출되지 않음</strong>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '10px',
+                  padding: '0.75rem 0.9rem'
+                }}
+              >
+                <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#6ee7b7', marginBottom: '4px' }}>
+                  ⚡ Lv.2 권한 (1번 + 2번 전체 계산기)
+                </div>
+                <div style={{ fontSize: '0.77rem', color: '#cbd5e1', lineHeight: 1.45 }}>
+                  • <strong>1번 구독 비교 계산기 + 2번 구독 포함 계산기</strong> 전체 사용<br />
+                  • 백화점/로드샵 복합 견적 및 캐셔 POS 지시서 사용 가능 (계정 관리 메뉴는 비노출)
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: 'rgba(212, 175, 55, 0.12)',
+                  border: '1px solid rgba(212, 175, 55, 0.45)',
+                  borderRadius: '10px',
+                  padding: '0.75rem 0.9rem'
+                }}
+              >
+                <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#fde68a', marginBottom: '4px' }}>
+                  👑 관리자 권한 (Master Admin)
+                </div>
+                <div style={{ fontSize: '0.77rem', color: '#cbd5e1', lineHeight: 1.45 }}>
+                  • Lv.1 + Lv.2의 모든 계산기 기능 제한 없이 사용<br />
+                  • 접속자 ID/PW 생성·수정·삭제 및 <strong>Lv.1 ↔ Lv.2 권한 실시간 부여/회수</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* 신규 계정 생성 폼 */}
+            <form
+              onSubmit={handleAdminAddAccount}
+              style={{
+                background: 'rgba(30, 41, 59, 0.75)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: '12px',
+                padding: '1rem 1.15rem'
+              }}
+            >
+              <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Plus size={16} color="#34d399" /> 신규 접속자 계정 등록 (ID / PW / 권한 레벨 설정)
+              </div>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                  gap: '0.65rem',
+                  alignItems: 'end'
+                }}
+              >
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.76rem', color: '#94a3b8', fontWeight: 700, marginBottom: '4px' }}>
+                    접속 아이디 (ID) *
+                  </label>
+                  <input
+                    type="text"
+                    value={newAccId}
+                    onChange={(e) => setNewAccId(e.target.value)}
+                    placeholder="예: staff01"
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      borderRadius: '8px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(255,255,255,0.18)',
+                      color: '#ffffff',
+                      fontSize: '0.86rem',
+                      fontWeight: 700
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.76rem', color: '#94a3b8', fontWeight: 700, marginBottom: '4px' }}>
+                    비밀번호 (PW) *
+                  </label>
+                  <input
+                    type="text"
+                    value={newAccPw}
+                    onChange={(e) => setNewAccPw(e.target.value)}
+                    placeholder="예: 1234"
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      borderRadius: '8px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(255,255,255,0.18)',
+                      color: '#ffffff',
+                      fontSize: '0.86rem',
+                      fontWeight: 700
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.76rem', color: '#94a3b8', fontWeight: 700, marginBottom: '4px' }}>
+                    사용자 이름 / 직책
+                  </label>
+                  <input
+                    type="text"
+                    value={newAccName}
+                    onChange={(e) => setNewAccName(e.target.value)}
+                    placeholder="예: 김삼성 매니저"
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      borderRadius: '8px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(255,255,255,0.18)',
+                      color: '#ffffff',
+                      fontSize: '0.86rem'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.76rem', color: '#94a3b8', fontWeight: 700, marginBottom: '4px' }}>
+                    초기 부여 레벨
+                  </label>
+                  <select
+                    value={newAccLevel}
+                    onChange={(e) => setNewAccLevel(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.7rem',
+                      borderRadius: '8px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(212, 175, 55, 0.45)',
+                      color: '#fde68a',
+                      fontSize: '0.85rem',
+                      fontWeight: 800
+                    }}
+                  >
+                    <option value="lv1">Lv.1 (1번 계산기만 허용)</option>
+                    <option value="lv2">Lv.2 (1·2번 전체 허용)</option>
+                    <option value="admin">관리자 (전체 + 계정설정)</option>
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  style={{
+                    height: '38px',
+                    padding: '0 1rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #059669, #10b981)',
+                    color: '#ffffff',
+                    fontSize: '0.86rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.35rem',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <Plus size={16} /> 계정 추가
+                </button>
+              </div>
+            </form>
+
+            {/* 등록된 계정 목록 및 원클릭 권한 변경 테이블 */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#e2e8f0' }}>
+                  등록된 접속 계정 목록 ({userAccounts.length}개) — 클릭 한 번으로 Lv.1 ↔ Lv.2 권한을 즉시 변경할 수 있습니다
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordsInAdmin((prev) => !prev)}
+                  style={{
+                    background: 'rgba(255,255,255,0.07)',
+                    border: '1px solid rgba(255,255,255,0.16)',
+                    color: '#cbd5e1',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {showPasswordsInAdmin ? '🔒 비밀번호 숨기기' : '👁️ 비밀번호 표시'}
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                {userAccounts.map((acc) => {
+                  const isEditing = editingAccUid === acc.uid;
+                  const isMe = currentUser?.uid === acc.uid || currentUser?.id === acc.id;
+
+                  return (
+                    <div
+                      key={acc.uid}
+                      style={{
+                        background: isMe ? 'rgba(212, 175, 55, 0.08)' : 'rgba(15, 23, 42, 0.9)',
+                        border: isMe
+                          ? '1px solid rgba(212, 175, 55, 0.45)'
+                          : '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '10px',
+                        padding: '0.75rem 1rem',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '0.75rem'
+                      }}
+                    >
+                      {isEditing ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', width: '100%' }}>
+                          <div style={{ flex: '1 1 130px' }}>
+                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>아이디 (ID)</span>
+                            <input
+                              type="text"
+                              value={editAccId}
+                              onChange={(e) => setEditAccId(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '0.4rem 0.6rem',
+                                borderRadius: '6px',
+                                background: '#020617',
+                                border: '1px solid #38bdf8',
+                                color: '#ffffff',
+                                fontSize: '0.84rem',
+                                fontWeight: 700
+                              }}
+                            />
+                          </div>
+                          <div style={{ flex: '1 1 130px' }}>
+                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>비밀번호 (PW)</span>
+                            <input
+                              type="text"
+                              value={editAccPw}
+                              onChange={(e) => setEditAccPw(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '0.4rem 0.6rem',
+                                borderRadius: '6px',
+                                background: '#020617',
+                                border: '1px solid #38bdf8',
+                                color: '#ffffff',
+                                fontSize: '0.84rem',
+                                fontWeight: 700
+                              }}
+                            />
+                          </div>
+                          <div style={{ flex: '1 1 150px' }}>
+                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>이름 / 직책</span>
+                            <input
+                              type="text"
+                              value={editAccName}
+                              onChange={(e) => setEditAccName(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '0.4rem 0.6rem',
+                                borderRadius: '6px',
+                                background: '#020617',
+                                border: '1px solid #38bdf8',
+                                color: '#ffffff',
+                                fontSize: '0.84rem'
+                              }}
+                            />
+                          </div>
+                          <div style={{ flex: '1 1 140px' }}>
+                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>권한 레벨</span>
+                            <select
+                              value={editAccLevel}
+                              onChange={(e) => setEditAccLevel(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '0.42rem 0.6rem',
+                                borderRadius: '6px',
+                                background: '#020617',
+                                border: '1px solid #fbbf24',
+                                color: '#fde68a',
+                                fontSize: '0.84rem',
+                                fontWeight: 800
+                              }}
+                            >
+                              <option value="lv1">Lv.1 (1번 계산기 전용)</option>
+                              <option value="lv2">Lv.2 (1·2번 전체 허용)</option>
+                              <option value="admin">관리자 (Master)</option>
+                            </select>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.4rem', alignSelf: 'flex-end' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleAdminSaveEdit(acc.uid)}
+                              style={{
+                                height: '34px',
+                                padding: '0 0.85rem',
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: '#10b981',
+                                color: '#ffffff',
+                                fontSize: '0.8rem',
+                                fontWeight: 800,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              저장
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingAccUid(null)}
+                              style={{
+                                height: '34px',
+                                padding: '0 0.75rem',
+                                borderRadius: '6px',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                background: 'transparent',
+                                color: '#94a3b8',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              취소
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* 좌측: 계정 정보 */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            <span
+                              style={{
+                                padding: '0.28rem 0.65rem',
+                                borderRadius: '999px',
+                                fontSize: '0.75rem',
+                                fontWeight: 900,
+                                background:
+                                  acc.level === 'admin'
+                                    ? 'rgba(212, 175, 55, 0.2)'
+                                    : acc.level === 'lv2'
+                                      ? 'rgba(16, 185, 129, 0.2)'
+                                      : 'rgba(37, 99, 235, 0.2)',
+                                border:
+                                  acc.level === 'admin'
+                                    ? '1px solid rgba(212, 175, 55, 0.6)'
+                                    : acc.level === 'lv2'
+                                      ? '1px solid rgba(16, 185, 129, 0.6)'
+                                      : '1px solid rgba(59, 130, 246, 0.6)',
+                                color:
+                                  acc.level === 'admin'
+                                    ? '#fde68a'
+                                    : acc.level === 'lv2'
+                                      ? '#6ee7b7'
+                                      : '#93c5fd'
+                              }}
+                            >
+                              {acc.level === 'admin'
+                                ? '👑 관리자'
+                                : acc.level === 'lv2'
+                                  ? '⚡ Lv.2 (1·2번 전체)'
+                                  : '🛡️ Lv.1 (1번 전용)'}
+                            </span>
+
+                            <div>
+                              <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <span>{acc.name || acc.id}</span>
+                                {isMe && (
+                                  <span style={{ fontSize: '0.7rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '1px 6px', borderRadius: '4px' }}>
+                                    현재 접속중
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', fontFamily: 'monospace' }}>
+                                ID: <strong style={{ color: '#38bdf8' }}>{acc.id}</strong>
+                                <span style={{ margin: '0 8px', color: '#475569' }}>|</span>
+                                PW: <strong style={{ color: '#fcd34d' }}>{showPasswordsInAdmin ? acc.pw : '••••••'}</strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 우측: 원클릭 레벨 전환 버튼 및 ID/PW 수정·삭제 */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.38rem', flexWrap: 'wrap' }}>
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                background: '#020617',
+                                padding: '3px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                gap: '3px'
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleAdminChangeLevel(acc.uid, 'lv1')}
+                                style={{
+                                  padding: '4px 9px',
+                                  borderRadius: '6px',
+                                  border: 'none',
+                                  background: acc.level === 'lv1' ? '#2563eb' : 'transparent',
+                                  color: acc.level === 'lv1' ? '#ffffff' : '#94a3b8',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 800,
+                                  cursor: 'pointer'
+                                }}
+                                title="1번 구독 비교 계산기만 사용 가능하도록 제한 (Lv.2 비노출)"
+                              >
+                                Lv.1 (1번 전용)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAdminChangeLevel(acc.uid, 'lv2')}
+                                style={{
+                                  padding: '4px 9px',
+                                  borderRadius: '6px',
+                                  border: 'none',
+                                  background: acc.level === 'lv2' ? '#059669' : 'transparent',
+                                  color: acc.level === 'lv2' ? '#ffffff' : '#94a3b8',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 800,
+                                  cursor: 'pointer'
+                                }}
+                                title="2번 구독 포함 계산기 및 백화점/POS 지시서 권한 부여"
+                              >
+                                Lv.2 권한 부여
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAdminChangeLevel(acc.uid, 'admin')}
+                                style={{
+                                  padding: '4px 9px',
+                                  borderRadius: '6px',
+                                  border: 'none',
+                                  background: acc.level === 'admin' ? '#d97706' : 'transparent',
+                                  color: acc.level === 'admin' ? '#ffffff' : '#94a3b8',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 800,
+                                  cursor: 'pointer'
+                                }}
+                                title="관리자 권한 부여"
+                              >
+                                관리자
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAdminStartEdit(acc)}
+                              style={{
+                                height: '30px',
+                                padding: '0 0.65rem',
+                                borderRadius: '6px',
+                                border: '1px solid rgba(56, 189, 248, 0.4)',
+                                background: 'rgba(14, 165, 233, 0.14)',
+                                color: '#7dd3fc',
+                                fontSize: '0.76rem',
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ID/PW 수정
+                            </button>
+
+                            {!acc.isMaster && (
+                              <button
+                                type="button"
+                                onClick={() => handleAdminDeleteAccount(acc)}
+                                style={{
+                                  height: '30px',
+                                  padding: '0 0.55rem',
+                                  borderRadius: '6px',
+                                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                                  background: 'rgba(239, 68, 68, 0.12)',
+                                  color: '#fca5a5',
+                                  fontSize: '0.76rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                                title="계정 삭제"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* 모달 하단 닫기 바 */}
+          <div
+            style={{
+              padding: '0.85rem 1.4rem',
+              background: 'rgba(2, 6, 23, 0.85)',
+              borderTop: '1px solid rgba(255,255,255,0.1)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '0.5rem'
+            }}
+          >
+            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+              💡 권한 변경 즉시 클라우드에 저장되며, 접속자는 새로고침 또는 재로그인 시 변경된 레벨이 즉시 적용됩니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowAdminAccountModal(false)}
+              style={{
+                padding: '0.55rem 1.3rem',
+                borderRadius: '8px',
+                border: '1px solid rgba(212, 175, 55, 0.5)',
+                background: 'linear-gradient(135deg, #d4af37, #b8860b)',
+                color: '#ffffff',
+                fontSize: '0.86rem',
+                fontWeight: 800,
+                cursor: 'pointer'
+              }}
+            >
+              설정 완료 및 닫기
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================================
+  // 1. 접속 ID / PW 로그인 인증 화면 (로컬 · 단독 HTML · 온라인 공통)
   // ============================================================================
   if (!isAuthenticated) {
     return (
-      <section className="container" style={{ paddingTop: '4rem', minHeight: '80vh' }}>
+      <section className="container" style={{ paddingTop: '3.5rem', minHeight: '82vh' }}>
         {onBack && (
           <button onClick={onBack} className="btn-back">
             <span>←</span> 홈으로 돌아가기
@@ -5132,11 +6341,12 @@ export default function BenefitCalculator({ onBack }) {
           <div
             className="glass-panel"
             style={{
-              maxWidth: '420px',
+              maxWidth: '440px',
               width: '100%',
               textAlign: 'center',
-              padding: '3rem 2rem',
-              borderTop: '4px solid var(--accent-gold)'
+              padding: '2.6rem 2rem',
+              borderTop: '4px solid var(--accent-gold)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)'
             }}
           >
             <div
@@ -5149,119 +6359,292 @@ export default function BenefitCalculator({ onBack }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 1.25rem',
+                margin: '0 auto 1.15rem',
                 color: 'var(--accent-gold)'
               }}
             >
               <Lock size={28} />
             </div>
-            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.6rem' }}>고객혜택 계산기</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.95rem' }}>
-              상담 매니저 전용 솔루션입니다.<br />비밀번호를 입력해주세요.
+            <h2 style={{ fontSize: '1.7rem', fontWeight: 800, marginBottom: '0.45rem' }}>
+              JCC 스마트 혜택 계산기
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.6rem', fontSize: '0.9rem', lineHeight: 1.5 }}>
+              승인된 매니저 전용 솔루션입니다.<br />
+              접속 <strong>아이디(ID)</strong>와 <strong>비밀번호(PW)</strong>를 입력해주세요.
             </p>
-            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="비밀번호 입력"
-                autoFocus
-                style={{
-                  width: '100%',
-                  padding: '1rem',
-                  borderRadius: '10px',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid var(--glass-border)',
-                  color: 'white',
-                  fontSize: '1.25rem',
-                  textAlign: 'center',
-                  letterSpacing: '6px'
-                }}
-              />
-              <button type="submit" className="btn-primary" style={{ width: '100%' }}>
-                <Unlock size={18} /> 계산기 열기
+
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem', textAlign: 'left' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.35rem' }}>
+                  접속 아이디 (ID)
+                </label>
+                <input
+                  type="text"
+                  value={loginIdInput}
+                  onChange={(e) => {
+                    setLoginIdInput(e.target.value);
+                    if (loginErrorMsg) setLoginErrorMsg('');
+                  }}
+                  placeholder="아이디 입력"
+                  autoFocus
+                  autoComplete="username"
+                  style={{
+                    width: '100%',
+                    padding: '0.9rem 1rem',
+                    borderRadius: '10px',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid var(--glass-border)',
+                    color: 'white',
+                    fontSize: '1.05rem',
+                    fontWeight: 700,
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.35rem' }}>
+                  비밀번호 (PW)
+                </label>
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    if (loginErrorMsg) setLoginErrorMsg('');
+                  }}
+                  placeholder="비밀번호 입력"
+                  autoComplete="current-password"
+                  style={{
+                    width: '100%',
+                    padding: '0.9rem 1rem',
+                    borderRadius: '10px',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid var(--glass-border)',
+                    color: 'white',
+                    fontSize: '1.05rem',
+                    fontWeight: 700,
+                    letterSpacing: '3px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              {loginErrorMsg && (
+                <div
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.14)',
+                    border: '1px solid rgba(239, 68, 68, 0.45)',
+                    color: '#fca5a5',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    textAlign: 'center'
+                  }}
+                >
+                  {loginErrorMsg}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={isAccountCloudSyncing}
+                style={{ width: '100%', marginTop: '0.35rem', padding: '0.95rem', fontSize: '1rem', fontWeight: 800 }}
+              >
+                <Unlock size={18} /> {isAccountCloudSyncing ? '계정 권한 확인 중...' : '로그인 및 계산기 열기'}
               </button>
             </form>
+
+            <div
+              style={{
+                marginTop: '1.35rem',
+                paddingTop: '1rem',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                fontSize: '0.78rem',
+                color: '#64748b',
+                lineHeight: 1.45
+              }}
+            >
+              🔒 접속 계정의 권한 등급(Lv.1 / Lv.2 / 관리자)에 따라<br />
+              허용된 계산기 기능만 자동으로 활성화됩니다.
+            </div>
           </div>
         </div>
       </section>
     );
   }
 
-  // 계산기 모드 전환 탭 바
+  // 접속자 정보 · 권한 레벨 표시 및 관리자 계정설정 바 + 계산기 모드 전환 탭 바
   const renderModeTabs = () => (
-    <div
-      className="container no-print"
-      style={{
-        maxWidth: '1100px',
-        marginBottom: '1rem',
-        display: 'flex',
-        gap: '0.5rem',
-        padding: '0.35rem',
-        background: 'rgba(15, 23, 42, 0.85)',
-        border: '1px solid var(--glass-border)',
-        borderRadius: '12px',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => {
-          setCalculatorMode('compare');
-          setActiveQuoteId(null);
-          setQuoteTitleInput('');
-          setSaveNotice('');
-        }}
+    <div className="container no-print" style={{ maxWidth: '1100px', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+      {/* 상단 접속자 계정 & 레벨 상태 바 */}
+      <div
         style={{
-          flex: 1,
-          height: '42px',
-          padding: '0 1rem',
-          borderRadius: '8px',
-          border: 'none',
-          background: calculatorMode === 'compare' ? 'linear-gradient(135deg, #1e3a8a, #2563eb)' : 'transparent',
-          color: calculatorMode === 'compare' ? '#ffffff' : 'var(--text-secondary)',
-          fontWeight: 800,
-          fontSize: '0.90rem',
-          cursor: 'pointer',
           display: 'flex',
+          justifyContent: 'space-between',
           alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.45rem',
-          boxShadow: calculatorMode === 'compare' ? '0 4px 12px rgba(37, 99, 235, 0.35)' : 'none',
-          transition: 'all 0.2s'
+          flexWrap: 'wrap',
+          gap: '0.5rem',
+          padding: '0.5rem 0.9rem',
+          background: 'rgba(15, 23, 42, 0.9)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          borderRadius: '10px'
         }}
       >
-        <Scale size={17} /> 1번 구독 비교 계산기
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          setCalculatorMode('mixed');
-          setActiveQuoteId(null);
-          setQuoteTitleInput('');
-          setSaveNotice('');
-        }}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexWrap: 'wrap' }}>
+          <span
+            style={{
+              padding: '0.22rem 0.65rem',
+              borderRadius: '999px',
+              fontSize: '0.75rem',
+              fontWeight: 900,
+              background: isAdminUser
+                ? 'rgba(212, 175, 55, 0.2)'
+                : canAccessLv2
+                  ? 'rgba(16, 185, 129, 0.2)'
+                  : 'rgba(37, 99, 235, 0.2)',
+              border: isAdminUser
+                ? '1px solid rgba(212, 175, 55, 0.6)'
+                : canAccessLv2
+                  ? '1px solid rgba(16, 185, 129, 0.6)'
+                  : '1px solid rgba(59, 130, 246, 0.6)',
+              color: isAdminUser ? '#fde68a' : canAccessLv2 ? '#6ee7b7' : '#93c5fd'
+            }}
+          >
+            {isAdminUser ? '👑 관리자 (MASTER)' : canAccessLv2 ? '⚡ Lv.2 권한' : '🛡️ Lv.1 권한'}
+          </span>
+          <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#f8fafc' }}>
+            {currentUser?.name || currentUser?.id}
+          </span>
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+            (ID: {currentUser?.id})
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+          {isAdminUser && (
+            <button
+              type="button"
+              onClick={() => setShowAdminAccountModal(true)}
+              style={{
+                height: '32px',
+                padding: '0 0.85rem',
+                borderRadius: '8px',
+                border: '1px solid rgba(212, 175, 55, 0.6)',
+                background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.25), rgba(180, 83, 9, 0.25))',
+                color: '#fde68a',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                boxShadow: '0 2px 10px rgba(212, 175, 55, 0.2)'
+              }}
+            >
+              <Crown size={14} /> 계정 · 권한(Lv.1/Lv.2) 관리
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleLock}
+            style={{
+              height: '32px',
+              padding: '0 0.75rem',
+              borderRadius: '8px',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              background: 'rgba(239, 68, 68, 0.12)',
+              color: '#fca5a5',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem'
+            }}
+            title="현재 계정에서 로그아웃하고 로그인 화면으로 돌아갑니다."
+          >
+            <Lock size={13} /> 로그아웃
+          </button>
+        </div>
+      </div>
+
+      {/* 계산기 모드 탭 바: Lv.1 계정에게는 2번 계산기 탭 자체를 노출하지 않음! */}
+      <div
         style={{
-          flex: 1,
-          height: '42px',
-          padding: '0 1rem',
-          borderRadius: '8px',
-          border: 'none',
-          background: calculatorMode === 'mixed' ? 'linear-gradient(135deg, #059669, #10b981)' : 'transparent',
-          color: calculatorMode === 'mixed' ? '#ffffff' : 'var(--text-secondary)',
-          fontWeight: 800,
-          fontSize: '0.90rem',
-          cursor: 'pointer',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.45rem',
-          boxShadow: calculatorMode === 'mixed' ? '0 4px 12px rgba(16, 185, 129, 0.35)' : 'none',
-          transition: 'all 0.2s'
+          gap: '0.5rem',
+          padding: '0.35rem',
+          background: 'rgba(15, 23, 42, 0.85)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '12px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
         }}
       >
-        <Layers size={17} /> 2번 구독 포함 계산기
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            setCalculatorMode('compare');
+            setActiveQuoteId(null);
+            setQuoteTitleInput('');
+            setSaveNotice('');
+          }}
+          style={{
+            flex: 1,
+            height: '42px',
+            padding: '0 1rem',
+            borderRadius: '8px',
+            border: 'none',
+            background: !isMixedMode ? 'linear-gradient(135deg, #1e3a8a, #2563eb)' : 'transparent',
+            color: !isMixedMode ? '#ffffff' : 'var(--text-secondary)',
+            fontWeight: 800,
+            fontSize: '0.90rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.45rem',
+            boxShadow: !isMixedMode ? '0 4px 12px rgba(37, 99, 235, 0.35)' : 'none',
+            transition: 'all 0.2s'
+          }}
+        >
+          <Scale size={17} /> 1번 구독 비교 계산기
+        </button>
+
+        {canAccessLv2 && (
+          <button
+            type="button"
+            onClick={() => {
+              setCalculatorMode('mixed');
+              setActiveQuoteId(null);
+              setQuoteTitleInput('');
+              setSaveNotice('');
+            }}
+            style={{
+              flex: 1,
+              height: '42px',
+              padding: '0 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: isMixedMode ? 'linear-gradient(135deg, #059669, #10b981)' : 'transparent',
+              color: isMixedMode ? '#ffffff' : 'var(--text-secondary)',
+              fontWeight: 800,
+              fontSize: '0.90rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.45rem',
+              boxShadow: isMixedMode ? '0 4px 12px rgba(16, 185, 129, 0.35)' : 'none',
+              transition: 'all 0.2s'
+            }}
+          >
+            <Layers size={17} /> 2번 구독 포함 계산기
+          </button>
+        )}
+      </div>
     </div>
   );
 
@@ -7629,6 +9012,8 @@ export default function BenefitCalculator({ onBack }) {
         )}
         {/* 직원 전용 캐셔 POS 결제 및 사은행사 지시서 모달 */}
         {renderPosCashierModal()}
+        {/* 관리자 전용 접속자 계정 및 레벨(Lv.1/Lv.2) 권한 설정 모달 */}
+        {renderAdminAccountModal()}
       </section>
     );
   }
@@ -12913,6 +14298,8 @@ export default function BenefitCalculator({ onBack }) {
 
       {/* 직원 전용 캐셔 POS 결제 및 사은행사 지시서 모달 */}
       {renderPosCashierModal()}
+      {/* 관리자 전용 접속자 계정 및 레벨(Lv.1/Lv.2) 권한 설정 모달 */}
+      {renderAdminAccountModal()}
     </section>
   );
 }
