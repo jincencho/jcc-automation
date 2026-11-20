@@ -697,18 +697,29 @@ function sanitizeUserAccounts(rawList) {
   }
   const normalized = rawList
     .filter((it) => it && typeof it.id === 'string' && it.id.trim())
-    .map((it, idx) => ({
-      uid: it.uid || `acc_${idx}_${Date.now()}`,
-      id: it.id.trim(),
-      pw: String(it.pw ?? ''),
-      name: (it.name || it.id).trim(),
-      level: it.level === 'admin' ? 'admin' : it.level === 'lv2' ? 'lv2' : 'lv1',
-      isMaster: Boolean(it.isMaster),
-      createdAt: it.createdAt || '2026-11-21'
-    }));
+    .map((it, idx) => {
+      const isPending = it.status === 'pending' || it.level === 'pending';
+      return {
+        uid: it.uid || `acc_${idx}_${Date.now()}`,
+        id: it.id.trim(),
+        pw: String(it.pw ?? ''),
+        name: (it.name || it.id).trim(),
+        status: isPending ? 'pending' : 'approved',
+        level: isPending
+          ? 'pending'
+          : it.level === 'admin'
+            ? 'admin'
+            : it.level === 'lv2'
+              ? 'lv2'
+              : 'lv1',
+        isMaster: Boolean(it.isMaster),
+        createdAt: it.createdAt || '2026-11-21',
+        requestedAt: it.requestedAt || it.createdAt || '2026-11-21'
+      };
+    });
 
-  // 최소 1개 이상의 관리자(admin) 계정이 항상 존재하도록 보장
-  const hasAdmin = normalized.some((acc) => acc.level === 'admin');
+  // 최소 1개 이상의 승인된 관리자(admin) 계정이 항상 존재하도록 보장
+  const hasAdmin = normalized.some((acc) => acc.status !== 'pending' && acc.level === 'admin');
   if (!hasAdmin) {
     return [DEFAULT_USER_ACCOUNTS[0], ...normalized];
   }
@@ -756,6 +767,21 @@ export default function BenefitCalculator({ onBack }) {
   const [loginIdInput, setLoginIdInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginErrorMsg, setLoginErrorMsg] = useState('');
+
+  // 로그인 화면 탭 ('login': 기존 계정 로그인 | 'request': 신규 아이디 사용 신청)
+  const [authScreenTab, setAuthScreenTab] = useState('login');
+  const [reqNameInput, setReqNameInput] = useState('');
+  const [reqIdInput, setReqIdInput] = useState('');
+  const [reqPwInput, setReqPwInput] = useState('');
+  const [reqFeedback, setReqFeedback] = useState({ type: '', message: '' });
+
+  // 승인 대기 중인 신청 목록 vs 승인 완료된 활성 계정 목록
+  const pendingAccountRequests = userAccounts.filter(
+    (acc) => acc.status === 'pending' || acc.level === 'pending'
+  );
+  const approvedUserAccounts = userAccounts.filter(
+    (acc) => acc.status !== 'pending' && acc.level !== 'pending'
+  );
 
   // 5분 미사용 자동 화면 잠금 & 잠금해제/로그아웃 선택 상태
   const [isScreenLocked, setIsScreenLocked] = useState(() => {
@@ -1493,6 +1519,14 @@ export default function BenefitCalculator({ onBack }) {
     }
 
     if (matched) {
+      // 아직 관리자가 승인하지 않은 신청 대기 계정인 경우 접속 차단 및 안내
+      if (matched.status === 'pending' || matched.level === 'pending') {
+        setLoginErrorMsg(
+          `⏳ '${matched.name} (ID: ${matched.id})' 계정은 현재 관리자 승인 대기 중입니다.\n관리자가 승인 및 권한 레벨(Lv.1 / Lv.2)을 부여한 후 접속하실 수 있습니다.`
+        );
+        return;
+      }
+
       const sessionUser = {
         uid: matched.uid,
         id: matched.id,
@@ -1524,6 +1558,124 @@ export default function BenefitCalculator({ onBack }) {
       setLoginErrorMsg('아이디(ID) 또는 비밀번호(PW)가 일치하지 않습니다. 관리자에게 문의하세요.');
       setPasswordInput('');
     }
+  };
+
+  // 사용자 신규 아이디(계정) 사용 신청 (이름 · 희망 ID · 희망 PW 입력 -> 관리자 승인 대기 등록)
+  const handleRequestNewAccount = async (e) => {
+    e.preventDefault();
+    setReqFeedback({ type: '', message: '' });
+
+    const trimmedName = reqNameInput.trim();
+    const trimmedId = reqIdInput.trim();
+    const trimmedPw = reqPwInput.trim();
+
+    if (!trimmedName) {
+      setReqFeedback({ type: 'error', message: '본인 이름(성함 또는 직책)을 입력해주세요.' });
+      return;
+    }
+    if (!trimmedId) {
+      setReqFeedback({ type: 'error', message: '사용하실 희망 아이디(ID)를 입력해주세요.' });
+      return;
+    }
+    if (!trimmedPw) {
+      setReqFeedback({ type: 'error', message: '사용하실 희망 비밀번호(PW)를 입력해주세요.' });
+      return;
+    }
+
+    // 최신 클라우드 계정 목록과 먼저 동기화하여 중복 여부 정확히 확인
+    const latestList = await syncUserAccountsFromCloud(false);
+    const existing = latestList.find(
+      (acc) => acc.id.trim().toLowerCase() === trimmedId.toLowerCase()
+    );
+
+    if (existing) {
+      if (existing.status === 'pending' || existing.level === 'pending') {
+        setReqFeedback({
+          type: 'error',
+          message: `이미 신청되어 관리자 승인 대기 중인 아이디('${trimmedId}')입니다.`
+        });
+      } else {
+        setReqFeedback({
+          type: 'error',
+          message: `이미 사용 중인 아이디('${trimmedId}')입니다. 다른 아이디를 입력해 주세요.`
+        });
+      }
+      return;
+    }
+
+    const now = new Date();
+    const reqTimeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate()
+    ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    const newReqAccount = {
+      uid: `req_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: trimmedId,
+      pw: trimmedPw,
+      name: trimmedName,
+      status: 'pending',
+      level: 'pending',
+      isMaster: false,
+      createdAt: reqTimeStr.slice(0, 10),
+      requestedAt: reqTimeStr
+    };
+
+    const nextList = [...latestList, newReqAccount];
+    await persistAndSyncUserAccounts(
+      nextList,
+      `'${trimmedName} (${trimmedId})' 계정 신청이 등록되었습니다.`
+    );
+
+    setReqNameInput('');
+    setReqIdInput('');
+    setReqPwInput('');
+    setReqFeedback({
+      type: 'success',
+      message: `✅ 아이디 사용 신청이 완료되었습니다!\n• 신청자: ${trimmedName} (희망 ID: ${trimmedId})\n관리자가 신청 내역을 확인하고 권한 레벨(Lv.1 또는 Lv.2)을 승인하면 즉시 로그인하실 수 있습니다.`
+    });
+  };
+
+  // 관리자 전용: 신청 대기 중인 계정을 승인하면서 레벨(Lv.1 / Lv.2 / 관리자) 부여
+  const handleAdminApproveRequest = async (targetUid, grantedLevel = 'lv1') => {
+    if (!isAdminUser) return;
+    const targetAcc = userAccounts.find((a) => a.uid === targetUid);
+    if (!targetAcc) return;
+
+    const validLevel = grantedLevel === 'admin' ? 'admin' : grantedLevel === 'lv2' ? 'lv2' : 'lv1';
+    const nextList = userAccounts.map((acc) =>
+      acc.uid === targetUid
+        ? {
+            ...acc,
+            status: 'approved',
+            level: validLevel
+          }
+        : acc
+    );
+
+    const levelLabel =
+      validLevel === 'admin'
+        ? '관리자(Master)'
+        : validLevel === 'lv2'
+          ? 'Lv.2 (1·2번 전체 계산기 허용)'
+          : 'Lv.1 (1번 계산기 전용 · Lv.2 비노출)';
+
+    await persistAndSyncUserAccounts(
+      nextList,
+      `✅ '${targetAcc.name} (ID: ${targetAcc.id})'님의 아이디 신청을 승인하고 [${levelLabel}] 권한을 부여했습니다.`
+    );
+  };
+
+  // 관리자 전용: 신청 대기 중인 계정 반려(삭제)
+  const handleAdminRejectRequest = async (acc) => {
+    if (!isAdminUser) return;
+    if (!window.confirm(`'${acc.name} (희망 ID: ${acc.id})'님의 아이디 사용 신청을 반려(삭제)하시겠습니까?`)) {
+      return;
+    }
+    const nextList = userAccounts.filter((a) => a.uid !== acc.uid);
+    await persistAndSyncUserAccounts(
+      nextList,
+      `'${acc.name} (ID: ${acc.id})'님의 아이디 신청을 반려(삭제)했습니다.`
+    );
   };
 
   // 화면 잠금 진입 (작성 중인 견적 데이터 및 현재 접속자 계정 유지 -> 잠금해제 또는 로그아웃 선택 가능)
@@ -5976,7 +6128,182 @@ export default function BenefitCalculator({ onBack }) {
               </div>
             </div>
 
-            {/* 신규 계정 생성 폼 */}
+            {/* 신규 아이디 사용 신청 승인 대기 목록 (신청 건이 있을 때 최상단에 강조 표시) */}
+            <div
+              style={{
+                background:
+                  pendingAccountRequests.length > 0
+                    ? 'rgba(245, 158, 11, 0.12)'
+                    : 'rgba(15, 23, 42, 0.6)',
+                border:
+                  pendingAccountRequests.length > 0
+                    ? '1.5px solid rgba(245, 158, 11, 0.6)'
+                    : '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                padding: '1rem 1.15rem'
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                  marginBottom: pendingAccountRequests.length > 0 ? '0.8rem' : '0'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span
+                    style={{
+                      padding: '0.22rem 0.65rem',
+                      borderRadius: '999px',
+                      fontSize: '0.76rem',
+                      fontWeight: 900,
+                      background:
+                        pendingAccountRequests.length > 0
+                          ? 'rgba(245, 158, 11, 0.25)'
+                          : 'rgba(255, 255, 255, 0.08)',
+                      color: pendingAccountRequests.length > 0 ? '#fde68a' : '#94a3b8',
+                      border:
+                        pendingAccountRequests.length > 0
+                          ? '1px solid rgba(245, 158, 11, 0.6)'
+                          : '1px solid rgba(255, 255, 255, 0.12)'
+                    }}
+                  >
+                    🔔 승인 대기 {pendingAccountRequests.length}건
+                  </span>
+                  <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc' }}>
+                    신규 아이디(계정) 사용 신청 내역
+                  </span>
+                </div>
+                <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
+                  {pendingAccountRequests.length > 0
+                    ? '신청자가 입력한 이름·ID·PW를 확인하고 부여할 레벨(Lv.1 또는 Lv.2)로 승인해 주세요.'
+                    : '현재 대기 중인 신규 아이디 신청 건이 없습니다.'}
+                </span>
+              </div>
+
+              {pendingAccountRequests.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                  {pendingAccountRequests.map((req) => (
+                    <div
+                      key={req.uid}
+                      style={{
+                        background: 'rgba(2, 6, 23, 0.85)',
+                        border: '1px solid rgba(245, 158, 11, 0.45)',
+                        borderRadius: '10px',
+                        padding: '0.8rem 1rem',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '0.75rem'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <span
+                          style={{
+                            padding: '0.26rem 0.65rem',
+                            borderRadius: '999px',
+                            fontSize: '0.74rem',
+                            fontWeight: 900,
+                            background: 'rgba(245, 158, 11, 0.2)',
+                            border: '1px solid rgba(245, 158, 11, 0.6)',
+                            color: '#fde68a'
+                          }}
+                        >
+                          ⏳ 승인 대기중
+                        </span>
+                        <div>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#fef3c7', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>신청자: {req.name}</span>
+                            <span style={{ fontSize: '0.73rem', color: '#94a3b8', fontWeight: 600 }}>
+                              ({req.requestedAt || req.createdAt})
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: '3px', fontFamily: 'monospace' }}>
+                            희망 ID: <strong style={{ color: '#38bdf8' }}>{req.id}</strong>
+                            <span style={{ margin: '0 8px', color: '#475569' }}>|</span>
+                            설정한 PW: <strong style={{ color: '#fcd34d' }}>{showPasswordsInAdmin ? req.pw : '••••••'}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleAdminApproveRequest(req.uid, 'lv1')}
+                          style={{
+                            height: '34px',
+                            padding: '0 0.85rem',
+                            borderRadius: '8px',
+                            border: '1px solid #3b82f6',
+                            background: 'linear-gradient(135deg, #1d4ed8, #2563eb)',
+                            color: '#ffffff',
+                            fontSize: '0.78rem',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.35)'
+                          }}
+                          title="1번 구독 비교 계산기만 사용 가능한 Lv.1 권한으로 승인합니다."
+                        >
+                          <Check size={14} /> Lv.1으로 승인 (1번 전용)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAdminApproveRequest(req.uid, 'lv2')}
+                          style={{
+                            height: '34px',
+                            padding: '0 0.85rem',
+                            borderRadius: '8px',
+                            border: '1px solid #10b981',
+                            background: 'linear-gradient(135deg, #059669, #10b981)',
+                            color: '#ffffff',
+                            fontSize: '0.78rem',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)'
+                          }}
+                          title="1번 + 2번 전체 계산기를 사용할 수 있는 Lv.2 권한으로 승인합니다."
+                        >
+                          <Check size={14} /> Lv.2로 승인 (1·2번 전체)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAdminRejectRequest(req)}
+                          style={{
+                            height: '34px',
+                            padding: '0 0.7rem',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(239, 68, 68, 0.45)',
+                            background: 'rgba(239, 68, 68, 0.14)',
+                            color: '#fca5a5',
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}
+                          title="신청을 반려하고 목록에서 삭제합니다."
+                        >
+                          <Trash2 size={13} /> 반려
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 관리자 직접 신규 계정 생성 폼 */}
             <form
               onSubmit={handleAdminAddAccount}
               style={{
@@ -5987,7 +6314,7 @@ export default function BenefitCalculator({ onBack }) {
               }}
             >
               <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <Plus size={16} color="#34d399" /> 신규 접속자 계정 등록 (ID / PW / 권한 레벨 설정)
+                <Plus size={16} color="#34d399" /> 관리자 직접 계정 생성 (즉시 승인 등록)
               </div>
               <div
                 style={{
@@ -6106,11 +6433,11 @@ export default function BenefitCalculator({ onBack }) {
               </div>
             </form>
 
-            {/* 등록된 계정 목록 및 원클릭 권한 변경 테이블 */}
+            {/* 승인 완료된 활성 계정 목록 및 원클릭 권한 변경 테이블 */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#e2e8f0' }}>
-                  등록된 접속 계정 목록 ({userAccounts.length}개) — 클릭 한 번으로 Lv.1 ↔ Lv.2 권한을 즉시 변경할 수 있습니다
+                  승인 완료된 활성 계정 목록 ({approvedUserAccounts.length}개) — 클릭 한 번으로 Lv.1 ↔ Lv.2 권한을 즉시 변경할 수 있습니다
                 </span>
                 <button
                   type="button"
@@ -6131,7 +6458,7 @@ export default function BenefitCalculator({ onBack }) {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                {userAccounts.map((acc) => {
+                {approvedUserAccounts.map((acc) => {
                   const isEditing = editingAccUid === acc.uid;
                   const isMe = currentUser?.uid === acc.uid || currentUser?.id === acc.id;
 
@@ -6473,11 +6800,11 @@ export default function BenefitCalculator({ onBack }) {
   };
 
   // ============================================================================
-  // 1. 접속 ID / PW 로그인 인증 화면 (로컬 · 단독 HTML · 온라인 공통)
+  // 1. 접속 ID / PW 로그인 및 신규 아이디 사용 신청 화면 (로컬 · 단독 HTML · 온라인 공통)
   // ============================================================================
   if (!isAuthenticated) {
     return (
-      <section className="container" style={{ paddingTop: '3.5rem', minHeight: '82vh' }}>
+      <section className="container" style={{ paddingTop: '3.2rem', minHeight: '82vh' }}>
         {onBack && (
           <button onClick={onBack} className="btn-back">
             <span>←</span> 홈으로 돌아가기
@@ -6487,135 +6814,414 @@ export default function BenefitCalculator({ onBack }) {
           <div
             className="glass-panel"
             style={{
-              maxWidth: '440px',
+              maxWidth: '460px',
               width: '100%',
               textAlign: 'center',
-              padding: '2.6rem 2rem',
-              borderTop: '4px solid var(--accent-gold)',
+              padding: '2.3rem 2rem',
+              borderTop: authScreenTab === 'request' ? '4px solid #10b981' : '4px solid var(--accent-gold)',
               boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)'
             }}
           >
+            {/* 상단 탭 전환: [기존 계정 로그인] vs [신규 아이디 사용 신청] */}
             <div
               style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '50%',
-                background: 'rgba(212, 175, 55, 0.12)',
-                border: '1px solid var(--accent-gold)',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 1.15rem',
-                color: 'var(--accent-gold)'
+                gap: '0.4rem',
+                padding: '0.3rem',
+                background: 'rgba(2, 6, 23, 0.65)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '10px',
+                marginBottom: '1.5rem'
               }}
             >
-              <Lock size={28} />
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthScreenTab('login');
+                  setLoginErrorMsg('');
+                  setReqFeedback({ type: '', message: '' });
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.6rem 0.75rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background:
+                    authScreenTab === 'login'
+                      ? 'linear-gradient(135deg, #d4af37, #b8860b)'
+                      : 'transparent',
+                  color: authScreenTab === 'login' ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.86rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                🔑 기존 계정 로그인
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthScreenTab('request');
+                  setLoginErrorMsg('');
+                  setReqFeedback({ type: '', message: '' });
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.6rem 0.75rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background:
+                    authScreenTab === 'request'
+                      ? 'linear-gradient(135deg, #059669, #10b981)'
+                      : 'transparent',
+                  color: authScreenTab === 'request' ? '#ffffff' : '#94a3b8',
+                  fontSize: '0.86rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                📝 신규 아이디 신청
+              </button>
             </div>
-            <h2 style={{ fontSize: '1.7rem', fontWeight: 800, marginBottom: '0.45rem' }}>
-              JCC 스마트 혜택 계산기
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.6rem', fontSize: '0.9rem', lineHeight: 1.5 }}>
-              승인된 매니저 전용 솔루션입니다.<br />
-              접속 <strong>아이디(ID)</strong>와 <strong>비밀번호(PW)</strong>를 입력해주세요.
-            </p>
 
-            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem', textAlign: 'left' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.35rem' }}>
-                  접속 아이디 (ID)
-                </label>
-                <input
-                  type="text"
-                  value={loginIdInput}
-                  onChange={(e) => {
-                    setLoginIdInput(e.target.value);
-                    if (loginErrorMsg) setLoginErrorMsg('');
-                  }}
-                  placeholder="아이디 입력"
-                  autoFocus
-                  autoComplete="username"
-                  style={{
-                    width: '100%',
-                    padding: '0.9rem 1rem',
-                    borderRadius: '10px',
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid var(--glass-border)',
-                    color: 'white',
-                    fontSize: '1.05rem',
-                    fontWeight: 700,
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.35rem' }}>
-                  비밀번호 (PW)
-                </label>
-                <input
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => {
-                    setPasswordInput(e.target.value);
-                    if (loginErrorMsg) setLoginErrorMsg('');
-                  }}
-                  placeholder="비밀번호 입력"
-                  autoComplete="current-password"
-                  style={{
-                    width: '100%',
-                    padding: '0.9rem 1rem',
-                    borderRadius: '10px',
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid var(--glass-border)',
-                    color: 'white',
-                    fontSize: '1.05rem',
-                    fontWeight: 700,
-                    letterSpacing: '3px',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
-              {loginErrorMsg && (
+            {authScreenTab === 'login' ? (
+              <>
                 <div
                   style={{
-                    background: 'rgba(239, 68, 68, 0.14)',
-                    border: '1px solid rgba(239, 68, 68, 0.45)',
-                    color: '#fca5a5',
-                    padding: '0.65rem 0.85rem',
-                    borderRadius: '8px',
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
-                    textAlign: 'center'
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    background: 'rgba(212, 175, 55, 0.12)',
+                    border: '1px solid var(--accent-gold)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 1rem',
+                    color: 'var(--accent-gold)'
                   }}
                 >
-                  {loginErrorMsg}
+                  <Lock size={26} />
                 </div>
-              )}
+                <h2 style={{ fontSize: '1.65rem', fontWeight: 800, marginBottom: '0.4rem' }}>
+                  JCC 스마트 혜택 계산기
+                </h2>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '1.4rem', fontSize: '0.88rem', lineHeight: 1.5 }}>
+                  승인된 매니저 전용 솔루션입니다.<br />
+                  접속 <strong>아이디(ID)</strong>와 <strong>비밀번호(PW)</strong>를 입력해주세요.
+                </p>
 
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={isAccountCloudSyncing}
-                style={{ width: '100%', marginTop: '0.35rem', padding: '0.95rem', fontSize: '1rem', fontWeight: 800 }}
-              >
-                <Unlock size={18} /> {isAccountCloudSyncing ? '계정 권한 확인 중...' : '로그인 및 계산기 열기'}
-              </button>
-            </form>
+                <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', textAlign: 'left' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.35rem' }}>
+                      접속 아이디 (ID)
+                    </label>
+                    <input
+                      type="text"
+                      value={loginIdInput}
+                      onChange={(e) => {
+                        setLoginIdInput(e.target.value);
+                        if (loginErrorMsg) setLoginErrorMsg('');
+                      }}
+                      placeholder="아이디 입력"
+                      autoFocus
+                      autoComplete="username"
+                      style={{
+                        width: '100%',
+                        padding: '0.88rem 1rem',
+                        borderRadius: '10px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid var(--glass-border)',
+                        color: 'white',
+                        fontSize: '1.02rem',
+                        fontWeight: 700,
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
 
-            <div
-              style={{
-                marginTop: '1.35rem',
-                paddingTop: '1rem',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-                fontSize: '0.78rem',
-                color: '#64748b',
-                lineHeight: 1.45
-              }}
-            >
-              🔒 접속 계정의 권한 등급(Lv.1 / Lv.2 / 관리자)에 따라<br />
-              허용된 계산기 기능만 자동으로 활성화됩니다. (5분 미사용 시 자동 화면 잠금)
-            </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.35rem' }}>
+                      비밀번호 (PW)
+                    </label>
+                    <input
+                      type="password"
+                      value={passwordInput}
+                      onChange={(e) => {
+                        setPasswordInput(e.target.value);
+                        if (loginErrorMsg) setLoginErrorMsg('');
+                      }}
+                      placeholder="비밀번호 입력"
+                      autoComplete="current-password"
+                      style={{
+                        width: '100%',
+                        padding: '0.88rem 1rem',
+                        borderRadius: '10px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid var(--glass-border)',
+                        color: 'white',
+                        fontSize: '1.02rem',
+                        fontWeight: 700,
+                        letterSpacing: '3px',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  {loginErrorMsg && (
+                    <div
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.14)',
+                        border: '1px solid rgba(239, 68, 68, 0.45)',
+                        color: '#fca5a5',
+                        padding: '0.65rem 0.85rem',
+                        borderRadius: '8px',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        textAlign: 'center',
+                        whiteSpace: 'pre-line',
+                        lineHeight: 1.45
+                      }}
+                    >
+                      {loginErrorMsg}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={isAccountCloudSyncing}
+                    style={{ width: '100%', marginTop: '0.3rem', padding: '0.92rem', fontSize: '0.98rem', fontWeight: 800 }}
+                  >
+                    <Unlock size={18} /> {isAccountCloudSyncing ? '계정 권한 확인 중...' : '로그인 및 계산기 열기'}
+                  </button>
+                </form>
+
+                <div
+                  style={{
+                    marginTop: '1.15rem',
+                    paddingTop: '0.95rem',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.55rem'
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthScreenTab('request');
+                      setLoginErrorMsg('');
+                      setReqFeedback({ type: '', message: '' });
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.68rem',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(16, 185, 129, 0.45)',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      color: '#6ee7b7',
+                      fontSize: '0.84rem',
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📝 계정이 없으신가요? 신규 아이디(ID/PW) 사용 신청하기 →
+                  </button>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4 }}>
+                    🔒 접속 계정의 권한 등급(Lv.1 / Lv.2 / 관리자)에 따라 허용된 계산기 기능만 활성화됩니다. (5분 미사용 시 자동 잠금)
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* 신규 아이디(계정) 사용 신청 화면 */
+              <>
+                <div
+                  style={{
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    background: 'rgba(16, 185, 129, 0.14)',
+                    border: '1px solid #10b981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 1rem',
+                    color: '#34d399'
+                  }}
+                >
+                  <Plus size={28} />
+                </div>
+                <h2 style={{ fontSize: '1.55rem', fontWeight: 800, marginBottom: '0.4rem', color: '#ecfdf5' }}>
+                  신규 아이디(계정) 사용 신청
+                </h2>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '1.35rem', fontSize: '0.86rem', lineHeight: 1.5 }}>
+                  본인 <strong>이름</strong>과 사용하실 <strong>아이디(ID) · 비밀번호(PW)</strong>를 입력해 신청해 주세요.<br />
+                  관리자가 확인 후 승인 및 <strong>권한 레벨(Lv.1 / Lv.2)</strong>을 부여하면 바로 접속됩니다.
+                </p>
+
+                <form onSubmit={handleRequestNewAccount} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', textAlign: 'left' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#a7f3d0', marginBottom: '0.32rem' }}>
+                      1. 본인 이름 (성함 / 직책) *
+                    </label>
+                    <input
+                      type="text"
+                      value={reqNameInput}
+                      onChange={(e) => {
+                        setReqNameInput(e.target.value);
+                        if (reqFeedback.message) setReqFeedback({ type: '', message: '' });
+                      }}
+                      placeholder="예: 홍길동 매니저"
+                      autoFocus
+                      style={{
+                        width: '100%',
+                        padding: '0.85rem 1rem',
+                        borderRadius: '10px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid var(--glass-border)',
+                        color: 'white',
+                        fontSize: '0.98rem',
+                        fontWeight: 700,
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#a7f3d0', marginBottom: '0.32rem' }}>
+                      2. 희망 접속 아이디 (ID) *
+                    </label>
+                    <input
+                      type="text"
+                      value={reqIdInput}
+                      onChange={(e) => {
+                        setReqIdInput(e.target.value);
+                        if (reqFeedback.message) setReqFeedback({ type: '', message: '' });
+                      }}
+                      placeholder="원하시는 아이디 입력 (영문/숫자)"
+                      autoComplete="username"
+                      style={{
+                        width: '100%',
+                        padding: '0.85rem 1rem',
+                        borderRadius: '10px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid var(--glass-border)',
+                        color: 'white',
+                        fontSize: '0.98rem',
+                        fontWeight: 700,
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#a7f3d0', marginBottom: '0.32rem' }}>
+                      3. 희망 비밀번호 (PW) *
+                    </label>
+                    <input
+                      type="password"
+                      value={reqPwInput}
+                      onChange={(e) => {
+                        setReqPwInput(e.target.value);
+                        if (reqFeedback.message) setReqFeedback({ type: '', message: '' });
+                      }}
+                      placeholder="원하시는 비밀번호 입력"
+                      autoComplete="new-password"
+                      style={{
+                        width: '100%',
+                        padding: '0.85rem 1rem',
+                        borderRadius: '10px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid var(--glass-border)',
+                        color: 'white',
+                        fontSize: '0.98rem',
+                        fontWeight: 700,
+                        letterSpacing: '2px',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  {reqFeedback.message && (
+                    <div
+                      style={{
+                        background:
+                          reqFeedback.type === 'success'
+                            ? 'rgba(16, 185, 129, 0.16)'
+                            : 'rgba(239, 68, 68, 0.14)',
+                        border:
+                          reqFeedback.type === 'success'
+                            ? '1px solid rgba(16, 185, 129, 0.5)'
+                            : '1px solid rgba(239, 68, 68, 0.45)',
+                        color: reqFeedback.type === 'success' ? '#a7f3d0' : '#fca5a5',
+                        padding: '0.75rem 0.9rem',
+                        borderRadius: '8px',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        whiteSpace: 'pre-line',
+                        lineHeight: 1.5
+                      }}
+                    >
+                      {reqFeedback.message}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isAccountCloudSyncing}
+                    style={{
+                      width: '100%',
+                      marginTop: '0.25rem',
+                      padding: '0.92rem',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #059669, #10b981)',
+                      color: '#ffffff',
+                      fontSize: '0.98rem',
+                      fontWeight: 800,
+                      cursor: isAccountCloudSyncing ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.4rem',
+                      boxShadow: '0 4px 15px rgba(16, 185, 129, 0.35)'
+                    }}
+                  >
+                    <CheckCircle2 size={18} />
+                    {isAccountCloudSyncing ? '클라우드에 신청 전송 중...' : '아이디 사용 신청하기 (관리자 승인 요청)'}
+                  </button>
+                </form>
+
+                <div
+                  style={{
+                    marginTop: '1.1rem',
+                    paddingTop: '0.9rem',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthScreenTab('login');
+                      setReqFeedback({ type: '', message: '' });
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#93c5fd',
+                      fontSize: '0.83rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    ← 기존 계정으로 로그인 화면 돌아가기
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -6914,19 +7520,40 @@ export default function BenefitCalculator({ onBack }) {
                 height: '32px',
                 padding: '0 0.85rem',
                 borderRadius: '8px',
-                border: '1px solid rgba(212, 175, 55, 0.6)',
-                background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.25), rgba(180, 83, 9, 0.25))',
+                border:
+                  pendingAccountRequests.length > 0
+                    ? '1.5px solid #f59e0b'
+                    : '1px solid rgba(212, 175, 55, 0.6)',
+                background:
+                  pendingAccountRequests.length > 0
+                    ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(180, 83, 9, 0.35))'
+                    : 'linear-gradient(135deg, rgba(212, 175, 55, 0.25), rgba(180, 83, 9, 0.25))',
                 color: '#fde68a',
                 fontSize: '0.8rem',
                 fontWeight: 800,
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.4rem',
                 boxShadow: '0 2px 10px rgba(212, 175, 55, 0.2)'
               }}
             >
-              <Crown size={14} /> 계정 · 권한(Lv.1/Lv.2) 관리
+              <Crown size={14} />
+              <span>계정 · 권한(Lv.1/Lv.2) 관리</span>
+              {pendingAccountRequests.length > 0 && (
+                <span
+                  style={{
+                    background: '#ef4444',
+                    color: '#ffffff',
+                    padding: '1px 7px',
+                    borderRadius: '999px',
+                    fontSize: '0.72rem',
+                    fontWeight: 900
+                  }}
+                >
+                  🔔 신청 {pendingAccountRequests.length}건
+                </span>
+              )}
             </button>
           )}
           <button
