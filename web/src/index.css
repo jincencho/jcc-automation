@@ -1528,4 +1528,37 @@ html {
   line-height: 1.25;
 }
 
+/* POS 결제 지시서 - 모바일/기기 다크모드 강제 무력화 및 순백색 A4 영수증 원본 보장 */
+#pos-cashier-print-area,
+#pos-cashier-print-area *,
+.pos-sheet-light-mode,
+.pos-sheet-light-mode * {
+  color-scheme: light !important;
+  forced-color-adjust: none !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+#pos-cashier-print-area,
+.pos-sheet-light-mode {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  #pos-cashier-print-area,
+  .pos-sheet-light-mode {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    color-scheme: light !important;
+    forced-color-adjust: none !important;
+  }
+  #pos-cashier-print-area *,
+  .pos-sheet-light-mode * {
+    color-scheme: light !important;
+    forced-color-adjust: none !important;
+  }
+}
+
+
 

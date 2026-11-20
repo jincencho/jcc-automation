@@ -3706,6 +3706,10 @@ export default function BenefitCalculator({ onBack }) {
     const prevHeight = node.style.height;
     const prevWidth = node.style.width;
     const prevFlex = node.style.flex;
+    const prevBg = node.style.backgroundColor;
+    const prevColor = node.style.color;
+    const prevColorScheme = node.style.colorScheme;
+    const prevForcedColorAdjust = node.style.forcedColorAdjust;
     try {
       node.style.overflow = 'visible';
       node.style.overflowY = 'visible';
@@ -3713,6 +3717,10 @@ export default function BenefitCalculator({ onBack }) {
       node.style.height = 'auto';
       node.style.width = `${targetWidth}px`;
       node.style.flex = 'none';
+      node.style.backgroundColor = '#ffffff';
+      node.style.color = '#0f172a';
+      node.style.colorScheme = 'light';
+      node.style.forcedColorAdjust = 'none';
       const fullHeight = node.scrollHeight + 16;
 
       return await htmlToImage.toPng(node, {
@@ -3731,7 +3739,11 @@ export default function BenefitCalculator({ onBack }) {
           overflow: 'visible',
           margin: '0',
           boxShadow: 'none',
-          background: '#ffffff'
+          background: '#ffffff',
+          backgroundColor: '#ffffff',
+          color: '#0f172a',
+          colorScheme: 'light',
+          forcedColorAdjust: 'none'
         }
       });
     } finally {
@@ -3741,6 +3753,10 @@ export default function BenefitCalculator({ onBack }) {
       node.style.height = prevHeight;
       node.style.width = prevWidth;
       node.style.flex = prevFlex;
+      node.style.backgroundColor = prevBg;
+      node.style.color = prevColor;
+      node.style.colorScheme = prevColorScheme;
+      node.style.forcedColorAdjust = prevForcedColorAdjust;
     }
   };
 
@@ -4164,15 +4180,41 @@ export default function BenefitCalculator({ onBack }) {
             </button>
           </div>
 
-          {/* 영수증/지시서 본체 (인쇄 가능) */}
+          {/* 영수증/지시서 본체 (인쇄 가능) - 사용자 기기 다크모드 무시하고 항상 순백색 A4 영수증 원본 유지 */}
           <div
             id="pos-cashier-print-area"
+            className="pos-sheet-light-mode"
             style={{
+              backgroundColor: '#ffffff',
+              color: '#0f172a',
+              colorScheme: 'light',
+              forcedColorAdjust: 'none',
+              WebkitPrintColorAdjust: 'exact',
+              printColorAdjust: 'exact',
               padding: '1.35rem 1.5rem',
               overflowY: 'auto',
               fontFamily: '"Pretendard", -apple-system, sans-serif'
             }}
           >
+            {/* 다크모드 강제 무력화 및 순백색 출력 보장 스타일 태그 (html-to-image 캡처 시 SVG 내부에도 직접 포함됨) */}
+            <style>{`
+              #pos-cashier-print-area, #pos-cashier-print-area * {
+                color-scheme: light !important;
+                forced-color-adjust: none !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              @media (prefers-color-scheme: dark) {
+                #pos-cashier-print-area {
+                  background-color: #ffffff !important;
+                  color: #0f172a !important;
+                }
+                #pos-cashier-print-area * {
+                  color-scheme: light !important;
+                  forced-color-adjust: none !important;
+                }
+              }
+            `}</style>
             {/* 지시서 타이틀 & 매장 정보 */}
             <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '0.55rem', marginBottom: '0.7rem' }}>
               <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 800, letterSpacing: '2.5px' }}>
