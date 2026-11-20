@@ -1965,7 +1965,7 @@ export default function BenefitCalculator({ onBack }) {
     { label: '300만', minSpend: 3093000, targetReceipt: 3000000, cardDiscountRate: 0.03, normalGcash: 195000 },
     { label: '400만', minSpend: 4124000, targetReceipt: 4000000, cardDiscountRate: 0.03, normalGcash: 260000 },
     { label: '500만', minSpend: 5264000, targetReceipt: 5000000, cardDiscountRate: 0.05, normalGcash: 325000 },
-    { label: '700만', minSpend: 7369000, targetReceipt: 7000000, cardDiscountRate: 0.05, normalGcash: 325000 },
+    { label: '700만', minSpend: 7369000, targetReceipt: 7000000, cardDiscountRate: 0.05, normalGcash: 455000 },
     { label: '1000만', minSpend: 10527000, targetReceipt: 10000000, cardDiscountRate: 0.05, normalGcash: 650000 },
     { label: '1500만', minSpend: 15790000, targetReceipt: 15000000, cardDiscountRate: 0.05, normalGcash: 975000 },
     { label: '2000만', minSpend: 21053000, targetReceipt: 20000000, cardDiscountRate: 0.05, normalGcash: 1300000 }
@@ -1995,14 +1995,19 @@ export default function BenefitCalculator({ onBack }) {
 
   const deptEnginePlan = (() => {
     if (deptCardCount === 1) {
-      if (deptEffectiveGross <= 21053000) {
+      const { matched: mainApplianceTier } = getTierForAmount(deptApplianceGross);
+      const canSplitSecondCard = Boolean(
+        mainApplianceTier &&
+        mainApplianceTier.minSpend >= 5264000 &&
+        (deptApplianceGross - mainApplianceTier.minSpend >= 1000000)
+      );
+
+      if (!canSplitSecondCard) {
         const { matched: tier, nextTier } = getTierForAmount(deptEffectiveGross);
         const tierGcash = getGcashForTier(tier);
         const baseGcash = tierGcash + deptPhoneGcash;
-        let bonusGcash = 0;
-        if (baseGcash >= 2000000) bonusGcash = 130000;
-        else if (baseGcash >= 1000000) bonusGcash = 65000;
-        const totalGcash = baseGcash + bonusGcash;
+        const bonusGcash = 0;
+        const totalGcash = baseGcash;
 
         // 유효기간 분리 (사은으로 받은 G캐시 9.5% 이상은 전부 유효기간 60일, 400만 이하 기본 6.5% 및 자급제는 5년)
         const is95OrAbove = tier && tier.minSpend >= 5264000 && deptRewardRate >= 9.5;
@@ -2131,6 +2136,7 @@ export default function BenefitCalculator({ onBack }) {
               discountRate: tier ? tier.cardDiscountRate : 0,
               discountAmount: cardDiscount,
               receiptAmount: Math.max(0, applianceApproval - cardDiscount),
+              rewardRateLabel: tier ? (tier.minSpend >= 5264000 ? `적립 (${Number(deptRewardRate)}%)` : '적립 (6.5%)') : '',
               note: tier ? `${(tier.cardDiscountRate * 100).toFixed(0)}% 청구할인 [가전 수수료율]` : '청구할인 미적용'
             },
             deptPhoneGross > 0 ? {
@@ -2143,6 +2149,7 @@ export default function BenefitCalculator({ onBack }) {
               discountRate: 0,
               discountAmount: 0,
               receiptAmount: deptPhoneGross,
+              rewardRateLabel: deptPhoneGcash > 0 ? '적립 (4%)' : '',
               note: '⚠️ 자급제 전용 수수료율 적용 (가전 바코드 스캔 절대 금지! 100만당 4만 G캐시)'
             } : null,
             safeDeduct > 0 ? {
@@ -2170,8 +2177,10 @@ export default function BenefitCalculator({ onBack }) {
         };
       }
 
-      // 2000만 초과: 1인 분할 비기 모드 (400만 / 300만 / 200만 / 100만 구간 지능형 매칭)
-      const step1MinSpend = 21053000;
+      // 500만 / 1000만 / 1500만 / 2000만 구간 초과 여유분 발생 시: 1인 최적 분할 비기 모드 (400만 / 300만 / 200만 / 100만 구간 지능형 매칭)
+      const step1Tier = mainApplianceTier || DEPT_TIERS[DEPT_TIERS.length - 1];
+      const step1MinSpend = step1Tier.minSpend;
+      const step1Label = step1Tier.label;
       let step2Approval = 0;
       let step2Gcash = 0;
       let step2Label = '';
@@ -2204,19 +2213,14 @@ export default function BenefitCalculator({ onBack }) {
       }
 
       const remainingForStep1And3 = deptApplianceGross - step2Approval;
-      // 1차 카드는 2,000만원 마지노선(21,053,000원)을 안전하게 넘기며, 5% 청구할인을 받을 수 있도록 자투리 잔여금을 온전히 1차 카드에 배정!
+      // 1차 카드는 메인 구간 마지노선(step1MinSpend)을 안전하게 넘기며, 5% 청구할인을 받을 수 있도록 자투리 잔여금을 온전히 1차 카드에 배정!
       let step1Approval = remainingForStep1And3;
-      const step1Tier = DEPT_TIERS.find((t) => t.label === '2000만') || DEPT_TIERS[DEPT_TIERS.length - 1];
       const step1Gcash = Math.round(step1Tier.targetReceipt * (deptRewardRate / 100));
 
       let step3Approval = 0;
       let step3Gcash = 0;
 
       const totalGcash = step1Gcash + step2Gcash + step3Gcash + deptPhoneGcash;
-
-      // 유효기간 분리 (1인 3분할: 1차 2000만 9.5% 이상 우대 사은은 전부 60일, 2차/3차 기본 6.5% 및 자급제는 5년)
-      const gcash60Day = deptRewardRate >= 9.5 ? step1Gcash : 0;
-      const gcash5Year = Math.max(0, totalGcash - gcash60Day);
 
       // 1) 전부 적립 시뮬레이션
       const rewardStep1Approval = step1Approval;
@@ -2230,7 +2234,7 @@ export default function BenefitCalculator({ onBack }) {
       // 2) 부분 차감 시뮬레이션 (마지노선 방어)
       const partDeduct3 = Math.min(step3Approval, totalGcash);
       const partRem = totalGcash - partDeduct3;
-      const partMargin = Math.max(0, step1Approval - 21053000);
+      const partMargin = Math.max(0, step1Approval - step1MinSpend);
       const partDeduct1 = Math.min(partMargin, partRem);
       const partialSafeDeduct = partDeduct3 + partDeduct1;
       const partialSafeReward = totalGcash - partialSafeDeduct;
@@ -2242,36 +2246,36 @@ export default function BenefitCalculator({ onBack }) {
       const partialCardDiscount = partialStep1Discount + partialStep2Discount;
       const partialFinalPerceived = deptEffectiveGross - partialCardDiscount - totalGcash;
 
-      // 3) 전부 차감 시뮬레이션 (G캐시 0원 올인):
-      // [사용자 특명]: 300만원 이하 구간은 청구할인이 없음!
-      // 따라서 300만원 미만 구간에서는 2차 카드는 딱 200만원만 결제하고 13만원 챙기고,
-      // 나머지 모든 자투리는 5% 청구할인을 받을 수 있는 1차 카드(2,000만원 이상)에 갖다 붙여서 계산!
+      // 3) 전부 차감 시뮬레이션 (G캐시 최대 활용 선차감):
+      // 1차 카드 마지노선(step1MinSpend)과 1차 G캐시(step1Gcash)를 우선 반영한 뒤 남는 잔액으로 달성 가능한 최적 2차 구간(400만/300만/200만/100만)을 매칭하고,
+      // 1차+2차 마지노선을 침범하지 않는 한도 내에서 G캐시를 최대치까지 선차감! (딱 떨어지면 잔여 0원, 초과 시 자투리 G캐시는 앱 적립!)
       let fullStep2Approval = 0;
       let fullStep2Discount = 0;
       let fullStep2Gcash = 0;
       let fullStep2Label = '';
       let fullStep2DiscountRate = 0;
 
-      if ((deptApplianceGross - step3Approval) - (step1Gcash + 260000) - 21053000 >= 4124000) {
-        fullStep2Approval = (deptApplianceGross - step3Approval) - (step1Gcash + 260000) - 21053000;
+      const remainAfterStep1Gcash = (deptApplianceGross - step3Approval) - step1MinSpend - (step1Gcash + deptPhoneGcash);
+
+      if (remainAfterStep1Gcash >= 4124000) {
+        fullStep2Approval = 4124000;
         fullStep2DiscountRate = 0.03;
         fullStep2Discount = Math.floor(fullStep2Approval * 0.03);
         fullStep2Gcash = 260000;
         fullStep2Label = '400만';
-      } else if ((deptApplianceGross - step3Approval) - (step1Gcash + 195000) - 21053000 >= 3093000) {
-        fullStep2Approval = (deptApplianceGross - step3Approval) - (step1Gcash + 195000) - 21053000;
+      } else if (remainAfterStep1Gcash >= 3093000) {
+        fullStep2Approval = 3093000;
         fullStep2DiscountRate = 0.03;
         fullStep2Discount = Math.floor(fullStep2Approval * 0.03);
         fullStep2Gcash = 195000;
         fullStep2Label = '300만';
-      } else if (deptApplianceGross - step1Gcash >= 21053000 + 2000000) {
-        // 딱 200만원 결제, 청구할인 0원, 13만원 사은 챙김, 나머지 자투리는 전부 1차 카드에 배정!
+      } else if (remainAfterStep1Gcash >= 2000000) {
         fullStep2Approval = 2000000;
         fullStep2DiscountRate = 0;
         fullStep2Discount = 0;
         fullStep2Gcash = 130000;
         fullStep2Label = '200만';
-      } else if (deptApplianceGross - step1Gcash >= 21053000 + 1000000) {
+      } else if (remainAfterStep1Gcash >= 1000000) {
         fullStep2Approval = 1000000;
         fullStep2DiscountRate = 0;
         fullStep2Discount = 0;
@@ -2282,16 +2286,17 @@ export default function BenefitCalculator({ onBack }) {
         fullStep2DiscountRate = 0;
         fullStep2Discount = 0;
         fullStep2Gcash = 0;
-        fullStep2Label = '미달';
+        fullStep2Label = '단독';
       }
 
       const fullTotalGcash = step1Gcash + fullStep2Gcash + deptPhoneGcash;
-      const fullSafeDeduct = fullTotalGcash;
-      const fullSafeReward = 0;
+      // 1차 마지노선(step1MinSpend)과 2차 구간 금액(fullStep2Approval)을 지키는 선에서 최대 차감 가능 한도 계산
+      const maxDeductibleForFull = Math.max(0, (deptApplianceGross - step3Approval) - step1MinSpend - fullStep2Approval);
+      const fullSafeDeduct = Math.min(fullTotalGcash, maxDeductibleForFull);
+      const fullSafeReward = Math.max(0, fullTotalGcash - fullSafeDeduct);
 
-      // 1차 카드 승인: 전체 가전 원금에서 2차 승인액(200만)을 뺀 뒤, 총 G캐시를 전액 선차감!
-      // (자투리 금액이 1차 카드에 다 붙어 2,000만 상한 마지노선을 완벽히 초과 수령!)
-      const fullStep1Approval = Math.max(21053000, (deptApplianceGross - fullStep2Approval) - fullTotalGcash);
+      // 1차 카드 승인: 전체 가전 원금에서 2차 승인액과 실제 선차감된 G캐시(fullSafeDeduct)를 뺀 금액 (마지노선 이상 보장!)
+      const fullStep1Approval = Math.max(0, (deptApplianceGross - fullStep2Approval) - fullSafeDeduct);
       const fullStep1Discount = Math.floor(fullStep1Approval * 0.05);
       const fullTotalCardDiscount = fullStep1Discount + fullStep2Discount;
       const fullCardApproval = fullStep1Approval + fullStep2Approval + deptPhoneGross;
@@ -2309,7 +2314,7 @@ export default function BenefitCalculator({ onBack }) {
       let safeMode = 'reward_only';
       let activeTotalGcash = totalGcash;
       let activeStep2Gcash = step2Gcash;
-      let activeStep2Label = step2Label || '400만';
+      let activeStep2Label = step2Label || '100만';
       let activeStep2DiscountRate = step2DiscountRate;
       let activeStep1Discount = 0;
       let activeStep2Discount = 0;
@@ -2348,7 +2353,7 @@ export default function BenefitCalculator({ onBack }) {
         safeMode = safeDeduct >= totalGcash ? 'full_instant' : (safeDeduct > 0 ? 'partial_instant' : 'reward_only');
         activeTotalGcash = totalGcash;
         activeStep2Gcash = step2Gcash;
-        activeStep2Label = step2Label || '400만';
+        activeStep2Label = step2Label || '100만';
         activeStep2DiscountRate = step2DiscountRate;
         activeStep1ActualApproval = partStep1Approval;
         activeStep2ActualApproval = partStep2Approval;
@@ -2368,7 +2373,7 @@ export default function BenefitCalculator({ onBack }) {
         safeMode = 'reward_only';
         activeTotalGcash = totalGcash;
         activeStep2Gcash = step2Gcash;
-        activeStep2Label = step2Label || '400만';
+        activeStep2Label = step2Label || '100만';
         activeStep2DiscountRate = step2DiscountRate;
         activeStep1ActualApproval = rewardStep1Approval;
         activeStep2ActualApproval = rewardStep2Approval;
@@ -2390,12 +2395,16 @@ export default function BenefitCalculator({ onBack }) {
       const finalPerceived = activeFinalPerceived;
       const currentGcash = activeTotalGcash;
 
+      // 유효기간 분리 (1인 분할: 1차 500만 이상 9.5% 이상 우대 사은은 전부 60일, 2차/3차 기본 6.5% 및 자급제는 5년)
+      const gcash60Day = deptRewardRate >= 9.5 ? step1Gcash : 0;
+      const gcash5Year = Math.max(0, currentGcash - gcash60Day);
+
       let jumpTip = null;
-      const jumpTarget = 21053000 + 5264000;
+      const jumpTarget = step1MinSpend + 5264000;
       if (deptEffectiveGross < jumpTarget && (jumpTarget - deptEffectiveGross) <= 1000000) {
         jumpTip = {
           needMore: jumpTarget - deptEffectiveGross,
-          message: `단 ${(jumpTarget - deptEffectiveGross).toLocaleString()}원만 추가 시 [2,000만 + 500만] 동시 점프! G캐시 폭증!`
+          message: `단 ${(jumpTarget - deptEffectiveGross).toLocaleString()}원만 추가 시 상위 우대 구간 동시 점프! G캐시 폭증!`
         };
       }
 
@@ -2404,6 +2413,9 @@ export default function BenefitCalculator({ onBack }) {
         applianceGross: deptApplianceGross,
         phoneGross: deptPhoneGross,
         effectiveGross: deptEffectiveGross,
+        tierLabel: `${step1Label}${activeStep2Gcash > 0 ? ` + ${activeStep2Label}` : ''}`,
+        step1Label,
+        step1MinSpend,
         step1Approval: step1ActualApproval,
         step1BaseApproval: step1Approval,
         step1Discount,
@@ -2432,7 +2444,8 @@ export default function BenefitCalculator({ onBack }) {
           safeDeduct: 0,
           safeReward: totalGcash,
           totalGcash: totalGcash,
-          step2Label: step2Label || '400만',
+          step1Label,
+          step2Label: step2Label || '100만',
           step2Gcash: step2Gcash,
           totalCardDiscount: rewardCardDiscount,
           finalPerceived: rewardFinalPerceived
@@ -2442,7 +2455,8 @@ export default function BenefitCalculator({ onBack }) {
           safeDeduct: partialSafeDeduct,
           safeReward: partialSafeReward,
           totalGcash: totalGcash,
-          step2Label: step2Label || '400만',
+          step1Label,
+          step2Label: step2Label || '100만',
           step2Gcash: step2Gcash,
           totalCardDiscount: partialCardDiscount,
           finalPerceived: partialFinalPerceived
@@ -2450,9 +2464,10 @@ export default function BenefitCalculator({ onBack }) {
         fullPlan: {
           cardApproval: fullCardApproval,
           safeDeduct: fullSafeDeduct,
-          safeReward: 0,
+          safeReward: fullSafeReward,
           totalGcash: fullTotalGcash,
-          step2Label: fullStep2Label || '200만',
+          step1Label,
+          step2Label: fullStep2Label || '단독',
           step2Gcash: fullStep2Gcash,
           totalCardDiscount: fullTotalCardDiscount,
           finalPerceived: fullFinalPerceived
@@ -2477,7 +2492,8 @@ export default function BenefitCalculator({ onBack }) {
             discountRate: 0.05,
             discountAmount: step1Discount,
             receiptAmount: Math.max(0, step1ActualApproval - step1Discount),
-            note: `5% 청구할인 + ${deptRewardRate}% 우대 사은 (2,000만 상한 사수)${deduct1 > 0 ? ` [자투리 합산 및 G캐시 ${formatWon(deduct1)} 선차감 반영]` : ''}`
+            rewardRateLabel: `적립 (${Number(deptRewardRate)}%)`,
+            note: `5% 청구할인 + ${deptRewardRate}% 우대 사은 (${step1Label} 구간 사수)${deduct1 > 0 ? ` [자투리 합산 및 G캐시 ${formatWon(deduct1)} 선차감 반영]` : ''}`
           },
           step2ActualApproval > 0 ? {
             step: 2,
@@ -2489,6 +2505,7 @@ export default function BenefitCalculator({ onBack }) {
             discountRate: activeStep2DiscountRate,
             discountAmount: step2Discount,
             receiptAmount: Math.max(0, step2ActualApproval - step2Discount),
+            rewardRateLabel: activeStep2Gcash > 0 ? '적립 (6.5%)' : '',
             note: activeStep2DiscountRate > 0
               ? `3% 청구할인 + 6.5% 일반 사은 (${activeStep2Label} 구간: ${formatWon(activeStep2Gcash)})${deduct2 > 0 ? ` [G캐시 ${formatWon(deduct2)} 선차감]` : ''} [가전 수수료율]`
               : `300만 미만 청구할인 미대상 (0원) + 6.5% 사은 (${activeStep2Label} ${formatWon(step2ActualApproval)} 결제: 사은 ${formatWon(activeStep2Gcash)} 챙김) [가전 수수료율]`
@@ -2503,6 +2520,7 @@ export default function BenefitCalculator({ onBack }) {
             discountRate: 0,
             discountAmount: 0,
             receiptAmount: step3ActualApproval,
+            rewardRateLabel: step3Gcash > 0 ? '적립 (6.5%)' : '',
             note: step3Gcash > 0 ? '6.5% 일반 사은 (100만 단위) [가전 수수료율]' : '가전 자투리 결제'
           } : null,
           deptPhoneGross > 0 ? {
@@ -2515,6 +2533,7 @@ export default function BenefitCalculator({ onBack }) {
             discountRate: 0,
             discountAmount: 0,
             receiptAmount: deptPhoneGross,
+            rewardRateLabel: deptPhoneGcash > 0 ? '적립 (4%)' : '',
             note: '⚠️ 자급제 전용 수수료율 적용 (가전 바코드 스캔 절대 금지! 100만당 4만 G캐시)'
           } : null,
           safeDeduct > 0 ? {
@@ -2718,6 +2737,7 @@ export default function BenefitCalculator({ onBack }) {
           discountRate: t1 ? t1.cardDiscountRate : 0,
           discountAmount: c1Discount,
           receiptAmount: Math.max(0, card1Actual - c1Discount),
+          rewardRateLabel: t1 ? (t1.minSpend >= 5264000 ? `적립 (${Number(deptRewardRate)}%)` : '적립 (6.5%)') : '',
           note: t1 ? `${t1.label} 구간 (${(t1.cardDiscountRate * 100).toFixed(0)}% 청구할인 + 우대 G캐시)${c1Deduct > 0 ? ` [G캐시 ${formatWon(c1Deduct)} 선차감]` : ''} [가전 수수료율]` : '구간 미달'
         },
         {
@@ -2730,6 +2750,7 @@ export default function BenefitCalculator({ onBack }) {
           discountRate: t2 ? t2.cardDiscountRate : 0,
           discountAmount: c2Discount,
           receiptAmount: Math.max(0, card2Actual - c2Discount),
+          rewardRateLabel: t2 ? (t2.minSpend >= 5264000 ? `적립 (${Number(deptRewardRate)}%)` : '적립 (6.5%)') : '',
           note: t2 ? `${t2.label} 구간 (${(t2.cardDiscountRate * 100).toFixed(0)}% 청구할인 + 우대 G캐시)${c2Deduct > 0 ? ` [G캐시 ${formatWon(c2Deduct)} 선차감]` : ''} [가전 수수료율]` : '구간 미달'
         },
         deptPhoneGross > 0 ? {
@@ -2742,6 +2763,7 @@ export default function BenefitCalculator({ onBack }) {
           discountRate: 0,
           discountAmount: 0,
           receiptAmount: deptPhoneGross,
+          rewardRateLabel: deptPhoneGcash > 0 ? '적립 (4%)' : '',
           note: '⚠️ 자급제 전용 수수료율 적용 (가전 바코드 스캔 절대 금지! 100만당 4만 G캐시)'
         } : null,
         safeDeduct > 0 ? {
@@ -4243,25 +4265,26 @@ export default function BenefitCalculator({ onBack }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
                 <thead>
                   <tr style={{ background: '#f1f5f9', borderTop: '2px solid #cbd5e1', borderBottom: '1px solid #cbd5e1', textAlign: 'left' }}>
-                    <th style={{ padding: '0.5rem 0.55rem', width: '58px', textAlign: 'center', fontSize: '0.82rem', fontWeight: 800, color: '#475569', whiteSpace: 'nowrap' }}>단계</th>
-                    <th style={{ padding: '0.5rem 0.65rem', fontSize: '0.82rem', fontWeight: 800, color: '#475569' }}>결제 구분</th>
-                    <th style={{ padding: '0.5rem 0.55rem', textAlign: 'center', width: '110px', fontSize: '0.82rem', fontWeight: 800, color: '#475569' }}>스캔 바코드</th>
-                    <th style={{ padding: '0.5rem 0.65rem', textAlign: 'right', width: '135px', fontSize: '0.82rem', fontWeight: 800, color: '#475569' }}>POS 승인 금액</th>
-                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right', width: '185px', background: '#eff6ff', color: '#1e40af', fontSize: '0.82rem', fontWeight: 900 }}>
-                      청구할인 적용 영수증 금액 (확인용)
+                    <th style={{ padding: '0.5rem 0.4rem', width: '48px', textAlign: 'center', fontSize: '0.8rem', fontWeight: 800, color: '#475569', whiteSpace: 'nowrap' }}>단계</th>
+                    <th style={{ padding: '0.5rem 0.5rem', fontSize: '0.8rem', fontWeight: 800, color: '#475569' }}>결제 구분</th>
+                    <th style={{ padding: '0.5rem 0.4rem', textAlign: 'center', width: '98px', fontSize: '0.8rem', fontWeight: 800, color: '#475569', whiteSpace: 'nowrap' }}>스캔 바코드</th>
+                    <th style={{ padding: '0.5rem 0.5rem', textAlign: 'right', width: '118px', fontSize: '0.8rem', fontWeight: 800, color: '#475569', whiteSpace: 'nowrap' }}>POS 승인 금액</th>
+                    <th style={{ padding: '0.5rem 0.55rem', textAlign: 'right', width: '155px', background: '#eff6ff', color: '#1e40af', fontSize: '0.8rem', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                      청구할인 영수증 금액
                     </th>
+                    <th style={{ padding: '0.5rem 0.4rem', textAlign: 'center', width: '92px', fontSize: '0.8rem', fontWeight: 800, color: '#b45309', whiteSpace: 'nowrap' }}>사은행사</th>
                   </tr>
                 </thead>
                 <tbody>
                   {deptEnginePlan.posSteps.map((st, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', background: st.discountAmount > 0 ? '#f8fafc' : 'transparent' }}>
-                      <td style={{ padding: '0.55rem 0.55rem', textAlign: 'center', fontWeight: 800, color: '#64748b', fontSize: '0.86rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.55rem 0.45rem', textAlign: 'center', fontWeight: 800, color: '#64748b', fontSize: '0.86rem', whiteSpace: 'nowrap' }}>
                         {st.step}
                       </td>
-                      <td style={{ padding: '0.55rem 0.65rem', fontWeight: 800, color: '#0f172a', fontSize: '0.88rem' }}>
+                      <td style={{ padding: '0.55rem 0.55rem', fontWeight: 800, color: '#0f172a', fontSize: '0.88rem', whiteSpace: 'nowrap' }}>
                         {st.label}
                       </td>
-                      <td style={{ padding: '0.55rem 0.55rem', textAlign: 'center' }}>
+                      <td style={{ padding: '0.55rem 0.45rem', textAlign: 'center' }}>
                         {st.barcodeBadge === '가전 907' ? (
                           <span style={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', fontSize: '0.76rem', border: '1px solid #7dd3fc', whiteSpace: 'nowrap' }}>
                             🏬 가전 907
@@ -4282,10 +4305,10 @@ export default function BenefitCalculator({ onBack }) {
                           <span style={{ color: '#94a3b8', fontSize: '0.76rem' }}>—</span>
                         )}
                       </td>
-                      <td style={{ padding: '0.55rem 0.65rem', textAlign: 'right', fontWeight: 800, fontSize: '0.94rem', color: '#334155', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.55rem 0.55rem', textAlign: 'right', fontWeight: 800, fontSize: '0.94rem', color: '#334155', whiteSpace: 'nowrap' }}>
                         {formatWon(st.amount)}
                       </td>
-                      <td style={{ padding: '0.55rem 0.75rem', textAlign: 'right', background: st.discountAmount > 0 ? '#eff6ff' : 'transparent', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.55rem 0.65rem', textAlign: 'right', background: st.discountAmount > 0 ? '#eff6ff' : 'transparent', whiteSpace: 'nowrap' }}>
                         {st.discountAmount > 0 ? (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
                             <strong style={{ fontSize: '0.98rem', fontWeight: 900, color: '#1d4ed8' }}>
@@ -4299,6 +4322,24 @@ export default function BenefitCalculator({ onBack }) {
                           <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#475569' }}>
                             {formatWon(st.receiptAmount || st.amount)}
                           </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '0.55rem 0.45rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {st.rewardRateLabel ? (
+                          <span style={{
+                            background: '#fffbeb',
+                            color: '#b45309',
+                            fontWeight: 900,
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.8rem',
+                            border: '1px solid #fcd34d',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {st.rewardRateLabel}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#cbd5e1', fontSize: '0.78rem' }}>—</span>
                         )}
                       </td>
                     </tr>
@@ -8436,42 +8477,46 @@ export default function BenefitCalculator({ onBack }) {
                         </div>
                       )}
 
-                      {/* 4. 1인 3분할 비기 모드 안내 (2,000만 초과 시) */}
+                      {/* 4. 1인 최적 분할 비기 모드 안내 (500만/1,000만/1,500만/2,000만 구간 초과 여유분 발생 시) */}
                       {deptCardCount === 1 && deptEnginePlan.mode === '1person_3split' && (
                         <div style={{ background: 'rgba(212, 175, 55, 0.08)', padding: '0.85rem', borderRadius: '10px', border: '1px solid rgba(212, 175, 55, 0.35)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'wrap', gap: '0.4rem' }}>
                             <span style={{ fontSize: '0.82rem', fontWeight: 900, color: '#fde68a' }}>
                               {deptEnginePlan.step3BaseApproval > 0
-                                ? '⚡ 1인 카드 3분할 결제 비기 작동 중 (2,000만 한도 초과 최적화)'
-                                : `⚡ 1인 카드 2단계 최적 분할 (2,000만 + ${deptEnginePlan.step2Label || '400만'} 신규구간 완벽 매칭)`}
+                                ? `⚡ 1인 카드 3분할 결제 비기 작동 중 (${deptEnginePlan.step1Label || '2000만'} 구간 초과 최적화)`
+                                : deptEnginePlan.step2Approval > 0
+                                  ? `⚡ 1인 카드 2단계 최적 분할 (1차 ${deptEnginePlan.step1Label || '1500만'} + 2차 ${deptEnginePlan.step2Label || '100만'} 구간 완벽 매칭)`
+                                  : `⚡ 1인 카드 최적 결제 (${deptEnginePlan.step1Label || '1500만'} 구간 마지노선 사수)`}
                             </span>
                             <span style={{ fontSize: '0.7rem', color: deptEnginePlan.safeDeduct > 0 ? '#67e8f9' : '#6ee7b7', fontWeight: 700 }}>
-                              {deptEnginePlan.safeDeduct > 0 ? `✓ G캐시 ${formatWon(deptEnginePlan.safeDeduct)} 즉시 선차감 적용` : '✓ 사은행사 2차/3차 전액 수령'}
+                              {deptEnginePlan.safeDeduct > 0
+                                ? `✓ G캐시 ${formatWon(deptEnginePlan.safeDeduct)} 선차감${deptEnginePlan.safeReward > 0 ? ` + 잔여 ${formatWon(deptEnginePlan.safeReward)} 앱 적립` : ' (전액 차감)'}`
+                                : '✓ 사은행사 1차+2차 전액 수령'}
                             </span>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem', fontSize: '0.76rem' }}>
                             <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.5rem 0.65rem', borderRadius: '6px' }}>
                               <div style={{ color: '#93c5fd', fontWeight: 700, fontSize: '0.85rem' }}>
-                                1차 제휴카드: {formatWon(deptEnginePlan.step1Approval)}
+                                1차 제휴카드: {formatWon(deptEnginePlan.step1Approval)} ({deptEnginePlan.step1Label || '1500만'} 구간)
                               </div>
                               <div style={{ color: '#cbd5e1', fontSize: '0.72rem' }}>
                                 5% 청구할인 ({formatWon(deptEnginePlan.step1Discount)}) + {deptRewardRate}% 우대 G캐시 ({formatWon(deptEnginePlan.step1Gcash)})
                                 {deptEnginePlan.deduct1 > 0 && (
                                   <div style={{ color: '#67e8f9', fontWeight: 700, marginTop: '2px' }}>
-                                    └ 마지노선(2,105.3만) 사수: G캐시 -{formatWon(deptEnginePlan.deduct1)} 선차감
+                                    └ {deptEnginePlan.step1Label} 마지노선({formatWon(deptEnginePlan.step1MinSpend)}) 사수: G캐시 -{formatWon(deptEnginePlan.deduct1)} 선차감
                                   </div>
                                 )}
                               </div>
                             </div>
-                            {deptEnginePlan.step2BaseApproval > 0 && (
+                            {deptEnginePlan.step2Approval > 0 && (
                               <div style={{ background: 'rgba(0,0,0,0.25)', padding: '0.5rem 0.65rem', borderRadius: '6px' }}>
                                 <div style={{ color: '#fde68a', fontWeight: 700, fontSize: '0.85rem' }}>
-                                  2차 제휴카드: {formatWon(deptEnginePlan.step2Approval)} ({deptEnginePlan.step2Label || '400만'} 구간)
+                                  2차 제휴카드: {formatWon(deptEnginePlan.step2Approval)} ({deptEnginePlan.step2Label || '100만'} 구간)
                                 </div>
                                 <div style={{ color: '#cbd5e1', fontSize: '0.72rem' }}>
                                   {deptEnginePlan.step2Discount > 0
                                     ? `3% 청구할인 (${formatWon(deptEnginePlan.step2Discount)})`
-                                    : '청구할인 미적용 (300만 이하)'} + 6.5% 일반 G캐시 ({formatWon(deptEnginePlan.step2Gcash)})
+                                    : '청구할인 미적용 (300만 미만)'} + 6.5% 일반 G캐시 ({formatWon(deptEnginePlan.step2Gcash)})
                                 </div>
                               </div>
                             )}
@@ -8495,9 +8540,14 @@ export default function BenefitCalculator({ onBack }) {
 
                           {/* 선차감 시 총 카드 결제 승인액 요약 */}
                           {deptEnginePlan.safeDeduct > 0 && (
-                            <div style={{ marginTop: '0.5rem', padding: '0.45rem 0.75rem', background: 'rgba(14, 165, 233, 0.15)', borderRadius: '6px', border: '1px solid rgba(14, 165, 233, 0.35)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem' }}>
+                            <div style={{ marginTop: '0.5rem', padding: '0.45rem 0.75rem', background: 'rgba(14, 165, 233, 0.15)', borderRadius: '6px', border: '1px solid rgba(14, 165, 233, 0.35)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', fontSize: '0.78rem' }}>
                               <span style={{ color: '#e0f2fe' }}>
                                 ⚡ 총 선차감액: <strong style={{ color: '#38bdf8' }}>-{formatWon(deptEnginePlan.safeDeduct)}</strong> {deptEnginePlan.deduct3 > 0 ? `(1차 ${formatWon(deptEnginePlan.deduct1)} + 3차 ${formatWon(deptEnginePlan.deduct3)})` : `(1차 ${formatWon(deptEnginePlan.deduct1)})`}
+                                {deptEnginePlan.safeReward > 0 && (
+                                  <span style={{ color: '#fde68a', fontWeight: 800, marginLeft: '8px' }}>
+                                    | 💰 잔여 자투리 G캐시 적립: +{formatWon(deptEnginePlan.safeReward)}
+                                  </span>
+                                )}
                               </span>
                               <span style={{ color: '#fef08a' }}>
                                 실제 고객 카드 결제 총액: <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>{formatWon(deptEnginePlan.cardApproval)}</strong>
@@ -8606,7 +8656,12 @@ export default function BenefitCalculator({ onBack }) {
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fde68a' }}>
                                   <span>G캐시 앱 적립 합계:</span>
-                                  <strong style={{ color: '#fde68a' }}>+ {formatWon(deptEnginePlan.totalGcash)} (100% 지급)</strong>
+                                  <strong style={{ color: '#fde68a' }}>
+                                    + {formatWon(deptEnginePlan.rewardPlan?.totalGcash ?? deptEnginePlan.totalGcash)}
+                                    {deptEnginePlan.mode === '1person_3split' && deptEnginePlan.rewardPlan?.step2Gcash > 0
+                                      ? ` (1차 ${deptEnginePlan.step1Label} + 2차 ${deptEnginePlan.rewardPlan?.step2Label})`
+                                      : ' (100% 지급)'}
+                                  </strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fca5a5' }}>
                                   <span>제휴카드 청구할인:</span>
@@ -8668,6 +8723,15 @@ export default function BenefitCalculator({ onBack }) {
                                   <span style={{ fontWeight: 800 }}>실제 카드 승인 총액:</span>
                                   <strong style={{ color: '#67e8f9', fontSize: '0.88rem' }}>{formatWon(deptEnginePlan.partialPlan?.cardApproval || deptEnginePlan.instantCardApproval)}</strong>
                                 </div>
+                                {deptEnginePlan.mode === '1person_3split' && (
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fde68a' }}>
+                                    <span>총 G캐시 발생 합계:</span>
+                                    <strong style={{ color: '#fde68a' }}>
+                                      + {formatWon(deptEnginePlan.partialPlan?.totalGcash ?? deptEnginePlan.totalGcash)}
+                                      {deptEnginePlan.partialPlan?.step2Gcash > 0 ? ` (1차 ${deptEnginePlan.step1Label} + 2차 ${deptEnginePlan.partialPlan?.step2Label})` : ''}
+                                    </strong>
+                                  </div>
+                                )}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#34d399' }}>
                                   <span>현장 G캐시 부분 선차감:</span>
                                   <strong>- {formatWon(deptEnginePlan.partialPlan?.safeDeduct || deptEnginePlan.instantSafeDeduct)}</strong>
@@ -8739,19 +8803,33 @@ export default function BenefitCalculator({ onBack }) {
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fde68a' }}>
                                   <span>G캐시 발생 (결제금액 재판정):</span>
-                                  <strong style={{ color: '#fde68a' }}>+ {formatWon(deptEnginePlan.fullPlan?.totalGcash)} (1차 2,000만 + 2차 {deptEnginePlan.fullPlan?.step2Label || '200만'})</strong>
+                                  <strong style={{ color: '#fde68a' }}>
+                                    + {formatWon(deptEnginePlan.fullPlan?.totalGcash)}
+                                    {deptEnginePlan.mode === '1person_3split'
+                                      ? (deptEnginePlan.fullPlan?.step2Gcash > 0
+                                          ? ` (1차 ${deptEnginePlan.step1Label} + 2차 ${deptEnginePlan.fullPlan?.step2Label})`
+                                          : ` (1차 ${deptEnginePlan.step1Label} 단독)`)
+                                      : ''}
+                                  </strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#34d399' }}>
-                                  <span>현장 G캐시 전액 선차감:</span>
-                                  <strong>- {formatWon(deptEnginePlan.fullPlan?.safeDeduct)} (100% 올인 차감)</strong>
+                                  <span>{deptEnginePlan.fullPlan?.safeReward > 0 ? '현장 G캐시 최대 선차감:' : '현장 G캐시 전액 선차감:'}</span>
+                                  <strong>
+                                    - {formatWon(deptEnginePlan.fullPlan?.safeDeduct)}
+                                    {deptEnginePlan.fullPlan?.safeReward > 0 ? ' (최대 활용 선차감)' : ' (100% 올인 차감)'}
+                                  </strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#fca5a5' }}>
                                   <span>제휴카드 청구할인:</span>
                                   <strong>- {formatWon(deptEnginePlan.fullPlan?.totalCardDiscount)}</strong>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#94a3b8', fontSize: '0.73rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: deptEnginePlan.fullPlan?.safeReward > 0 ? '#fef08a' : '#94a3b8', fontSize: '0.73rem' }}>
                                   <span>잔여 G캐시 앱 적립:</span>
-                                  <strong style={{ color: '#cbd5e1' }}>0원 (남김없이 올인 차감)</strong>
+                                  <strong style={{ color: deptEnginePlan.fullPlan?.safeReward > 0 ? '#fef08a' : '#cbd5e1' }}>
+                                    {deptEnginePlan.fullPlan?.safeReward > 0
+                                      ? `+ ${formatWon(deptEnginePlan.fullPlan?.safeReward)} (자투리 앱 적립)`
+                                      : '0원 (남김없이 올인 차감)'}
+                                  </strong>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.35rem', borderTop: '1px dashed rgba(255,255,255,0.15)', color: '#fde68a', fontWeight: 800 }}>
                                   <span>고객 체감 최종가:</span>
