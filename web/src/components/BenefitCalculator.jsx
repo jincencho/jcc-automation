@@ -2153,7 +2153,7 @@ export default function BenefitCalculator({ onBack }) {
               discountRate: 0,
               discountAmount: 0,
               receiptAmount: safeDeduct,
-              note: '결제 즉시 차감'
+              note: '⚡ POS G캐시 현장 결제 차감 (1회 승인)'
             } : null,
             safeReward > 0 ? {
               step: '증정',
@@ -3861,11 +3861,19 @@ export default function BenefitCalculator({ onBack }) {
     const applianceSteps = (deptEnginePlan?.posSteps || []).filter(
       (s) => s && (s.barcodeTail === '907' || s.barcodeType === 'appliance')
     );
-    const applianceCount = applianceSteps.length;
+    const hasGcashPayment = (deptEnginePlan?.safeDeduct || 0) > 0;
+    const gcashDeductAmount = deptEnginePlan?.safeDeduct || 0;
+    const totalAppliancePayments = applianceSteps.length + (hasGcashPayment ? 1 : 0);
+
     const phoneSteps = (deptEnginePlan?.posSteps || []).filter(
       (s) => s && (s.barcodeTail === '606' || s.barcodeType === 'phone')
     );
     const phoneCount = phoneSteps.length;
+
+    const appliancePaymentBreakdown = [
+      ...applianceSteps.map((s, idx) => `${idx + 1}차: ${formatWon(s.amount)}`),
+      ...(hasGcashPayment ? [`${applianceSteps.length + 1}차(G캐시): ${formatWon(gcashDeductAmount)}`] : [])
+    ];
 
     return (
       <div
@@ -4112,18 +4120,22 @@ export default function BenefitCalculator({ onBack }) {
                       <strong style={{
                         fontSize: '0.74rem',
                         fontWeight: 900,
-                        color: applianceCount > 1 ? '#d97706' : '#0369a1',
-                        background: applianceCount > 1 ? '#fef3c7' : '#e0f2fe',
+                        color: totalAppliancePayments > 1 ? '#d97706' : '#0369a1',
+                        background: totalAppliancePayments > 1 ? '#fef3c7' : '#e0f2fe',
                         padding: '1px 6px',
                         borderRadius: '4px',
-                        border: applianceCount > 1 ? '1px solid #fde68a' : '1px solid #bae6fd'
+                        border: totalAppliancePayments > 1 ? '1px solid #fde68a' : '1px solid #bae6fd'
                       }}>
-                        {applianceCount > 1 ? `총 ${applianceCount}회 분할 결제` : applianceCount === 1 ? '단독 1회 결제' : '0건 (결제 없음)'}
+                        {totalAppliancePayments > 1
+                          ? `총 ${totalAppliancePayments}회 분할 결제${hasGcashPayment ? ` (카드 ${applianceSteps.length}회 + G캐시 1회)` : ''}`
+                          : totalAppliancePayments === 1
+                            ? '단독 1회 결제'
+                            : '0건 (결제 없음)'}
                       </strong>
                     </div>
-                    {applianceCount > 1 && (
+                    {totalAppliancePayments > 1 && (
                       <div style={{ fontSize: '0.67rem', color: '#0369a1', fontWeight: 700, background: '#f0f9ff', padding: '2px 5px', borderRadius: '4px', textAlign: 'right', marginTop: '1px' }}>
-                        {applianceSteps.map((s, idx) => `${idx + 1}차: ${formatWon(s.amount)}`).join(' | ')}
+                        {appliancePaymentBreakdown.join(' | ')}
                       </div>
                     )}
                   </div>
@@ -4219,6 +4231,8 @@ export default function BenefitCalculator({ onBack }) {
                 <span>■ POS 승인 순서 및 분할 결제 지시 (현장 영수증 일치 확인)</span>
                 <span style={{ fontSize: '0.73rem', color: '#0369a1', fontWeight: 700 }}>
                   {deptEnginePlan.mode === '2person_2cards' ? '👥 2인 2카드 분할' : deptEnginePlan.mode === '1person_3split' ? '👤 1인 분할 비기' : '👤 1인 단독 결제'}
+                  {hasGcashPayment ? ' + ⚡ G캐시 차감 결제' : ''}
+                  {` (총 ${totalAppliancePayments + phoneCount}건 결제)`}
                 </span>
               </div>
 
