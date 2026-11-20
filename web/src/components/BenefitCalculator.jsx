@@ -3857,6 +3857,16 @@ export default function BenefitCalculator({ onBack }) {
 
   const renderPosCashierModal = () => {
     if (!showPosCashierModal) return null;
+
+    const applianceSteps = (deptEnginePlan?.posSteps || []).filter(
+      (s) => s && (s.barcodeTail === '907' || s.barcodeType === 'appliance')
+    );
+    const applianceCount = applianceSteps.length;
+    const phoneSteps = (deptEnginePlan?.posSteps || []).filter(
+      (s) => s && (s.barcodeTail === '606' || s.barcodeType === 'phone')
+    );
+    const phoneCount = phoneSteps.length;
+
     return (
       <div
         role="dialog"
@@ -3928,50 +3938,54 @@ export default function BenefitCalculator({ onBack }) {
           <div
             id="pos-cashier-print-area"
             style={{
-              padding: '1.4rem 1.6rem',
+              padding: '1.1rem 1.3rem',
               overflowY: 'auto',
               fontFamily: '"Pretendard", -apple-system, sans-serif'
             }}
           >
             {/* 지시서 타이틀 & 매장 정보 */}
-            <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '0.9rem', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 700, letterSpacing: '2px' }}>
+            <div style={{ textAlign: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '0.45rem', marginBottom: '0.55rem' }}>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, letterSpacing: '2px' }}>
                 GALLERIA JINJU STORE
               </div>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: 900, margin: '0.3rem 0', color: '#0f172a' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 900, margin: '0.2rem 0', color: '#0f172a' }}>
                 POS 결제 및 사은행사 지시서
               </h2>
-              <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '0.3rem' }}>
+              <div style={{ fontSize: '0.76rem', color: '#64748b', display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '0.2rem' }}>
                 <span>일자: {consultDate || new Date().toISOString().slice(0, 10)}</span>
                 <span>고객: <strong>{customerName || '소중한고객님'}</strong></span>
                 <span>담당: <strong>조준석 매니저</strong></span>
               </div>
             </div>
 
-            {/* 매장 계좌 및 담당 매니저 정보 헤더 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '0.75rem', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.86rem', marginBottom: '2px' }}>
-                  ㈜한화 갤러리아 진주점 가전매장
-                </div>
-                <div style={{ fontSize: '0.76rem', color: '#475569' }}>
-                  입금계좌: <strong>경남은행 207-0123-9010-00</strong>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', fontSize: '0.78rem' }}>
-                <span style={{ color: '#64748b' }}>담당 매니저: </span>
-                <strong style={{ color: '#0369a1', fontWeight: 900 }}>조준석 매니저 (1041315089)</strong>
-              </div>
+            {/* 매장 및 입금계좌 한 줄 요약 헤더 (전화번호/중복 매니저명 제거 및 한 줄 배치) */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              background: '#f8fafc',
+              padding: '0.4rem 0.8rem',
+              borderRadius: '6px',
+              border: '1px solid #e2e8f0',
+              marginBottom: '0.65rem',
+              fontSize: '0.78rem',
+              color: '#334155',
+              gap: '0.6rem',
+              flexWrap: 'wrap'
+            }}>
+              <span style={{ fontWeight: 800, color: '#0f172a' }}>㈜한화 갤러리아 진주점 가전매장</span>
+              <span style={{ color: '#cbd5e1' }}>|</span>
+              <span>입금계좌: <strong style={{ color: '#0f172a' }}>경남은행 207-0123-9010-00</strong> <span style={{ color: '#64748b', fontSize: '0.72rem' }}>(예금주: ㈜한화 갤러리아)</span></span>
             </div>
 
-            {/* 3대 시나리오 실시간 플랜 전환 바 (POS 지시서 모달 상단) */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f1f5f9', padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.45rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.82rem', fontWeight: 800, color: '#0f172a' }}>
+            {/* 3대 시나리오 실시간 플랜 전환 바 (POS 지시서 모달 상단 - 인쇄 시 버튼 숨김) */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f1f5f9', padding: '0.4rem 0.7rem', borderRadius: '6px', border: '1px solid #cbd5e1', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.35rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>
                 <span>지시서 적용 플랜:</span>
                 <span style={{
-                  padding: '2px 8px',
+                  padding: '2px 7px',
                   borderRadius: '4px',
-                  fontSize: '0.78rem',
+                  fontSize: '0.74rem',
                   fontWeight: 900,
                   background: deptStrategy === 'reward' ? '#d1fae5' : deptStrategy === 'full' ? '#fef3c7' : '#e0f2fe',
                   color: deptStrategy === 'reward' ? '#047857' : deptStrategy === 'full' ? '#b45309' : '#0369a1',
@@ -3984,17 +3998,17 @@ export default function BenefitCalculator({ onBack }) {
                       : '🛡️ 2. 부분 차감 플랜 (마지노선 방어 선차감)'}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: '0.35rem' }}>
+              <div className="no-print" style={{ display: 'flex', gap: '0.3rem' }}>
                 <button
                   type="button"
                   onClick={() => setDeptStrategy('reward')}
                   style={{
-                    padding: '3px 8px',
-                    borderRadius: '5px',
+                    padding: '2px 7px',
+                    borderRadius: '4px',
                     border: deptStrategy === 'reward' ? '1.5px solid #10b981' : '1px solid #cbd5e1',
                     background: deptStrategy === 'reward' ? '#10b981' : '#ffffff',
                     color: deptStrategy === 'reward' ? '#ffffff' : '#475569',
-                    fontSize: '0.72rem',
+                    fontSize: '0.7rem',
                     fontWeight: 800,
                     cursor: 'pointer'
                   }}
@@ -4005,12 +4019,12 @@ export default function BenefitCalculator({ onBack }) {
                   type="button"
                   onClick={() => setDeptStrategy('partial')}
                   style={{
-                    padding: '3px 8px',
-                    borderRadius: '5px',
+                    padding: '2px 7px',
+                    borderRadius: '4px',
                     border: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
                     background: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '#0284c7' : '#ffffff',
                     color: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '#ffffff' : '#475569',
-                    fontSize: '0.72rem',
+                    fontSize: '0.7rem',
                     fontWeight: 800,
                     cursor: 'pointer'
                   }}
@@ -4021,12 +4035,12 @@ export default function BenefitCalculator({ onBack }) {
                   type="button"
                   onClick={() => setDeptStrategy('full')}
                   style={{
-                    padding: '3px 8px',
-                    borderRadius: '5px',
+                    padding: '2px 7px',
+                    borderRadius: '4px',
                     border: deptStrategy === 'full' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
                     background: deptStrategy === 'full' ? '#d97706' : '#ffffff',
                     color: deptStrategy === 'full' ? '#ffffff' : '#475569',
-                    fontSize: '0.72rem',
+                    fontSize: '0.7rem',
                     fontWeight: 800,
                     cursor: 'pointer'
                   }}
@@ -4037,61 +4051,84 @@ export default function BenefitCalculator({ onBack }) {
             </div>
 
             {/* 핵심: POS 필수 스캔 바코드 2종 (가전 907 vs 자급제 606 - 수수료 완전 분리) */}
-            <div style={{ marginBottom: '1.2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'wrap', gap: '0.3rem' }}>
-                <span style={{ fontSize: '0.88rem', fontWeight: 900, color: '#0f172a' }}>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.3rem' }}>
+                <span style={{ fontSize: '0.84rem', fontWeight: 900, color: '#0f172a' }}>
                   ■ POS 필수 스캔 바코드 2종 (수수료 상이 · 교차스캔 금지)
                 </span>
-                <span style={{ fontSize: '0.72rem', color: '#dc2626', fontWeight: 800, background: '#fee2e2', padding: '2px 8px', borderRadius: '4px', border: '1px solid #fca5a5' }}>
+                <span style={{ fontSize: '0.68rem', color: '#dc2626', fontWeight: 800, background: '#fee2e2', padding: '1px 6px', borderRadius: '4px', border: '1px solid #fca5a5' }}>
                   ⚠️ 가전 vs 자급제폰 수수료율 상이 / 전용 바코드 분리 필수
                 </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.75rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.65rem' }}>
                 {/* 1. 일반 가전 결제 바코드 (끝자리 907) */}
                 <div
                   style={{
                     background: '#f0f9ff',
                     border: '2px solid #0284c7',
-                    borderRadius: '10px',
-                    padding: '0.75rem 0.85rem',
+                    borderRadius: '8px',
+                    padding: '0.55rem 0.75rem',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '0.45rem',
-                    boxShadow: '0 4px 12px rgba(2, 132, 199, 0.12)'
+                    gap: '0.35rem',
+                    boxShadow: '0 2px 8px rgba(2, 132, 199, 0.08)'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 900, color: '#0369a1' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 900, color: '#0369a1' }}>
                       🏬 일반 가전 결제용 바코드
                     </span>
-                    <span style={{ fontSize: '0.68rem', fontWeight: 900, background: '#0284c7', color: '#ffffff', padding: '2px 7px', borderRadius: '4px' }}>
+                    <span style={{ fontSize: '0.66rem', fontWeight: 900, background: '#0284c7', color: '#ffffff', padding: '1px 6px', borderRadius: '4px' }}>
                       끝자리 907 (가전 수수료율)
                     </span>
                   </div>
 
                   {/* 실물 바코드 이미지 (끝자리 907) */}
-                  <div style={{ background: '#ffffff', padding: '5px 8px', borderRadius: '6px', border: '1px solid #bae6fd', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace', letterSpacing: '2px' }}>
+                  <div style={{ background: '#ffffff', padding: '3px 6px', borderRadius: '6px', border: '1px solid #bae6fd', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.68rem', color: '#64748b', fontFamily: 'monospace', letterSpacing: '1.5px', lineHeight: 1.1 }}>
                       {DEPT_POS_BARCODES.appliance.topCode}
                     </div>
                     <img
                       src={DEPT_POS_BARCODES.appliance.image}
                       alt="가전 바코드 2304641471907"
-                      style={{ width: '100%', maxWidth: '240px', height: '48px', objectFit: 'contain', margin: '3px auto', display: 'block' }}
+                      style={{ width: '100%', maxWidth: '220px', height: '34px', objectFit: 'contain', margin: '2px auto', display: 'block' }}
                     />
-                    <div style={{ fontSize: '0.98rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '2.5px', color: '#0f172a' }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '2px', color: '#0f172a', lineHeight: 1.1 }}>
                       2304641471<span style={{ color: '#0284c7', textDecoration: 'underline' }}>907</span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.76rem' }}>
-                    <span style={{ color: '#64748b', fontWeight: 700 }}>가전 승인 대상액:</span>
-                    <strong style={{ fontSize: '1.02rem', fontWeight: 900, color: '#0369a1' }}>
-                      {formatWon(deptEnginePlan.applianceGross)}
-                    </strong>
+                  {/* 바코드 하단: 결제 승인 금액 및 분할 건수 안내 */}
+                  <div style={{ background: '#ffffff', borderRadius: '6px', padding: '5px 8px', border: '1px solid #bae6fd', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.76rem' }}>
+                      <span style={{ color: '#475569', fontWeight: 700 }}>가전 승인 대상액:</span>
+                      <strong style={{ fontSize: '1rem', fontWeight: 900, color: '#0369a1' }}>
+                        {formatWon(deptEnginePlan.applianceGross)}
+                      </strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.73rem' }}>
+                      <span style={{ color: '#475569', fontWeight: 700 }}>결제 건수:</span>
+                      <strong style={{
+                        fontSize: '0.74rem',
+                        fontWeight: 900,
+                        color: applianceCount > 1 ? '#d97706' : '#0369a1',
+                        background: applianceCount > 1 ? '#fef3c7' : '#e0f2fe',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        border: applianceCount > 1 ? '1px solid #fde68a' : '1px solid #bae6fd'
+                      }}>
+                        {applianceCount > 1 ? `총 ${applianceCount}회 분할 결제` : applianceCount === 1 ? '단독 1회 결제' : '0건 (결제 없음)'}
+                      </strong>
+                    </div>
+                    {applianceCount > 1 && (
+                      <div style={{ fontSize: '0.67rem', color: '#0369a1', fontWeight: 700, background: '#f0f9ff', padding: '2px 5px', borderRadius: '4px', textAlign: 'right', marginTop: '1px' }}>
+                        {applianceSteps.map((s, idx) => `${idx + 1}차: ${formatWon(s.amount)}`).join(' | ')}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '0.68rem', color: '#0369a1', fontWeight: 700, lineHeight: 1.3 }}>
+
+                  <div style={{ fontSize: '0.65rem', color: '#0369a1', fontWeight: 700, lineHeight: 1.25 }}>
                     ※ 일반 가전(냉장고, TV, 세탁기 등) 결제 시 스캔 (자급제 스캔 절대 금지)
                   </div>
                 </div>
@@ -4101,26 +4138,26 @@ export default function BenefitCalculator({ onBack }) {
                   style={{
                     background: deptEnginePlan.phoneGross > 0 ? '#ecfdf5' : '#f8fafc',
                     border: deptEnginePlan.phoneGross > 0 ? '2px solid #059669' : '1px dashed #cbd5e1',
-                    borderRadius: '10px',
-                    padding: '0.75rem 0.85rem',
+                    borderRadius: '8px',
+                    padding: '0.55rem 0.75rem',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '0.45rem',
+                    gap: '0.35rem',
                     opacity: deptEnginePlan.phoneGross > 0 ? 1 : 0.65,
-                    boxShadow: deptEnginePlan.phoneGross > 0 ? '0 4px 12px rgba(5, 150, 105, 0.12)' : 'none'
+                    boxShadow: deptEnginePlan.phoneGross > 0 ? '0 2px 8px rgba(5, 150, 105, 0.08)' : 'none'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 900, color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#64748b' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 900, color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#64748b' }}>
                       📱 자급제폰 결제용 바코드
                     </span>
                     <span
                       style={{
-                        fontSize: '0.68rem',
+                        fontSize: '0.66rem',
                         fontWeight: 900,
                         background: deptEnginePlan.phoneGross > 0 ? '#059669' : '#94a3b8',
                         color: '#ffffff',
-                        padding: '2px 7px',
+                        padding: '1px 6px',
                         borderRadius: '4px'
                       }}
                     >
@@ -4129,27 +4166,45 @@ export default function BenefitCalculator({ onBack }) {
                   </div>
 
                   {/* 실물 바코드 이미지 (끝자리 606) */}
-                  <div style={{ background: '#ffffff', padding: '5px 8px', borderRadius: '6px', border: '1px solid #a7f3d0', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontFamily: 'monospace', letterSpacing: '2px' }}>
+                  <div style={{ background: '#ffffff', padding: '3px 6px', borderRadius: '6px', border: '1px solid #a7f3d0', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.68rem', color: '#64748b', fontFamily: 'monospace', letterSpacing: '1.5px', lineHeight: 1.1 }}>
                       {DEPT_POS_BARCODES.phone.topCode}
                     </div>
                     <img
                       src={DEPT_POS_BARCODES.phone.image}
                       alt="자급제 바코드 2303990976606"
-                      style={{ width: '100%', maxWidth: '240px', height: '48px', objectFit: 'contain', margin: '3px auto', display: 'block' }}
+                      style={{ width: '100%', maxWidth: '220px', height: '34px', objectFit: 'contain', margin: '2px auto', display: 'block' }}
                     />
-                    <div style={{ fontSize: '0.98rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '2.5px', color: '#0f172a' }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 900, fontFamily: 'monospace', letterSpacing: '2px', color: '#0f172a', lineHeight: 1.1 }}>
                       2303990976<span style={{ color: '#059669', textDecoration: 'underline' }}>606</span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.76rem' }}>
-                    <span style={{ color: '#64748b', fontWeight: 700 }}>자급제 승인 대상액:</span>
-                    <strong style={{ fontSize: '1.02rem', fontWeight: 900, color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#94a3b8' }}>
-                      {deptEnginePlan.phoneGross > 0 ? formatWon(deptEnginePlan.phoneGross) : '자급제 없음 (0원)'}
-                    </strong>
+                  {/* 바코드 하단: 결제 승인 금액 및 분할 건수 안내 */}
+                  <div style={{ background: '#ffffff', borderRadius: '6px', padding: '5px 8px', border: '1px solid #a7f3d0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.76rem' }}>
+                      <span style={{ color: '#475569', fontWeight: 700 }}>자급제 승인 대상액:</span>
+                      <strong style={{ fontSize: '1rem', fontWeight: 900, color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#94a3b8' }}>
+                        {deptEnginePlan.phoneGross > 0 ? formatWon(deptEnginePlan.phoneGross) : '자급제 없음 (0원)'}
+                      </strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.73rem' }}>
+                      <span style={{ color: '#475569', fontWeight: 700 }}>결제 건수:</span>
+                      <strong style={{
+                        fontSize: '0.74rem',
+                        fontWeight: 900,
+                        color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#94a3b8',
+                        background: deptEnginePlan.phoneGross > 0 ? '#ecfdf5' : '#f1f5f9',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        border: deptEnginePlan.phoneGross > 0 ? '1px solid #a7f3d0' : '1px solid #e2e8f0'
+                      }}>
+                        {deptEnginePlan.phoneGross > 0 ? (phoneCount > 1 ? `총 ${phoneCount}회 분할 결제` : '단독 1회 결제') : '0건 (결제 없음)'}
+                      </strong>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.68rem', color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#94a3b8', fontWeight: 700, lineHeight: 1.3 }}>
+
+                  <div style={{ fontSize: '0.65rem', color: deptEnginePlan.phoneGross > 0 ? '#047857' : '#94a3b8', fontWeight: 700, lineHeight: 1.25 }}>
                     {deptEnginePlan.phoneGross > 0
                       ? '※ 자급제폰 결제 시에만 단독 스캔 (일반 가전 스캔 절대 금지)'
                       : '※ 이번 결제에는 자급제폰이 포함되지 않아 스캔하지 않습니다.'}
@@ -4159,77 +4214,77 @@ export default function BenefitCalculator({ onBack }) {
             </div>
 
             {/* 결제 실행 단계별 지시표 */}
-            <div style={{ marginBottom: '1.2rem' }}>
-              <div style={{ fontSize: '0.86rem', fontWeight: 900, color: '#0f172a', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div style={{ fontSize: '0.84rem', fontWeight: 900, color: '#0f172a', marginBottom: '0.35rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>■ POS 승인 순서 및 분할 결제 지시 (현장 영수증 일치 확인)</span>
-                <span style={{ fontSize: '0.75rem', color: '#0369a1', fontWeight: 700 }}>
+                <span style={{ fontSize: '0.73rem', color: '#0369a1', fontWeight: 700 }}>
                   {deptEnginePlan.mode === '2person_2cards' ? '👥 2인 2카드 분할' : deptEnginePlan.mode === '1person_3split' ? '👤 1인 분할 비기' : '👤 1인 단독 결제'}
                 </span>
               </div>
 
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem' }}>
                 <thead>
                   <tr style={{ background: '#f1f5f9', borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1', textAlign: 'left' }}>
-                    <th style={{ padding: '0.5rem 0.5rem', width: '38px', textAlign: 'center' }}>단계</th>
-                    <th style={{ padding: '0.5rem 0.5rem' }}>결제 구분</th>
-                    <th style={{ padding: '0.5rem 0.5rem', textAlign: 'center', width: '85px' }}>스캔 바코드</th>
-                    <th style={{ padding: '0.5rem 0.5rem', textAlign: 'right', width: '110px' }}>POS 승인 금액</th>
-                    <th style={{ padding: '0.5rem 0.6rem', textAlign: 'right', width: '145px', background: '#eff6ff', color: '#1e40af' }}>
+                    <th style={{ padding: '0.35rem 0.4rem', width: '36px', textAlign: 'center' }}>단계</th>
+                    <th style={{ padding: '0.35rem 0.4rem' }}>결제 구분</th>
+                    <th style={{ padding: '0.35rem 0.4rem', textAlign: 'center', width: '80px' }}>스캔 바코드</th>
+                    <th style={{ padding: '0.35rem 0.4rem', textAlign: 'right', width: '100px' }}>POS 승인 금액</th>
+                    <th style={{ padding: '0.35rem 0.45rem', textAlign: 'right', width: '135px', background: '#eff6ff', color: '#1e40af' }}>
                       청구할인된 영수증 금액 (확인용)
                     </th>
-                    <th style={{ padding: '0.5rem 0.5rem' }}>혜택 및 수수료 비고</th>
+                    <th style={{ padding: '0.35rem 0.4rem' }}>혜택 및 수수료 비고</th>
                   </tr>
                 </thead>
                 <tbody>
                   {deptEnginePlan.posSteps.map((st, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', background: st.discountAmount > 0 ? '#f8fafc' : 'transparent' }}>
-                      <td style={{ padding: '0.55rem 0.5rem', textAlign: 'center', fontWeight: 800, color: '#64748b' }}>
+                      <td style={{ padding: '0.35rem 0.4rem', textAlign: 'center', fontWeight: 800, color: '#64748b' }}>
                         {st.step}
                       </td>
-                      <td style={{ padding: '0.55rem 0.5rem', fontWeight: 800, color: '#0f172a' }}>
+                      <td style={{ padding: '0.35rem 0.4rem', fontWeight: 800, color: '#0f172a' }}>
                         {st.label}
                       </td>
-                      <td style={{ padding: '0.55rem 0.5rem', textAlign: 'center' }}>
+                      <td style={{ padding: '0.35rem 0.4rem', textAlign: 'center' }}>
                         {st.barcodeBadge === '가전 907' ? (
-                          <span style={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', border: '1px solid #7dd3fc', whiteSpace: 'nowrap' }}>
+                          <span style={{ background: '#e0f2fe', color: '#0369a1', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', fontSize: '0.68rem', border: '1px solid #7dd3fc', whiteSpace: 'nowrap' }}>
                             🏬 가전 907
                           </span>
                         ) : st.barcodeBadge === '자급제 606' ? (
-                          <span style={{ background: '#d1fae5', color: '#047857', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', border: '1px solid #6ee7b7', whiteSpace: 'nowrap' }}>
+                          <span style={{ background: '#d1fae5', color: '#047857', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', fontSize: '0.68rem', border: '1px solid #6ee7b7', whiteSpace: 'nowrap' }}>
                             📱 자급제 606
                           </span>
                         ) : st.barcodeBadge === 'G캐시' ? (
-                          <span style={{ background: '#fef3c7', color: '#b45309', fontWeight: 800, padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', border: '1px solid #fde68a', whiteSpace: 'nowrap' }}>
+                          <span style={{ background: '#fef3c7', color: '#b45309', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', fontSize: '0.68rem', border: '1px solid #fde68a', whiteSpace: 'nowrap' }}>
                             ⚡ G캐시 차감
                           </span>
                         ) : st.barcodeBadge === '앱 적립' ? (
-                          <span style={{ background: '#f1f5f9', color: '#475569', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', border: '1px solid #cbd5e1', whiteSpace: 'nowrap' }}>
+                          <span style={{ background: '#f1f5f9', color: '#475569', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', fontSize: '0.68rem', border: '1px solid #cbd5e1', whiteSpace: 'nowrap' }}>
                             💰 모바일 적립
                           </span>
                         ) : (
-                          <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>—</span>
+                          <span style={{ color: '#94a3b8', fontSize: '0.68rem' }}>—</span>
                         )}
                       </td>
-                      <td style={{ padding: '0.55rem 0.5rem', textAlign: 'right', fontWeight: 800, fontSize: '0.9rem', color: '#475569', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.35rem 0.4rem', textAlign: 'right', fontWeight: 800, fontSize: '0.84rem', color: '#475569', whiteSpace: 'nowrap' }}>
                         {formatWon(st.amount)}
                       </td>
-                      <td style={{ padding: '0.55rem 0.6rem', textAlign: 'right', background: st.discountAmount > 0 ? '#eff6ff' : 'transparent', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.35rem 0.45rem', textAlign: 'right', background: st.discountAmount > 0 ? '#eff6ff' : 'transparent', whiteSpace: 'nowrap' }}>
                         {st.discountAmount > 0 ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.25 }}>
-                            <strong style={{ fontSize: '0.98rem', fontWeight: 900, color: '#1d4ed8' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.15 }}>
+                            <strong style={{ fontSize: '0.88rem', fontWeight: 900, color: '#1d4ed8' }}>
                               {formatWon(st.receiptAmount)}
                             </strong>
-                            <span style={{ fontSize: '0.69rem', color: '#dc2626', fontWeight: 700 }}>
-                              (-{formatWon(st.discountAmount)} 즉시 청구할인)
+                            <span style={{ fontSize: '0.65rem', color: '#dc2626', fontWeight: 700 }}>
+                              (-{formatWon(st.discountAmount)} 청구할인)
                             </span>
                           </div>
                         ) : (
-                          <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#64748b' }}>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#64748b' }}>
                             {formatWon(st.receiptAmount || st.amount)}
                           </span>
                         )}
                       </td>
-                      <td style={{ padding: '0.55rem 0.5rem', fontSize: '0.74rem', color: '#64748b' }}>
+                      <td style={{ padding: '0.35rem 0.4rem', fontSize: '0.7rem', color: '#64748b' }}>
                         {st.note}
                       </td>
                     </tr>
@@ -4239,13 +4294,13 @@ export default function BenefitCalculator({ onBack }) {
             </div>
 
             {/* 최종 혜택 및 고객 정산 요약 */}
-            <div style={{ background: '#f8fafc', padding: '0.9rem 1.1rem', borderRadius: '10px', border: '1px solid #cbd5e1', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+            <div style={{ background: '#f8fafc', padding: '0.55rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '0.6rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.2rem' }}>
                 <span style={{ color: '#64748b' }}>결제 기준 금액 총액</span>
                 <div>
                   <strong>{formatWon(deptEnginePlan.effectiveGross)}</strong>
                   {deptEnginePlan.phoneGross > 0 && (
-                    <span style={{ fontSize: '0.74rem', color: '#64748b', marginLeft: '6px' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', marginLeft: '4px' }}>
                       (가전 {formatWon(deptEnginePlan.applianceGross)} + 자급제 {formatWon(deptEnginePlan.phoneGross)})
                     </span>
                   )}
@@ -4255,66 +4310,66 @@ export default function BenefitCalculator({ onBack }) {
               {/* 선차감 모드일 때: G캐시 선차감 및 고객 실제 카드 결제액 표시 */}
               {deptEnginePlan.safeDeduct > 0 ? (
                 <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem', color: '#059669', background: '#ecfdf5', padding: '4px 8px', borderRadius: '5px', border: '1px solid #a7f3d0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.2rem', color: '#059669', background: '#ecfdf5', padding: '2px 6px', borderRadius: '4px', border: '1px solid #a7f3d0' }}>
                     <span style={{ fontWeight: 800 }}>⚡ G캐시 즉시 선차감 (결제 시 현장 차감)</span>
-                    <strong style={{ fontSize: '0.95rem' }}>- {formatWon(deptEnginePlan.safeDeduct)}</strong>
+                    <strong style={{ fontSize: '0.88rem' }}>- {formatWon(deptEnginePlan.safeDeduct)}</strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.88rem', marginBottom: '0.45rem', padding: '4px 8px', background: '#f0f9ff', borderRadius: '5px', border: '1px solid #bae6fd' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.82rem', marginBottom: '0.25rem', padding: '3px 6px', background: '#f0f9ff', borderRadius: '4px', border: '1px solid #bae6fd' }}>
                     <span style={{ color: '#0369a1', fontWeight: 900 }}>💳 고객 실제 카드 결제 승인 총액</span>
-                    <strong style={{ fontSize: '1.15rem', color: '#0284c7', fontWeight: 900 }}>
+                    <strong style={{ fontSize: '1.02rem', color: '#0284c7', fontWeight: 900 }}>
                       {formatWon(deptEnginePlan.cardApproval || (deptEnginePlan.effectiveGross - deptEnginePlan.safeDeduct))}
                     </strong>
                   </div>
                 </>
               ) : (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem', color: '#64748b' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.2rem', color: '#64748b' }}>
                   <span>고객 카드 결제 승인 총액 (전액 카드 결제)</span>
                   <strong>{formatWon(deptEnginePlan.effectiveGross)}</strong>
                 </div>
               )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem', color: '#dc2626' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.2rem', color: '#dc2626' }}>
                 <span>제휴카드 즉시 청구할인 합계 (영수증 현장 차감)</span>
                 <strong>- {formatWon(deptEnginePlan.totalCardDiscount)}</strong>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.88rem', marginBottom: '0.45rem', padding: '5px 8px', background: '#eff6ff', borderRadius: '5px', border: '1px solid #bfdbfe' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '0.82rem', marginBottom: '0.25rem', padding: '3px 6px', background: '#eff6ff', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
                 <span style={{ color: '#1e40af', fontWeight: 900 }}>🧾 청구할인 적용 후 영수증 결제 총액 (확인용)</span>
-                <strong style={{ fontSize: '1.18rem', color: '#1d4ed8', fontWeight: 900 }}>
+                <strong style={{ fontSize: '1.05rem', color: '#1d4ed8', fontWeight: 900 }}>
                   {formatWon((deptEnginePlan.cardApproval || deptEnginePlan.effectiveGross) - deptEnginePlan.totalCardDiscount)}
                 </strong>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '0.82rem', marginBottom: '0.55rem', color: '#d97706' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '0.78rem', marginBottom: '0.35rem', color: '#d97706' }}>
                 <div>
                   <span>
                     {deptEnginePlan.safeDeduct > 0 ? '💰 고객 잔여 순적립 G캐시 (모바일 앱)' : `백화점 사은행사 G캐시 증정 합계 (${deptRewardRate}%)`}
                   </span>
-                  <div style={{ fontSize: '0.71rem', color: '#b45309', fontWeight: 700, marginTop: '2px' }}>
-                    • 기본 6.5% 사은 (유효기간 5년): <strong>{formatWon(deptEnginePlan.gcash5Year)}</strong>
+                  <div style={{ fontSize: '0.68rem', color: '#b45309', fontWeight: 700, marginTop: '1px' }}>
+                    • 기본 6.5% 사은 (5년): <strong>{formatWon(deptEnginePlan.gcash5Year)}</strong>
                     {deptEnginePlan.gcash60Day > 0 && (
-                      <span style={{ marginLeft: '6px' }}>
-                        • 우대 추가분 (유효기간 60일): <strong style={{ color: '#dc2626' }}>{formatWon(deptEnginePlan.gcash60Day)}</strong>
+                      <span style={{ marginLeft: '4px' }}>
+                        • 우대 추가분 (60일): <strong style={{ color: '#dc2626' }}>{formatWon(deptEnginePlan.gcash60Day)}</strong>
                       </span>
                     )}
                   </div>
                 </div>
-                <strong style={{ fontSize: '1.05rem', whiteSpace: 'nowrap' }}>
+                <strong style={{ fontSize: '0.98rem', whiteSpace: 'nowrap' }}>
                   + {formatWon(deptEnginePlan.safeReward !== undefined ? deptEnginePlan.safeReward : deptEnginePlan.totalGcash)}
                 </strong>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: '0.55rem', borderTop: '2px solid #0f172a' }}>
-                <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>고객 체감 최종 혜택가</span>
-                <strong style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0f172a' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: '0.35rem', borderTop: '2px solid #0f172a' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.88rem', color: '#0f172a' }}>고객 체감 최종 혜택가</span>
+                <strong style={{ fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
                   {formatWon(deptEnginePlan.finalPerceived)}
                 </strong>
               </div>
             </div>
 
             {/* 하단 캐셔 안내 주의사항 (수수료율 구분 및 G캐시 유효기간 안내) */}
-            <div style={{ fontSize: '0.73rem', color: '#475569', lineHeight: 1.5, borderTop: '2px solid #ef4444', paddingTop: '0.7rem', background: '#fef2f2', padding: '0.7rem 0.9rem', borderRadius: '8px' }}>
-              <div style={{ color: '#b91c1c', fontWeight: 900, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div style={{ fontSize: '0.67rem', color: '#475569', lineHeight: 1.35, borderTop: '2px solid #ef4444', background: '#fef2f2', padding: '0.45rem 0.65rem', borderRadius: '6px' }}>
+              <div style={{ color: '#b91c1c', fontWeight: 900, marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '3px' }}>
                 🚨 [캐셔 필수 확인 - 백화점 마진 수수료율 구분 및 G캐시 유효기간 지침]
               </div>
               <div>① 일반 가전과 자급제폰은 <strong>백화점 마진 수수료율이 완전히 상이</strong>하여 반드시 서로 다른 바코드로 분리 결제되어야 합니다.</div>
@@ -4357,19 +4412,72 @@ export default function BenefitCalculator({ onBack }) {
                 const printContents = document.getElementById('pos-cashier-print-area').innerHTML;
                 const printWindow = window.open('', '', 'width=800,height=900');
                 printWindow.document.write(`
+                  <!DOCTYPE html>
                   <html>
                     <head>
+                      <meta charset="utf-8">
                       <title>POS 결제 지시서 - ${customerName || '고객님'}</title>
                       <style>
-                        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; color: #0f172a; }
-                        table { width: 100%; border-collapse: collapse; }
-                        th, td { border-bottom: 1px solid #cbd5e1; padding: 8px; }
-                        th { background: #f1f5f9; }
-                        @media print { body { padding: 0; } }
+                        @page {
+                          size: A4 portrait;
+                          margin: 6mm 8mm 6mm 8mm;
+                        }
+                        * {
+                          box-sizing: border-box;
+                          -webkit-print-color-adjust: exact !important;
+                          print-color-adjust: exact !important;
+                        }
+                        html, body {
+                          margin: 0;
+                          padding: 0;
+                          background: #ffffff;
+                          color: #0f172a;
+                          font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif;
+                          font-size: 11px;
+                          line-height: 1.3;
+                        }
+                        .no-print {
+                          display: none !important;
+                        }
+                        #pos-cashier-print-area {
+                          padding: 0 !important;
+                          width: 100% !important;
+                          max-width: 100% !important;
+                        }
+                        table {
+                          width: 100%;
+                          border-collapse: collapse;
+                          page-break-inside: avoid;
+                        }
+                        th, td {
+                          border-bottom: 1px solid #cbd5e1;
+                          padding: 3px 5px !important;
+                        }
+                        th {
+                          background: #f1f5f9 !important;
+                        }
+                        @media print {
+                          html, body {
+                            width: 210mm;
+                            height: 297mm;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            overflow: hidden !important;
+                          }
+                          .no-print {
+                            display: none !important;
+                          }
+                          #pos-cashier-print-area {
+                            padding: 0 !important;
+                            overflow: visible !important;
+                          }
+                        }
                       </style>
                     </head>
                     <body>
-                      ${printContents}
+                      <div id="pos-cashier-print-area">
+                        ${printContents}
+                      </div>
                     </body>
                   </html>
                 `);
