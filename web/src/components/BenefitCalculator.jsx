@@ -3689,7 +3689,9 @@ export default function BenefitCalculator({ onBack }) {
           margin: '0',
           boxShadow: 'none',
           transform: 'none',
-          transformOrigin: 'top left'
+          transformOrigin: 'top left',
+          minHeight: '1160px',
+          justifyContent: node.classList.contains('a4-page-1') ? 'flex-start' : undefined
         }
       });
 
@@ -3807,7 +3809,9 @@ export default function BenefitCalculator({ onBack }) {
             margin: '0',
             boxShadow: 'none',
             transform: 'none',
-            transformOrigin: 'top left'
+            transformOrigin: 'top left',
+            minHeight: '1160px',
+            justifyContent: node.classList.contains('a4-page-1') ? 'flex-start' : undefined
           }
         });
 
@@ -5616,7 +5620,14 @@ export default function BenefitCalculator({ onBack }) {
               {isMixedMode ? (
                 <>
                   {/* ===== [스마트 견적서 1페이지: 1번 구독 & 2번 일반구매] ===== */}
-                  <div className="a4-print-sheet a4-page-1 a4-page-break" style={sheetStyle}>
+                  <div
+                    className="a4-print-sheet a4-page-1 a4-page-break"
+                    style={{
+                      ...sheetStyle,
+                      minHeight: '1160px',
+                      justifyContent: 'flex-start'
+                    }}
+                  >
                     {renderA4Header(1, 2)}
                     <div className="a4-mixed-unified-container">
                       {/* 1) 상단: 삼성AI구독 모델 및 전용 서비스 정리 */}
