@@ -740,6 +740,10 @@ function loadSessionAuthUser() {
   }
 }
 
+const AUTH_SCREEN_LOCKED_KEY = 'jcc_calc_screen_locked';
+const AUTH_LAST_ACTIVE_KEY = 'jcc_calc_last_active_ts';
+const INACTIVITY_LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5분 (300,000ms) 미사용 시 화면 잠금
+
 export default function BenefitCalculator({ onBack }) {
   // 접속자 계정 목록 (로컬 + 클라우드 실시간 동기화)
   const [userAccounts, setUserAccounts] = useState(() => loadStoredUserAccounts());
@@ -752,6 +756,19 @@ export default function BenefitCalculator({ onBack }) {
   const [loginIdInput, setLoginIdInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginErrorMsg, setLoginErrorMsg] = useState('');
+
+  // 5분 미사용 자동 화면 잠금 & 잠금해제/로그아웃 선택 상태
+  const [isScreenLocked, setIsScreenLocked] = useState(() => {
+    try {
+      return sessionStorage.getItem(AUTH_SCREEN_LOCKED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [screenLockReason, setScreenLockReason] = useState('auto'); // 'auto' (5분 미사용) | 'manual' (수동 잠금)
+  const [unlockPasswordInput, setUnlockPasswordInput] = useState('');
+  const [unlockErrorMsg, setUnlockErrorMsg] = useState('');
+  const lastActivityRef = React.useRef(Date.now());
 
   // 관리자 전용 계정 설정 모달 상태
   const [showAdminAccountModal, setShowAdminAccountModal] = useState(false);
@@ -1483,15 +1500,22 @@ export default function BenefitCalculator({ onBack }) {
         level: matched.level,
         isMaster: Boolean(matched.isMaster)
       };
+      const nowTs = Date.now();
+      lastActivityRef.current = nowTs;
       try {
         sessionStorage.setItem(AUTH_SESSION_USER_KEY, JSON.stringify(sessionUser));
         sessionStorage.setItem('jcc_calc_auth', 'true');
+        sessionStorage.removeItem(AUTH_SCREEN_LOCKED_KEY);
+        sessionStorage.setItem(AUTH_LAST_ACTIVE_KEY, String(nowTs));
       } catch {}
       setCurrentUser(sessionUser);
       setIsAuthenticated(true);
+      setIsScreenLocked(false);
       setLoginIdInput('');
       setPasswordInput('');
       setLoginErrorMsg('');
+      setUnlockPasswordInput('');
+      setUnlockErrorMsg('');
       if (sessionUser.level === 'lv1') {
         setCalculatorMode('compare');
         setShowPosCashierModal(false);
@@ -1502,17 +1526,139 @@ export default function BenefitCalculator({ onBack }) {
     }
   };
 
-  const handleLock = () => {
+  // 화면 잠금 진입 (작성 중인 견적 데이터 및 현재 접속자 계정 유지 -> 잠금해제 또는 로그아웃 선택 가능)
+  const handleScreenLock = React.useCallback((reason = 'manual') => {
+    try {
+      sessionStorage.setItem(AUTH_SCREEN_LOCKED_KEY, 'true');
+    } catch {}
+    setScreenLockReason(reason);
+    setIsScreenLocked(true);
+    setUnlockPasswordInput('');
+    setUnlockErrorMsg('');
+    setShowAdminAccountModal(false);
+    setShowPosCashierModal(false);
+  }, []);
+
+  // 잠금 화면에서 비밀번호로 잠금 해제 (작업 중이던 화면 그대로 복귀)
+  const handleUnlockScreen = async (e) => {
+    if (e) e.preventDefault();
+    setUnlockErrorMsg('');
+    const trimmedPw = unlockPasswordInput.trim();
+    if (!trimmedPw) {
+      setUnlockErrorMsg('잠금 해제를 위해 현재 계정의 비밀번호(PW)를 입력해주세요.');
+      return;
+    }
+
+    const activeUserId = currentUser?.id || 'admin';
+    let matched = findMatchedAccount(userAccounts, activeUserId, trimmedPw);
+    if (!matched) {
+      const latestList = await syncUserAccountsFromCloud(false);
+      matched = findMatchedAccount(latestList, activeUserId, trimmedPw);
+    }
+
+    if (matched) {
+      const nowTs = Date.now();
+      lastActivityRef.current = nowTs;
+      try {
+        sessionStorage.removeItem(AUTH_SCREEN_LOCKED_KEY);
+        sessionStorage.setItem(AUTH_LAST_ACTIVE_KEY, String(nowTs));
+      } catch {}
+      setIsScreenLocked(false);
+      setUnlockPasswordInput('');
+      setUnlockErrorMsg('');
+    } else {
+      setUnlockErrorMsg('비밀번호(PW)가 일치하지 않습니다. 다시 확인해주세요.');
+      setUnlockPasswordInput('');
+    }
+  };
+
+  // 완전 로그아웃 (현재 계정 세션 종료 및 ID/PW 로그인 화면으로 이동)
+  const handleLogout = () => {
     try {
       sessionStorage.removeItem('jcc_calc_auth');
       sessionStorage.removeItem(AUTH_SESSION_USER_KEY);
+      sessionStorage.removeItem(AUTH_SCREEN_LOCKED_KEY);
+      sessionStorage.removeItem(AUTH_LAST_ACTIVE_KEY);
     } catch {}
     setCurrentUser(null);
     setIsAuthenticated(false);
+    setIsScreenLocked(false);
+    setUnlockPasswordInput('');
+    setUnlockErrorMsg('');
+    setLoginIdInput('');
+    setPasswordInput('');
+    setLoginErrorMsg('');
     setShowAdminAccountModal(false);
     setShowPosCashierModal(false);
     setStep('input');
   };
+
+  // 기존 잠금 버튼 클릭 시 화면 잠금 상태로 전환 (잠금해제 또는 로그아웃 선택 가능)
+  const handleLock = () => {
+    handleScreenLock('manual');
+  };
+
+  // 5분(300초) 미사용(비활성) 시 자동으로 화면 잠금 상태로 전환하는 타이머 & 이벤트 감지
+  useEffect(() => {
+    if (!isAuthenticated || isScreenLocked) return;
+
+    const now = Date.now();
+    try {
+      const savedLastActive = Number(sessionStorage.getItem(AUTH_LAST_ACTIVE_KEY));
+      if (savedLastActive > 0 && now - savedLastActive >= INACTIVITY_LOCK_TIMEOUT_MS) {
+        handleScreenLock('auto');
+        return;
+      }
+      lastActivityRef.current = savedLastActive > 0 ? savedLastActive : now;
+      sessionStorage.setItem(AUTH_LAST_ACTIVE_KEY, String(lastActivityRef.current));
+    } catch {
+      lastActivityRef.current = now;
+    }
+
+    let lastRecorded = lastActivityRef.current;
+    const handleUserActivity = () => {
+      const currentTs = Date.now();
+      // 이미 5분이 경과한 뒤에 이벤트가 발생했다면 즉시 잠금 처리
+      if (currentTs - lastActivityRef.current >= INACTIVITY_LOCK_TIMEOUT_MS) {
+        handleScreenLock('auto');
+        return;
+      }
+      lastActivityRef.current = currentTs;
+      // sessionStorage 쓰기 부하 방지를 위해 2초 단위로 스로틀링
+      if (currentTs - lastRecorded >= 2000) {
+        lastRecorded = currentTs;
+        try {
+          sessionStorage.setItem(AUTH_LAST_ACTIVE_KEY, String(currentTs));
+        } catch {}
+      }
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click', 'input'];
+    activityEvents.forEach((evt) => window.addEventListener(evt, handleUserActivity, { passive: true }));
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const currentTs = Date.now();
+        if (currentTs - lastActivityRef.current >= INACTIVITY_LOCK_TIMEOUT_MS) {
+          handleScreenLock('auto');
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const intervalId = setInterval(() => {
+      const currentTs = Date.now();
+      if (currentTs - lastActivityRef.current >= INACTIVITY_LOCK_TIMEOUT_MS) {
+        handleScreenLock('auto');
+      }
+    }, 3000);
+
+    return () => {
+      activityEvents.forEach((evt) => window.removeEventListener(evt, handleUserActivity));
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(intervalId);
+    };
+  }, [isAuthenticated, isScreenLocked, handleScreenLock]);
 
   // 관리자 전용: 새 계정 생성
   const handleAdminAddAccount = async (e) => {
@@ -6468,8 +6614,231 @@ export default function BenefitCalculator({ onBack }) {
               }}
             >
               🔒 접속 계정의 권한 등급(Lv.1 / Lv.2 / 관리자)에 따라<br />
-              허용된 계산기 기능만 자동으로 활성화됩니다.
+              허용된 계산기 기능만 자동으로 활성화됩니다. (5분 미사용 시 자동 화면 잠금)
             </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // ============================================================================
+  // 1-2. 화면 잠금 상태 (5분 미사용 자동 잠금 또는 수동 잠금 시: 잠금해제 또는 로그아웃 선택)
+  // ============================================================================
+  if (isScreenLocked) {
+    return (
+      <section className="container" style={{ paddingTop: '3.5rem', minHeight: '82vh' }}>
+        {onBack && (
+          <button onClick={onBack} className="btn-back">
+            <span>←</span> 홈으로 돌아가기
+          </button>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+          <div
+            className="glass-panel"
+            style={{
+              maxWidth: '460px',
+              width: '100%',
+              textAlign: 'center',
+              padding: '2.5rem 2rem',
+              borderTop: '4px solid #f59e0b',
+              boxShadow: '0 22px 55px rgba(0, 0, 0, 0.6)'
+            }}
+          >
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: 'rgba(245, 158, 11, 0.14)',
+                border: '1px solid rgba(245, 158, 11, 0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem',
+                color: '#fbbf24'
+              }}
+            >
+              <Lock size={28} />
+            </div>
+
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.25rem 0.75rem',
+                borderRadius: '999px',
+                background: 'rgba(245, 158, 11, 0.16)',
+                border: '1px solid rgba(245, 158, 11, 0.45)',
+                color: '#fde68a',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                marginBottom: '0.65rem'
+              }}
+            >
+              {screenLockReason === 'auto'
+                ? '⏱️ 5분 미사용 자동 화면 잠금'
+                : '🔒 보안 화면 잠금 상태'}
+            </div>
+
+            <h2 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '0.45rem', color: '#f8fafc' }}>
+              화면이 잠금 상태입니다
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.25rem', fontSize: '0.88rem', lineHeight: 1.5 }}>
+              작성 중이던 견적 데이터는 안전하게 보호되고 있습니다.<br />
+              <strong>잠금 해제</strong>로 작업을 이어가거나 <strong>로그아웃</strong>을 선택해 주세요.
+            </p>
+
+            {/* 현재 잠금된 접속자 계정 정보 카드 */}
+            <div
+              style={{
+                background: 'rgba(15, 23, 42, 0.85)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: '10px',
+                padding: '0.75rem 1rem',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.55rem',
+                flexWrap: 'wrap'
+              }}
+            >
+              <span
+                style={{
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '999px',
+                  fontSize: '0.74rem',
+                  fontWeight: 900,
+                  background: isAdminUser
+                    ? 'rgba(212, 175, 55, 0.2)'
+                    : canAccessLv2
+                      ? 'rgba(16, 185, 129, 0.2)'
+                      : 'rgba(37, 99, 235, 0.2)',
+                  border: isAdminUser
+                    ? '1px solid rgba(212, 175, 55, 0.6)'
+                    : canAccessLv2
+                      ? '1px solid rgba(16, 185, 129, 0.6)'
+                      : '1px solid rgba(59, 130, 246, 0.6)',
+                  color: isAdminUser ? '#fde68a' : canAccessLv2 ? '#6ee7b7' : '#93c5fd'
+                }}
+              >
+                {isAdminUser ? '👑 관리자' : canAccessLv2 ? '⚡ Lv.2' : '🛡️ Lv.1'}
+              </span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc' }}>
+                {currentUser?.name || currentUser?.id}
+              </span>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                (ID: {currentUser?.id})
+              </span>
+            </div>
+
+            {/* 선택 1: 비밀번호 입력 후 잠금 해제 */}
+            <form onSubmit={handleUnlockScreen} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', textAlign: 'left' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.35rem' }}>
+                  현재 계정 비밀번호(PW) 입력
+                </label>
+                <input
+                  type="password"
+                  value={unlockPasswordInput}
+                  onChange={(e) => {
+                    setUnlockPasswordInput(e.target.value);
+                    if (unlockErrorMsg) setUnlockErrorMsg('');
+                  }}
+                  placeholder="비밀번호 입력하여 잠금 해제"
+                  autoFocus
+                  autoComplete="current-password"
+                  style={{
+                    width: '100%',
+                    padding: '0.9rem 1rem',
+                    borderRadius: '10px',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid var(--glass-border)',
+                    color: 'white',
+                    fontSize: '1.05rem',
+                    fontWeight: 700,
+                    letterSpacing: '3px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              {unlockErrorMsg && (
+                <div
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.14)',
+                    border: '1px solid rgba(239, 68, 68, 0.45)',
+                    color: '#fca5a5',
+                    padding: '0.6rem 0.85rem',
+                    borderRadius: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    textAlign: 'center'
+                  }}
+                >
+                  {unlockErrorMsg}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={isAccountCloudSyncing}
+                style={{
+                  width: '100%',
+                  padding: '0.92rem',
+                  fontSize: '0.98rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.45rem'
+                }}
+              >
+                <Unlock size={18} />
+                {isAccountCloudSyncing ? '확인 중...' : '1. 잠금 해제 (작업 중이던 화면으로 복귀)'}
+              </button>
+            </form>
+
+            {/* 구분선 */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                margin: '1rem 0'
+              }}
+            >
+              <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }} />
+              <span style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 700 }}>또는</span>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }} />
+            </div>
+
+            {/* 선택 2: 완전 로그아웃 상태로 전환 */}
+            <button
+              type="button"
+              onClick={handleLogout}
+              style={{
+                width: '100%',
+                padding: '0.85rem 1rem',
+                borderRadius: '10px',
+                border: '1px solid rgba(239, 68, 68, 0.45)',
+                background: 'rgba(239, 68, 68, 0.12)',
+                color: '#fca5a5',
+                fontSize: '0.92rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.45rem',
+                transition: 'all 0.2s'
+              }}
+            >
+              <ArrowLeft size={17} /> 2. 로그아웃 상태로 전환 (다른 계정으로 로그인)
+            </button>
           </div>
         </div>
       </section>
@@ -6521,6 +6890,19 @@ export default function BenefitCalculator({ onBack }) {
           <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
             (ID: {currentUser?.id})
           </span>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              color: '#64748b',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              padding: '0.14rem 0.5rem',
+              borderRadius: '999px'
+            }}
+            title="5분 동안 입력이나 마우스/터치 조작이 없으면 자동으로 화면이 잠금됩니다."
+          >
+            ⏱️ 5분 미사용 시 자동잠금
+          </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
@@ -6549,7 +6931,28 @@ export default function BenefitCalculator({ onBack }) {
           )}
           <button
             type="button"
-            onClick={handleLock}
+            onClick={() => handleScreenLock('manual')}
+            style={{
+              height: '32px',
+              padding: '0 0.75rem',
+              borderRadius: '8px',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
+              background: 'rgba(245, 158, 11, 0.14)',
+              color: '#fde68a',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem'
+            }}
+            title="작성 중인 내용을 유지한 채 화면을 잠금 상태로 전환합니다."
+          >
+            <Lock size={13} /> 화면 잠금
+          </button>
+          <button
+            type="button"
+            onClick={handleLogout}
             style={{
               height: '32px',
               padding: '0 0.75rem',
@@ -6564,9 +6967,9 @@ export default function BenefitCalculator({ onBack }) {
               alignItems: 'center',
               gap: '0.3rem'
             }}
-            title="현재 계정에서 로그아웃하고 로그인 화면으로 돌아갑니다."
+            title="현재 계정에서 완전히 로그아웃하고 ID/PW 로그인 화면으로 돌아갑니다."
           >
-            <Lock size={13} /> 로그아웃
+            로그아웃
           </button>
         </div>
       </div>
