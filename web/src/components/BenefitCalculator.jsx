@@ -3910,7 +3910,17 @@ export default function BenefitCalculator({ onBack }) {
     const node = nodes[pageIndex] || nodes[0];
     if (!node || isExportingImage) return;
     setIsExportingImage(true);
+    const prevBg = node.style.backgroundColor;
+    const prevColor = node.style.color;
+    const prevColorScheme = node.style.colorScheme;
+    const prevForcedColorAdjust = node.style.forcedColorAdjust;
     try {
+      // 모바일 기기 다크모드 무력화 및 순백색 A4 영수증/견적서 강제 지정
+      node.style.backgroundColor = '#ffffff';
+      node.style.color = '#0f172a';
+      node.style.colorScheme = 'light';
+      node.style.forcedColorAdjust = 'none';
+
       // 100% 오프라인 동작 보장: skipFonts: true 로 외부 웹폰트 네트워크 재요청 방지
       // Retina 2x 화질로 모바일/카톡 전송 시 글자가 또렷하게 보이도록 설정
       // 모바일 화면 맞춤 배율이 적용되어 있어도 캡처 시에는 transform: none 으로 원본 1640px 해상도 보장
@@ -3925,7 +3935,12 @@ export default function BenefitCalculator({ onBack }) {
           transform: 'none',
           transformOrigin: 'top left',
           minHeight: '1160px',
-          justifyContent: node.classList.contains('a4-page-1') ? 'flex-start' : undefined
+          justifyContent: node.classList.contains('a4-page-1') ? 'flex-start' : undefined,
+          background: '#ffffff',
+          backgroundColor: '#ffffff',
+          color: '#0f172a',
+          colorScheme: 'light',
+          forcedColorAdjust: 'none'
         }
       });
 
@@ -4000,6 +4015,10 @@ export default function BenefitCalculator({ onBack }) {
       console.error('견적서 사진 생성 오류:', err);
       alert('견적서 사진 생성 중 오류가 발생했습니다. 브라우저 인쇄(PDF 저장)를 이용해 주세요.');
     } finally {
+      node.style.backgroundColor = prevBg;
+      node.style.color = prevColor;
+      node.style.colorScheme = prevColorScheme;
+      node.style.forcedColorAdjust = prevForcedColorAdjust;
       setIsExportingImage(false);
     }
   };
@@ -4034,22 +4053,44 @@ export default function BenefitCalculator({ onBack }) {
         const node = nodes[i];
         if (i > 0) pdf.addPage('a4', 'p');
 
-        const dataUrl = await htmlToImage.toPng(node, {
-          quality: 0.98,
-          pixelRatio: 2,
-          backgroundColor: '#ffffff',
-          skipFonts: true,
-          style: {
-            margin: '0',
-            boxShadow: 'none',
-            transform: 'none',
-            transformOrigin: 'top left',
-            minHeight: '1160px',
-            justifyContent: node.classList.contains('a4-page-1') ? 'flex-start' : undefined
-          }
-        });
+        const prevBg = node.style.backgroundColor;
+        const prevColor = node.style.color;
+        const prevColorScheme = node.style.colorScheme;
+        const prevForcedColorAdjust = node.style.forcedColorAdjust;
 
-        pdf.addImage(dataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
+        try {
+          node.style.backgroundColor = '#ffffff';
+          node.style.color = '#0f172a';
+          node.style.colorScheme = 'light';
+          node.style.forcedColorAdjust = 'none';
+
+          const dataUrl = await htmlToImage.toPng(node, {
+            quality: 0.98,
+            pixelRatio: 2,
+            backgroundColor: '#ffffff',
+            skipFonts: true,
+            style: {
+              margin: '0',
+              boxShadow: 'none',
+              transform: 'none',
+              transformOrigin: 'top left',
+              minHeight: '1160px',
+              justifyContent: node.classList.contains('a4-page-1') ? 'flex-start' : undefined,
+              background: '#ffffff',
+              backgroundColor: '#ffffff',
+              color: '#0f172a',
+              colorScheme: 'light',
+              forcedColorAdjust: 'none'
+            }
+          });
+
+          pdf.addImage(dataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
+        } finally {
+          node.style.backgroundColor = prevBg;
+          node.style.color = prevColor;
+          node.style.colorScheme = prevColorScheme;
+          node.style.forcedColorAdjust = prevForcedColorAdjust;
+        }
       }
 
       const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
@@ -5514,14 +5555,21 @@ export default function BenefitCalculator({ onBack }) {
         {(() => null)()}
         {/* ==================== A4 출력 시트 ==================== */}
         {(() => {
-          const sheetStyle =
-            mobileFitMode && isSmallScreen
+          const sheetStyle = {
+            backgroundColor: '#ffffff',
+            color: '#0f172a',
+            colorScheme: 'light',
+            forcedColorAdjust: 'none',
+            WebkitPrintColorAdjust: 'exact',
+            printColorAdjust: 'exact',
+            ...(mobileFitMode && isSmallScreen
               ? {
                   transform: `scale(${mobileSheetScale})`,
                   transformOrigin: 'top center',
                   marginBottom: `calc(-1 * (1 - ${mobileSheetScale}) * 800px)`
                 }
-              : undefined;
+              : {})
+          };
 
           const renderA4Header = (pageNo = 1, totalPages = 1) => (
             <header className="a4-header">
