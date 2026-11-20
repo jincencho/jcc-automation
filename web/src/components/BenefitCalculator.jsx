@@ -2004,9 +2004,9 @@ export default function BenefitCalculator({ onBack }) {
         else if (baseGcash >= 1000000) bonusGcash = 65000;
         const totalGcash = baseGcash + bonusGcash;
 
-        // 유효기간 분리 (기본 6.5%는 5년, 우대율 초과 추가분은 60일)
-        const tierNormal = tier ? tier.normalGcash : 0;
-        const gcash60Day = tier && tier.minSpend >= 5264000 ? Math.max(0, tierGcash - tierNormal) : 0;
+        // 유효기간 분리 (사은으로 받은 G캐시 9.5% 이상은 전부 유효기간 60일, 400만 이하 기본 6.5% 및 자급제는 5년)
+        const is95OrAbove = tier && tier.minSpend >= 5264000 && deptRewardRate >= 9.5;
+        const gcash60Day = is95OrAbove ? (tierGcash + bonusGcash) : 0;
         const gcash5Year = Math.max(0, totalGcash - gcash60Day);
 
         // 1) 전부 적립 시뮬레이션
@@ -2163,7 +2163,7 @@ export default function BenefitCalculator({ onBack }) {
               discountRate: 0,
               discountAmount: 0,
               receiptAmount: safeReward,
-              note: `백화점 모바일 앱 지급 (5년: ${formatWon(gcash5Year)} / 60일: ${formatWon(gcash60Day)})`
+              note: `백화점 모바일 앱 지급 (${gcash60Day > 0 ? `9.5%이상 60일: ${formatWon(gcash60Day)}` : ''}${gcash60Day > 0 && gcash5Year > 0 ? ' / ' : ''}${gcash5Year > 0 ? `기본 5년: ${formatWon(gcash5Year)}` : ''})`
             } : null
           ].filter(Boolean),
           jumpTip
@@ -2214,8 +2214,8 @@ export default function BenefitCalculator({ onBack }) {
 
       const totalGcash = step1Gcash + step2Gcash + step3Gcash + deptPhoneGcash;
 
-      // 유효기간 분리 (1인 3분할: 1차 2000만 우대 초과분은 60일, 나머지 2차/3차/자급제 및 기본 130만은 5년)
-      const gcash60Day = Math.max(0, step1Gcash - 1300000);
+      // 유효기간 분리 (1인 3분할: 1차 2000만 9.5% 이상 우대 사은은 전부 60일, 2차/3차 기본 6.5% 및 자급제는 5년)
+      const gcash60Day = deptRewardRate >= 9.5 ? step1Gcash : 0;
       const gcash5Year = Math.max(0, totalGcash - gcash60Day);
 
       // 1) 전부 적립 시뮬레이션
@@ -2535,7 +2535,7 @@ export default function BenefitCalculator({ onBack }) {
             discountRate: 0,
             discountAmount: 0,
             receiptAmount: safeReward,
-            note: `백화점 모바일 앱 지급 (5년: ${formatWon(gcash5Year)} / 60일: ${formatWon(gcash60Day)})`
+            note: `백화점 모바일 앱 지급 (${gcash60Day > 0 ? `9.5%이상 60일: ${formatWon(gcash60Day)}` : ''}${gcash60Day > 0 && gcash5Year > 0 ? ' / ' : ''}${gcash5Year > 0 ? `기본 5년: ${formatWon(gcash5Year)}` : ''})`
           } : null
         ].filter(Boolean),
         jumpTip
@@ -2555,10 +2555,10 @@ export default function BenefitCalculator({ onBack }) {
 
     const totalGcash = c1Gcash + c2Gcash + deptPhoneGcash;
 
-    // 유효기간 분리 (2인 2카드: 각 카드가 500만 이상일 때 우대 추가분은 60일, 나머지는 5년)
-    const c1Extra = t1 && t1.minSpend >= 5264000 ? Math.max(0, c1Gcash - t1.normalGcash) : 0;
-    const c2Extra = t2 && t2.minSpend >= 5264000 ? Math.max(0, c2Gcash - t2.normalGcash) : 0;
-    const gcash60Day = c1Extra + c2Extra;
+    // 유효기간 분리 (2인 2카드: 500만 이상 9.5% 이상 사은은 전부 60일, 400만 이하 기본 6.5% 및 자급제는 5년)
+    const c1_60Day = (t1 && t1.minSpend >= 5264000 && deptRewardRate >= 9.5) ? c1Gcash : 0;
+    const c2_60Day = (t2 && t2.minSpend >= 5264000 && deptRewardRate >= 9.5) ? c2Gcash : 0;
+    const gcash60Day = c1_60Day + c2_60Day;
     const gcash5Year = Math.max(0, totalGcash - gcash60Day);
 
     // 1) 전부 적립 시뮬레이션
@@ -2762,7 +2762,7 @@ export default function BenefitCalculator({ onBack }) {
           discountRate: 0,
           discountAmount: 0,
           receiptAmount: safeReward,
-          note: `백화점 모바일 앱 지급 (5년: ${formatWon(gcash5Year)} / 60일: ${formatWon(gcash60Day)})`
+          note: `백화점 모바일 앱 지급 (${gcash60Day > 0 ? `9.5%이상 60일: ${formatWon(gcash60Day)}` : ''}${gcash60Day > 0 && gcash5Year > 0 ? ' / ' : ''}${gcash5Year > 0 ? `기본 5년: ${formatWon(gcash5Year)}` : ''})`
         } : null
       ].filter(Boolean),
       jumpTip
@@ -4346,10 +4346,14 @@ export default function BenefitCalculator({ onBack }) {
                     {deptEnginePlan.safeDeduct > 0 ? '💰 고객 잔여 순적립 G캐시 (모바일 앱)' : `백화점 사은행사 G캐시 증정 합계 (${deptRewardRate}%)`}
                   </span>
                   <div style={{ fontSize: '0.68rem', color: '#b45309', fontWeight: 700, marginTop: '1px' }}>
-                    • 기본 6.5% 사은 (5년): <strong>{formatWon(deptEnginePlan.gcash5Year)}</strong>
                     {deptEnginePlan.gcash60Day > 0 && (
-                      <span style={{ marginLeft: '4px' }}>
-                        • 우대 추가분 (60일): <strong style={{ color: '#dc2626' }}>{formatWon(deptEnginePlan.gcash60Day)}</strong>
+                      <span>
+                        • 9.5% 이상 사은 (유효기간 60일): <strong style={{ color: '#dc2626' }}>{formatWon(deptEnginePlan.gcash60Day)}</strong>
+                      </span>
+                    )}
+                    {deptEnginePlan.gcash5Year > 0 && (
+                      <span style={{ marginLeft: deptEnginePlan.gcash60Day > 0 ? '6px' : '0' }}>
+                        • 기본 6.5% 사은 (유효기간 5년): <strong>{formatWon(deptEnginePlan.gcash5Year)}</strong>
                       </span>
                     )}
                   </div>
@@ -4375,7 +4379,7 @@ export default function BenefitCalculator({ onBack }) {
               <div>① 일반 가전과 자급제폰은 <strong>백화점 마진 수수료율이 완전히 상이</strong>하여 반드시 서로 다른 바코드로 분리 결제되어야 합니다.</div>
               <div>② 가전 승인금액은 반드시 <strong>[가전 바코드 907]</strong>을 스캔하고, 자급제폰 승인금액은 반드시 <strong>[자급제 바코드 606]</strong>을 스캔하십시오.</div>
               <div>③ 바코드를 교차 스캔하거나 하나로 통합 결제할 경우 <strong>매장 및 백화점 정산 수수료에 치명적인 오류</strong>가 발생하므로 절대 주의 바랍니다.</div>
-              <div>④ ⏱️ <strong>사은행사 G캐시 유효기간 분리 안내</strong>: 기본 6.5% 사은(<strong>{formatWon(deptEnginePlan.gcash5Year)}</strong>)은 증정일로부터 <strong>5년</strong>, 9.5% 이상 우대 추가분(<strong>{formatWon(deptEnginePlan.gcash60Day)}</strong>)은 증정일로부터 <strong>60일(2개월 이내)</strong> 유효합니다. 고객에게 반드시 안내바랍니다.</div>
+              <div>④ ⏱️ <strong>사은행사 G캐시 유효기간 안내</strong>: 사은으로 받은 G캐시 중 <strong>9.5% 이상 사은행사(<strong>{formatWon(deptEnginePlan.gcash60Day)}</strong>)는 전액 증정일로부터 60일(2개월 이내)</strong> 유효하며, 기본 6.5% 일반 사은(<strong>{formatWon(deptEnginePlan.gcash5Year)}</strong>)은 <strong>5년간</strong> 유효합니다. 고객에게 60일 유효기간을 반드시 안내바랍니다.</div>
             </div>
           </div>
 
@@ -5513,7 +5517,7 @@ export default function BenefitCalculator({ onBack }) {
                                 </span>
                               ) : (
                                 <span style={{ display: 'inline-block', fontSize: '0.68rem', fontWeight: 800, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', padding: '1px 6px', borderRadius: '4px', marginLeft: '6px', verticalAlign: 'middle' }}>
-                                  적립 (기본 5년 / 우대 추가분 60일)
+                                  {deptEnginePlan.gcash60Day > 0 ? '적립 (9.5%이상 전액 60일)' : '적립 (5년)'}
                                 </span>
                               )}
                             </span>
@@ -8226,7 +8230,7 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
                           <div style={{ fontSize: '0.67rem', color: '#94a3b8', marginTop: '0.45rem', lineHeight: 1.4 }}>
                             <div>• <strong>400만 이하</strong>: 기본 6.5% 사은행사 고정 적용 (300만: 19.5만 / 400만: 26만)</div>
-                            <div>• ⏱️ <strong>유효기간</strong>: 기본 6.5%는 <strong>5년</strong> / 9.5% 이상 우대 추가분은 <strong>60일(2개월)</strong></div>
+                            <div>• ⏱️ <strong>유효기간</strong>: <strong>사은으로 받은 G캐시 9.5% 이상은 전액 60일(2개월)</strong> / 400만 이하 기본 6.5%는 <strong>5년</strong></div>
                           </div>
                         </div>
 
@@ -8873,7 +8877,7 @@ export default function BenefitCalculator({ onBack }) {
                             <span style={{ fontSize: '0.82rem', color: '#fde68a' }}>
                               백화점 G캐시 증정 <strong style={{ color: '#fde68a', fontSize: '0.98rem' }}>+{formatWon(deptEnginePlan.totalGcash)}</strong>
                               <span style={{ fontSize: '0.72rem', color: '#fef3c7', marginLeft: '6px', background: 'rgba(217, 119, 6, 0.35)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
-                                5년: {formatWon(deptEnginePlan.gcash5Year)}{deptEnginePlan.gcash60Day > 0 ? ` / 60일: ${formatWon(deptEnginePlan.gcash60Day)}` : ''}
+                                {deptEnginePlan.gcash60Day > 0 ? `60일: ${formatWon(deptEnginePlan.gcash60Day)}` : ''}{deptEnginePlan.gcash60Day > 0 && deptEnginePlan.gcash5Year > 0 ? ' / ' : ''}{deptEnginePlan.gcash5Year > 0 ? `5년: ${formatWon(deptEnginePlan.gcash5Year)}` : ''}
                               </span>
                             </span>
                             <span style={{ fontSize: '0.85rem', color: '#cbd5e1', marginLeft: '0.2rem' }}>=</span>
@@ -9062,7 +9066,7 @@ export default function BenefitCalculator({ onBack }) {
                               transition: 'all 0.15s ease'
                             }}
                           >
-                            적립 (5년/60일 적립)
+                            적립 (60일/5년 적립)
                           </button>
                         </div>
                       </div>
