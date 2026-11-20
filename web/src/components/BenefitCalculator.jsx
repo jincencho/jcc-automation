@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as htmlToImage from 'html-to-image';
+import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { DEPT_POS_BARCODES } from '../constants/deptBarcodes';
 import { BRAND_LOGO_B64, MANAGER_PROFILE_B64 } from '../constants/brandAssets';
@@ -3696,6 +3697,75 @@ export default function BenefitCalculator({ onBack }) {
   const [posImageModalData, setPosImageModalData] = useState(null);
   const [mobileFitMode, setMobileFitMode] = useState(false);
 
+  const captureElementToPng = async (node, customOptions = {}) => {
+    // 1차 시도: html2canvas
+    // SVG foreignObject를 거치지 않고 순수 2D Canvas 메서드로 렌더링하므로
+    // 모바일 브라우저(삼성인터넷, 안드로이드 크롬)의 Late-stage 다크모드/야간모드 셰이더 반전 필터를 100% 원천 우회합니다.
+    try {
+      const isSheet = node.classList && node.classList.contains('a4-print-sheet');
+      const targetWidth = customOptions.width || (isSheet ? 820 : 790);
+      const canvas = await html2canvas(node, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        width: targetWidth,
+        windowWidth: targetWidth + 50,
+        onclone: (clonedDoc, clonedEl) => {
+          clonedEl.style.transform = 'none';
+          clonedEl.style.margin = '0';
+          clonedEl.style.boxShadow = 'none';
+          clonedEl.style.backgroundColor = '#ffffff';
+          clonedEl.style.color = '#0f172a';
+          clonedEl.style.colorScheme = 'only light';
+          clonedEl.style.forcedColorAdjust = 'none';
+          if (clonedEl.classList && clonedEl.classList.contains('a4-page-1')) {
+            clonedEl.style.justifyContent = 'flex-start';
+          }
+          if (customOptions.isPosModal) {
+            clonedEl.style.overflow = 'visible';
+            clonedEl.style.maxHeight = 'none';
+            clonedEl.style.height = 'auto';
+            clonedEl.style.width = `${targetWidth}px`;
+          }
+          const allElements = clonedEl.querySelectorAll('*');
+          allElements.forEach((el) => {
+            el.style.colorScheme = 'only light';
+            el.style.forcedColorAdjust = 'none';
+          });
+        }
+      });
+      return canvas.toDataURL('image/png');
+    } catch (h2cErr) {
+      console.warn('html2canvas 실행 실패, htmlToImage로 대체 실행합니다:', h2cErr);
+      const isSheet = node.classList && node.classList.contains('a4-print-sheet');
+      const targetWidth = customOptions.width || (isSheet ? 820 : 790);
+      return await htmlToImage.toPng(node, {
+        quality: 0.98,
+        pixelRatio: 2,
+        width: targetWidth,
+        backgroundColor: '#ffffff',
+        skipFonts: true,
+        filter: (el) => !(el && el.classList && el.classList.contains('no-print')),
+        style: {
+          margin: '0',
+          boxShadow: 'none',
+          transform: 'none',
+          transformOrigin: 'top left',
+          minHeight: isSheet ? '1160px' : undefined,
+          justifyContent: (node.classList && node.classList.contains('a4-page-1')) ? 'flex-start' : undefined,
+          background: '#ffffff',
+          backgroundColor: '#ffffff',
+          color: '#0f172a',
+          colorScheme: 'only light',
+          forcedColorAdjust: 'none',
+          ...(customOptions.style || {})
+        }
+      });
+    }
+  };
+
   const captureFullPosSheetPng = async () => {
     const node = document.getElementById('pos-cashier-print-area');
     if (!node) return null;
@@ -3719,31 +3789,17 @@ export default function BenefitCalculator({ onBack }) {
       node.style.flex = 'none';
       node.style.backgroundColor = '#ffffff';
       node.style.color = '#0f172a';
-      node.style.colorScheme = 'light';
+      node.style.colorScheme = 'only light';
       node.style.forcedColorAdjust = 'none';
-      const fullHeight = node.scrollHeight + 16;
 
-      return await htmlToImage.toPng(node, {
-        quality: 0.98,
-        pixelRatio: 2,
+      return await captureElementToPng(node, {
         width: targetWidth,
-        height: fullHeight,
-        backgroundColor: '#ffffff',
-        skipFonts: true,
-        filter: (el) => !(el && el.classList && el.classList.contains('no-print')),
+        isPosModal: true,
         style: {
           width: `${targetWidth}px`,
           maxWidth: `${targetWidth}px`,
-          height: `${fullHeight}px`,
           maxHeight: 'none',
-          overflow: 'visible',
-          margin: '0',
-          boxShadow: 'none',
-          background: '#ffffff',
-          backgroundColor: '#ffffff',
-          color: '#0f172a',
-          colorScheme: 'light',
-          forcedColorAdjust: 'none'
+          overflow: 'visible'
         }
       });
     } finally {
@@ -3915,34 +3971,14 @@ export default function BenefitCalculator({ onBack }) {
     const prevColorScheme = node.style.colorScheme;
     const prevForcedColorAdjust = node.style.forcedColorAdjust;
     try {
-      // 모바일 기기 다크모드 무력화 및 순백색 A4 영수증/견적서 강제 지정
       node.style.backgroundColor = '#ffffff';
       node.style.color = '#0f172a';
-      node.style.colorScheme = 'light';
+      node.style.colorScheme = 'only light';
       node.style.forcedColorAdjust = 'none';
 
-      // 100% 오프라인 동작 보장: skipFonts: true 로 외부 웹폰트 네트워크 재요청 방지
-      // Retina 2x 화질로 모바일/카톡 전송 시 글자가 또렷하게 보이도록 설정
-      // 모바일 화면 맞춤 배율이 적용되어 있어도 캡처 시에는 transform: none 으로 원본 1640px 해상도 보장
-      const dataUrl = await htmlToImage.toPng(node, {
-        quality: 0.98,
-        pixelRatio: 2,
-        backgroundColor: '#ffffff',
-        skipFonts: true,
-        style: {
-          margin: '0',
-          boxShadow: 'none',
-          transform: 'none',
-          transformOrigin: 'top left',
-          minHeight: '1160px',
-          justifyContent: node.classList.contains('a4-page-1') ? 'flex-start' : undefined,
-          background: '#ffffff',
-          backgroundColor: '#ffffff',
-          color: '#0f172a',
-          colorScheme: 'light',
-          forcedColorAdjust: 'none'
-        }
-      });
+      // 1순위: html2canvas (모바일 다크모드/삼성인터넷 색상 반전 100% 원천 차단)
+      const dataUrl = await captureElementToPng(node);
+      if (!dataUrl) return;
 
       const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
       const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
@@ -4061,30 +4097,13 @@ export default function BenefitCalculator({ onBack }) {
         try {
           node.style.backgroundColor = '#ffffff';
           node.style.color = '#0f172a';
-          node.style.colorScheme = 'light';
+          node.style.colorScheme = 'only light';
           node.style.forcedColorAdjust = 'none';
 
-          const dataUrl = await htmlToImage.toPng(node, {
-            quality: 0.98,
-            pixelRatio: 2,
-            backgroundColor: '#ffffff',
-            skipFonts: true,
-            style: {
-              margin: '0',
-              boxShadow: 'none',
-              transform: 'none',
-              transformOrigin: 'top left',
-              minHeight: '1160px',
-              justifyContent: node.classList.contains('a4-page-1') ? 'flex-start' : undefined,
-              background: '#ffffff',
-              backgroundColor: '#ffffff',
-              color: '#0f172a',
-              colorScheme: 'light',
-              forcedColorAdjust: 'none'
-            }
-          });
-
-          pdf.addImage(dataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
+          const dataUrl = await captureElementToPng(node);
+          if (dataUrl) {
+            pdf.addImage(dataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
+          }
         } finally {
           node.style.backgroundColor = prevBg;
           node.style.color = prevColor;
