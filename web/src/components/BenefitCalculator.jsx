@@ -7029,8 +7029,9 @@ export default function BenefitCalculator({ onBack }) {
                   >
                     📝 계정이 없으신가요? 신규 아이디(ID/PW) 사용 신청하기 →
                   </button>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4 }}>
-                    🔒 접속 계정의 권한 등급(Lv.1 / Lv.2 / 관리자)에 따라 허용된 계산기 기능만 활성화됩니다. (5분 미사용 시 자동 잠금)
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.45 }}>
+                    🔒 접속 계정의 권한 등급(Lv.1 / Lv.2 / 관리자)에 따라 허용된 계산기 기능만 활성화됩니다. (5분 미사용 시 자동 잠금)<br />
+                    ☁️ 사내망에 저장해 둔 단독 HTML 파일도 온라인 서버 업데이트 시 최신 기능이 자동 동기화됩니다.
                   </div>
                 </div>
               </>
