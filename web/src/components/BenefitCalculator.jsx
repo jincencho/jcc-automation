@@ -663,6 +663,15 @@ const AUTH_SESSION_USER_KEY = 'jcc_calc_auth_user';
 
 const DEFAULT_USER_ACCOUNTS = [
   {
+    uid: 'acc_master_saeootang',
+    id: 'saeootang',
+    pw: '08931121',
+    name: '총괄 관리자',
+    level: 'admin',
+    isMaster: true,
+    createdAt: '2026-11-21'
+  },
+  {
     uid: 'acc_admin_master',
     id: 'admin',
     pw: '08931121',
@@ -690,6 +699,31 @@ const DEFAULT_USER_ACCOUNTS = [
     createdAt: '2026-11-21'
   }
 ];
+
+// 보안 보호 헬퍼: 관리자 계정 ID(saeootang 등)가 화면에 직접 노출되지 않도록 마스킹
+const isProtectedAdminId = (rawId) => {
+  if (!rawId) return false;
+  const lower = String(rawId).trim().toLowerCase();
+  return lower === 'saeootang';
+};
+
+const maskAccountId = (rawId) => {
+  if (!rawId) return '';
+  if (isProtectedAdminId(rawId)) {
+    return '••••••••';
+  }
+  return rawId;
+};
+
+const getDisplayUserName = (user) => {
+  if (!user) return '';
+  const rawId = String(user.id || '').trim();
+  const rawName = String(user.name || '').trim();
+  if (isProtectedAdminId(rawId) || isProtectedAdminId(rawName)) {
+    return '총괄 관리자';
+  }
+  return rawName || rawId;
+};
 
 function sanitizeUserAccounts(rawList) {
   if (!Array.isArray(rawList) || rawList.length === 0) {
@@ -1489,8 +1523,10 @@ export default function BenefitCalculator({ onBack }) {
     );
     if (directMatch) return directMatch;
 
-    // 마스터 관리자 보조 별칭 ('jcc') 지원
-    if (idLower === 'jcc' && pwStr === '08931121') {
+    // 마스터 관리자 보조 별칭 ('jcc', 'saeootang') 지원
+    if ((idLower === 'jcc' || idLower === 'saeootang') && pwStr === '08931121') {
+      const found = list.find((acc) => acc.id.trim().toLowerCase() === idLower);
+      if (found && String(found.pw) === pwStr) return found;
       return list.find((acc) => acc.isMaster || acc.level === 'admin') || null;
     }
     return null;
@@ -6631,7 +6667,7 @@ export default function BenefitCalculator({ onBack }) {
 
                             <div>
                               <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <span>{acc.name || acc.id}</span>
+                                <span>{getDisplayUserName(acc)}</span>
                                 {isMe && (
                                   <span style={{ fontSize: '0.7rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '1px 6px', borderRadius: '4px' }}>
                                     현재 접속중
@@ -6639,97 +6675,115 @@ export default function BenefitCalculator({ onBack }) {
                                 )}
                               </div>
                               <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', fontFamily: 'monospace' }}>
-                                ID: <strong style={{ color: '#38bdf8' }}>{acc.id}</strong>
+                                ID: <strong style={{ color: '#38bdf8' }}>{maskAccountId(acc.id)}</strong>
                                 <span style={{ margin: '0 8px', color: '#475569' }}>|</span>
-                                PW: <strong style={{ color: '#fcd34d' }}>{showPasswordsInAdmin ? acc.pw : '••••••'}</strong>
+                                PW: <strong style={{ color: '#fcd34d' }}>{showPasswordsInAdmin ? (isProtectedAdminId(acc.id) ? '••••••••' : acc.pw) : '••••••'}</strong>
                               </div>
                             </div>
                           </div>
 
                           {/* 우측: 원클릭 레벨 전환 버튼 및 ID/PW 수정·삭제 */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.38rem', flexWrap: 'wrap' }}>
-                            <div
-                              style={{
-                                display: 'inline-flex',
-                                background: '#020617',
-                                padding: '3px',
-                                borderRadius: '8px',
-                                border: '1px solid rgba(255,255,255,0.12)',
-                                gap: '3px'
-                              }}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleAdminChangeLevel(acc.uid, 'lv1')}
+                            {isProtectedAdminId(acc.id) ? (
+                              <span
                                 style={{
-                                  padding: '4px 9px',
+                                  padding: '4px 10px',
                                   borderRadius: '6px',
-                                  border: 'none',
-                                  background: acc.level === 'lv1' ? '#2563eb' : 'transparent',
-                                  color: acc.level === 'lv1' ? '#ffffff' : '#94a3b8',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 800,
-                                  cursor: 'pointer'
+                                  background: 'rgba(212, 175, 55, 0.15)',
+                                  border: '1px solid rgba(212, 175, 55, 0.5)',
+                                  color: '#fde68a',
+                                  fontSize: '0.74rem',
+                                  fontWeight: 800
                                 }}
-                                title="1번 구독 비교 계산기만 사용 가능하도록 제한 (Lv.2 비노출)"
                               >
-                                Lv.1 (1번 전용)
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleAdminChangeLevel(acc.uid, 'lv2')}
-                                style={{
-                                  padding: '4px 9px',
-                                  borderRadius: '6px',
-                                  border: 'none',
-                                  background: acc.level === 'lv2' ? '#059669' : 'transparent',
-                                  color: acc.level === 'lv2' ? '#ffffff' : '#94a3b8',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 800,
-                                  cursor: 'pointer'
-                                }}
-                                title="2번 구독 포함 계산기 및 백화점/POS 지시서 권한 부여"
-                              >
-                                Lv.2 권한 부여
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleAdminChangeLevel(acc.uid, 'admin')}
-                                style={{
-                                  padding: '4px 9px',
-                                  borderRadius: '6px',
-                                  border: 'none',
-                                  background: acc.level === 'admin' ? '#d97706' : 'transparent',
-                                  color: acc.level === 'admin' ? '#ffffff' : '#94a3b8',
-                                  fontSize: '0.75rem',
-                                  fontWeight: 800,
-                                  cursor: 'pointer'
-                                }}
-                                title="관리자 권한 부여"
-                              >
-                                관리자
-                              </button>
-                            </div>
+                                🔒 보안 마스터 (권한 고정)
+                              </span>
+                            ) : (
+                              <>
+                                <div
+                                  style={{
+                                    display: 'inline-flex',
+                                    background: '#020617',
+                                    padding: '3px',
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    gap: '3px'
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdminChangeLevel(acc.uid, 'lv1')}
+                                    style={{
+                                      padding: '4px 9px',
+                                      borderRadius: '6px',
+                                      border: 'none',
+                                      background: acc.level === 'lv1' ? '#2563eb' : 'transparent',
+                                      color: acc.level === 'lv1' ? '#ffffff' : '#94a3b8',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 800,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="1번 구독 비교 계산기만 사용 가능하도록 제한 (Lv.2 비노출)"
+                                  >
+                                    Lv.1 (1번 전용)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdminChangeLevel(acc.uid, 'lv2')}
+                                    style={{
+                                      padding: '4px 9px',
+                                      borderRadius: '6px',
+                                      border: 'none',
+                                      background: acc.level === 'lv2' ? '#059669' : 'transparent',
+                                      color: acc.level === 'lv2' ? '#ffffff' : '#94a3b8',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 800,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="2번 구독 포함 계산기 및 백화점/POS 지시서 권한 부여"
+                                  >
+                                    Lv.2 권한 부여
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdminChangeLevel(acc.uid, 'admin')}
+                                    style={{
+                                      padding: '4px 9px',
+                                      borderRadius: '6px',
+                                      border: 'none',
+                                      background: acc.level === 'admin' ? '#d97706' : 'transparent',
+                                      color: acc.level === 'admin' ? '#ffffff' : '#94a3b8',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 800,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="관리자 권한 부여"
+                                  >
+                                    관리자
+                                  </button>
+                                </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleAdminStartEdit(acc)}
-                              style={{
-                                height: '30px',
-                                padding: '0 0.65rem',
-                                borderRadius: '6px',
-                                border: '1px solid rgba(56, 189, 248, 0.4)',
-                                background: 'rgba(14, 165, 233, 0.14)',
-                                color: '#7dd3fc',
-                                fontSize: '0.76rem',
-                                fontWeight: 700,
-                                cursor: 'pointer'
-                              }}
-                            >
-                              ID/PW 수정
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdminStartEdit(acc)}
+                                  style={{
+                                    height: '30px',
+                                    padding: '0 0.65rem',
+                                    borderRadius: '6px',
+                                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                                    background: 'rgba(14, 165, 233, 0.14)',
+                                    color: '#7dd3fc',
+                                    fontSize: '0.76rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  ID/PW 수정
+                                </button>
+                              </>
+                            )}
 
-                            {!acc.isMaster && (
+                            {!acc.isMaster && !isProtectedAdminId(acc.id) && (
                               <button
                                 type="button"
                                 onClick={() => handleAdminDeleteAccount(acc)}
@@ -7292,60 +7346,16 @@ export default function BenefitCalculator({ onBack }) {
             <h2 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '0.45rem', color: '#f8fafc' }}>
               화면이 잠금 상태입니다
             </h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.25rem', fontSize: '0.88rem', lineHeight: 1.5 }}>
-              작성 중이던 견적 데이터는 안전하게 보호되고 있습니다.<br />
-              <strong>잠금 해제</strong>로 작업을 이어가거나 <strong>로그아웃</strong>을 선택해 주세요.
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.4rem', fontSize: '0.88rem', lineHeight: 1.5 }}>
+              보안을 위해 화면이 안전하게 잠금 처리되었습니다.<br />
+              비밀번호를 입력하여 잠금을 해제하거나 로그아웃을 선택해 주세요.
             </p>
-
-            {/* 현재 잠금된 접속자 계정 정보 카드 */}
-            <div
-              style={{
-                background: 'rgba(15, 23, 42, 0.85)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '10px',
-                padding: '0.75rem 1rem',
-                marginBottom: '1.25rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.55rem',
-                flexWrap: 'wrap'
-              }}
-            >
-              <span
-                style={{
-                  padding: '0.2rem 0.6rem',
-                  borderRadius: '999px',
-                  fontSize: '0.74rem',
-                  fontWeight: 900,
-                  background: isAdminUser
-                    ? 'rgba(212, 175, 55, 0.2)'
-                    : canAccessLv2
-                      ? 'rgba(16, 185, 129, 0.2)'
-                      : 'rgba(37, 99, 235, 0.2)',
-                  border: isAdminUser
-                    ? '1px solid rgba(212, 175, 55, 0.6)'
-                    : canAccessLv2
-                      ? '1px solid rgba(16, 185, 129, 0.6)'
-                      : '1px solid rgba(59, 130, 246, 0.6)',
-                  color: isAdminUser ? '#fde68a' : canAccessLv2 ? '#6ee7b7' : '#93c5fd'
-                }}
-              >
-                {isAdminUser ? '👑 관리자' : canAccessLv2 ? '⚡ Lv.2' : '🛡️ Lv.1'}
-              </span>
-              <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f8fafc' }}>
-                {currentUser?.name || currentUser?.id}
-              </span>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                (ID: {currentUser?.id})
-              </span>
-            </div>
 
             {/* 선택 1: 비밀번호 입력 후 잠금 해제 */}
             <form onSubmit={handleUnlockScreen} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', textAlign: 'left' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#cbd5e1', marginBottom: '0.35rem' }}>
-                  현재 계정 비밀번호(PW) 입력
+                  비밀번호(PW) 입력
                 </label>
                 <input
                   type="password"
@@ -7492,11 +7502,13 @@ export default function BenefitCalculator({ onBack }) {
             {isAdminUser ? '👑 관리자 (MASTER)' : canAccessLv2 ? '⚡ Lv.2 권한' : '🛡️ Lv.1 권한'}
           </span>
           <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#f8fafc' }}>
-            {currentUser?.name || currentUser?.id}
+            {getDisplayUserName(currentUser)}
           </span>
-          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-            (ID: {currentUser?.id})
-          </span>
+          {!isProtectedAdminId(currentUser?.id) && (
+            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+              (ID: {currentUser?.id})
+            </span>
+          )}
           <span
             style={{
               fontSize: '0.72rem',
