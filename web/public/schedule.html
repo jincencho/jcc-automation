@@ -4,9 +4,9 @@
   <!-- JCC CLOUD OTA HOT-UPDATE BOOTLOADER -->
   <script id="jcc-ota-bootloader">
     (function() {
-      window.__JCC_EMBEDDED_VERSION__ = "2026.11.22-v10";
-      window.__JCC_EMBEDDED_BUILT_AT__ = "2026-11-22 18:35";
-      window.__JCC_ACTIVE_VERSION__ = "2026.11.22-v10";
+      window.__JCC_EMBEDDED_VERSION__ = "2026.11.22-v12";
+      window.__JCC_EMBEDDED_BUILT_AT__ = "2026-11-22 18:45";
+      window.__JCC_ACTIVE_VERSION__ = "2026.11.22-v12";
 
       var DB_NAME = "jcc_staff_schedule_ota_v1";
       var STORE_NAME = "bundles";
@@ -42,10 +42,24 @@
         });
       }
 
-      // 내장된 버전보다 최신인 클라우드 패치본이 IndexedDB에 있으면 부팅 시 즉시 실행
+      // 이미 OTA 부팅된 상태이면 중복 실행 방지
+      if (window.__JCC_OTA_BOOTED__) return;
+
+      // 내장된 버전보다 최신인 클라우드 패치본이 IndexedDB에 있으면 사용자 입력 휴무 데이터를 100% 보존한 채로 부팅
       getCachedBundle().then(function(cached) {
         if (cached && cached.version && cached.version > window.__JCC_EMBEDDED_VERSION__ && cached.fullHtml) {
-          console.log('[JCC OTA] Booting newer cloud-cached version:', cached.version);
+          console.log('[JCC OTA] Booting newer cloud-cached version (preserving user schedule data):', cached.version);
+          try {
+            var masterData = localStorage.getItem('JIN_SCHEDULE_MASTER_PERMANENT_DATA') ||
+                             localStorage.getItem('JIN_SCHEDULE_PLANNER_2026_12_V4') ||
+                             localStorage.getItem('JIN_SCHEDULE_PLANNER_2026_12_V3');
+            if (masterData) {
+              window.__JCC_PRESERVED_USER_STATE__ = masterData;
+              localStorage.setItem('JIN_SCHEDULE_MASTER_PERMANENT_DATA', masterData);
+            }
+          } catch (e) {}
+          window.__JCC_OTA_BOOTED__ = true;
+          window.__JCC_APP_INITIALIZED__ = false;
           window.__JCC_ACTIVE_VERSION__ = cached.version;
           window.__JCC_VERSION_SOURCE__ = 'cloud_ota';
           document.open();
@@ -2362,7 +2376,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         </div>
         <div style="font-size: 0.78rem; color: #64748b; line-height: 1.6;">
           • 연동 서버: <code style="background: #e2e8f0; padding: 1px 5px; border-radius: 4px; color: #1e293b;">nuptkcozqdwirafrbfyx.supabase.co</code> (진센조 클라우드)<br>
-          • 시스템 버전: <span id="modalAppVersionText" style="font-weight: 700; color: #0f172a;">v2026.11.22-v10</span><br>
+          • 시스템 버전: <span id="modalAppVersionText" style="font-weight: 700; color: #0f172a;">v2026.11.22-v12</span><br>
           • 최근 클라우드 동기화: <span id="modalLastSyncTime" style="font-weight: 700; color: #0f172a;">방금 전</span>
         </div>
       </div>
@@ -2785,7 +2799,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     /* =====================================================================
        STATE MANAGEMENT & LOCAL STORAGE
        ===================================================================== */
-    const STORAGE_KEY = 'JIN_SCHEDULE_PLANNER_2026_12_V4';
+    const STORAGE_KEY = 'JIN_SCHEDULE_MASTER_PERMANENT_DATA';
+    const LEGACY_STORAGE_KEYS = ['JIN_SCHEDULE_MASTER_PERMANENT_DATA', 'JIN_SCHEDULE_PLANNER_2026_12_V4', 'JIN_SCHEDULE_PLANNER_2026_12_V3', 'JIN_SCHEDULE_PLANNER_2026_12_V2'];
 
     const DEFAULT_APP_STATE = {
       currentYear: 2026,
@@ -3244,11 +3259,12 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       tableName: "saved_quotes",
       scheduleDocId: "__jcc_staff_schedule_v1__",
       metaDocId: "__jcc_staff_schedule_meta_v1__",
-      appVersion: "2026.11.22-v10",
+      appVersion: "2026.11.22-v12",
       appName: "진센조 직원 휴무 계획표"
     };
 
     let isCloudSyncing = false;
+    let cloudSyncState = 'online';
     let lastCloudSyncTimestamp = 0;
     let cloudSaveDebounceTimer = null;
 
@@ -3454,7 +3470,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 
         const localUpdatedAt = AppState.updatedAt || 0;
 
-        if (remoteState && remoteUpdatedAt > localUpdatedAt && Object.keys(remoteState.entries || {}).length > 0) {
+        if (remoteState && Object.keys(remoteState.entries || {}).length > 0 && (isManual || (!AppState.userModified && remoteUpdatedAt > localUpdatedAt))) {
           // 클라우드 데이터가 더 최신임 -> 머지 및 화면 갱신
           AppState = { ...AppState, ...remoteState };
           if (!AppState.dailyBranches) AppState.dailyBranches = {};
@@ -3527,13 +3543,24 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
                 const bRows = await bundleRes.json();
                 if (Array.isArray(bRows) && bRows[0] && bRows[0].data && bRows[0].data.fullHtml) {
                   const newBundle = bRows[0].data;
+                  // 업데이트 적용 전 현재 입력된 모든 휴무 데이터를 영구 저장소에 100% 잠금 보존
+                  AppState.userModified = true;
+                  AppState.baselineLockedV11 = true;
+                  try {
+                    var lockedJson = JSON.stringify(AppState);
+                    localStorage.setItem(STORAGE_KEY, lockedJson);
+                    localStorage.setItem('JIN_SCHEDULE_PLANNER_2026_12_V4', lockedJson);
+                    localStorage.setItem('JIN_SCHEDULE_PLANNER_2026_12_V3', lockedJson);
+                  } catch (e) {}
+
                   await saveCachedBundleToDb(newBundle);
                   showCloudUpdateBanner(newBundle.version, meta.description);
                   if (isManual) {
                     const doReload = confirm(
-                      `✨ 온라인 서버에 새로운 기능 버전(v${meta.version})이 등록되어 있어 다운로드를 완료했습니다!\n\n` +
-                      `• 개선 내용: ${meta.description || '최신 기능 및 안정성 향상'}\n\n` +
-                      `지금 화면을 새로고침하여 최신 기능을 즉시 적용하시겠습니까?`
+                      `✨ 새로운 시스템 기능 업데이트(v${meta.version}) 다운로드가 완료되었습니다!\n\n` +
+                      `• 업데이트 내용: ${meta.description || '최신 기능 및 안정성 향상'}\n` +
+                      `• 🔒 데이터 보호: 현재 입력된 모든 직원 명단과 휴무 일정은 초기화 없이 100% 그대로 유지됩니다.\n\n` +
+                      `지금 화면을 새로고침하여 최신 기능을 적용하시겠습니까?`
                     );
                     if (doReload) window.location.reload();
                   }
@@ -3648,27 +3675,109 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       alert('✅ [직원휴무계획표.html] 단일 파일 다운로드가 완료되었습니다.');
     }
 
+    // [영구 데이터 보호 엔진] 버전이 바뀌거나 시스템이 업데이트되어도 기존 입력된 휴무 데이터 100% 보존
     function loadState() {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
+      var rawSaved = window.__JCC_PRESERVED_USER_STATE__ || null;
+
+      if (!rawSaved) {
+        // 영구 마스터 키 및 구버전 키들 중 가장 최신/유효한 사용자 데이터를 탐색
+        var bestParsed = null;
+        var bestEntryCount = -1;
+        var bestTimestamp = -1;
+
+        for (var i = 0; i < LEGACY_STORAGE_KEYS.length; i++) {
+          var k = LEGACY_STORAGE_KEYS[i];
+          var candidateStr = null;
+          try { candidateStr = localStorage.getItem(k); } catch (e) {}
+          if (!candidateStr) continue;
+          try {
+            var candidate = JSON.parse(candidateStr);
+            if (!candidate || typeof candidate !== 'object' || !candidate.entries) continue;
+
+            // 총 등록된 휴무/근무 건수 계산
+            var eCount = 0;
+            Object.keys(candidate.entries).forEach(function(d) {
+              eCount += Object.keys(candidate.entries[d] || {}).length;
+            });
+            var ts = candidate.updatedAt || 0;
+
+            // 사용자가 직접 수정한(userModified) 데이터이거나, 건수/타임스탬프가 유효한 최신 데이터 선택
+            if (candidate.userModified) {
+              if (!bestParsed || !bestParsed.userModified || ts > bestTimestamp) {
+                bestParsed = candidate;
+                bestEntryCount = eCount;
+                bestTimestamp = ts;
+              }
+            } else if (!bestParsed || (!bestParsed.userModified && (eCount > bestEntryCount || (eCount === bestEntryCount && ts > bestTimestamp)))) {
+              bestParsed = candidate;
+              bestEntryCount = eCount;
+              bestTimestamp = ts;
+            }
+          } catch (e) {}
+        }
+
+        if (bestParsed) {
+          rawSaved = JSON.stringify(bestParsed);
+        }
+      }
+
+      if (rawSaved) {
         try {
-          const parsed = JSON.parse(saved);
-          AppState = { ...AppState, ...parsed };
+          var parsed = typeof rawSaved === 'string' ? JSON.parse(rawSaved) : rawSaved;
+
+          // 만약 구버전(v10 이전)에서 일부 직원(김장미, 이인규, 정봉주, 조준석) 데이터가 유실되었던 상태라면,
+          // 기본 확정 휴무표(DEFAULT_APP_STATE)의 데이터를 밑바탕으로 깔고 그 위에 사용자 입력 데이터를 안전하게 병합!
+          var mergedEntries = JSON.parse(JSON.stringify(DEFAULT_APP_STATE.entries || {}));
+          if (parsed.userModified && parsed.baselineLockedV11) {
+            // v11 이후 사용자가 직접 수정/삭제한 상태는 사용자 상태를 100% 그대로 신뢰 (삭제한 것도 그대로 유지)
+            mergedEntries = parsed.entries || {};
+          } else if (parsed.entries) {
+            // 구버전 데이터와 병합 시: 기존 입력된 모든 날짜/직원 데이터를 하나도 잃지 않고 보존
+            Object.keys(parsed.entries).forEach(function(dStr) {
+              if (!mergedEntries[dStr]) mergedEntries[dStr] = {};
+              Object.keys(parsed.entries[dStr] || {}).forEach(function(sName) {
+                mergedEntries[dStr][sName] = parsed.entries[dStr][sName];
+              });
+            });
+          }
+
+          var mergedDailyBranches = Object.assign({}, DEFAULT_APP_STATE.dailyBranches || {}, parsed.dailyBranches || {});
+          var mergedMonthlyBranches = Object.assign({}, DEFAULT_APP_STATE.monthlyBranches || {}, parsed.monthlyBranches || {});
+
+          AppState = Object.assign({}, DEFAULT_APP_STATE, parsed, {
+            entries: mergedEntries,
+            dailyBranches: mergedDailyBranches,
+            monthlyBranches: mergedMonthlyBranches,
+            baselineLockedV11: true
+          });
         } catch (e) {
           console.error("Load state error", e);
         }
       }
+
       if (!AppState.dailyBranches) AppState.dailyBranches = {};
       if (!AppState.monthlyBranches) AppState.monthlyBranches = {};
+      AppState.baselineLockedV11 = true;
       deduplicateCustomHolidays();
+
+      // 로드 직후 영구 마스터 키에 동기화 저장하여 향후 어떤 버전 업데이트에도 유실 원천 차단
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(AppState));
+      } catch (e) {}
     }
 
     function saveState(immediateCloud = false) {
-      // 1. 브라우저 로컬 저장소 우선 보관 (오프라인 100% 무중단)
+      // 1. 사용자 수정 플래그 및 타임스탬프 기록 후 영구 마스터 저장소 + 호환 키에 다중 보관
       const now = Date.now();
       AppState.updatedAt = now;
+      AppState.userModified = true;
+      AppState.baselineLockedV11 = true;
+      var serialized = JSON.stringify(AppState);
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(AppState));
+        localStorage.setItem(STORAGE_KEY, serialized);
+        localStorage.setItem('JIN_SCHEDULE_PLANNER_2026_12_V4', serialized);
+        localStorage.setItem('JIN_SCHEDULE_PLANNER_2026_12_V3', serialized);
+        window.__JCC_PRESERVED_USER_STATE__ = serialized;
       } catch (e) {
         console.error("Local storage save error", e);
       }
@@ -5651,8 +5760,10 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     }
 
     
-    /* Initialize Listeners */
-    document.addEventListener('DOMContentLoaded', () => {
+    /* Initialize Listeners (DOMContentLoaded & Async OTA Document.write 100% 호환) */
+    function initSchedulePlannerApp() {
+      if (window.__JCC_APP_INITIALIZED__) return;
+      window.__JCC_APP_INITIALIZED__ = true;
       // [구형 PC 최적화] ESC 키 누르면 열려있는 모든 모달 즉시 닫기
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' || e.keyCode === 27) {
@@ -6646,14 +6757,19 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 
       // [사내 보안망 최적화] 초기 1회 연결 확인 후 보안망 차단(오프라인) 상태이면 불필요한 반복 폴링 중단
       pullStateFromCloud(false).then(() => {
-        if (cloudSyncState === 'online') {
+        if (typeof cloudSyncState !== 'undefined' && cloudSyncState === 'online') {
           setTimeout(() => checkCloudAppUpdates(false), 1000);
           setInterval(() => {
-            if (cloudSyncState === 'online') pullStateFromCloud(false);
+            if (typeof cloudSyncState !== 'undefined' && cloudSyncState === 'online') pullStateFromCloud(false);
           }, 30000);
         }
       }).catch(() => {});
-    });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initSchedulePlannerApp);
+    } else {
+      initSchedulePlannerApp();
+    }
   </script>
 </body>
 </html>
