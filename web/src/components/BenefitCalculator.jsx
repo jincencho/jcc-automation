@@ -848,6 +848,66 @@ export default function BenefitCalculator({ onBack }) {
   const [unlockErrorMsg, setUnlockErrorMsg] = useState('');
   const lastActivityRef = React.useRef(Date.now());
 
+  // HTML 오프라인 단일 파일 & 온라인 서버 OTA 최신 기능 동기화 상태
+  const [otaState, setOtaState] = useState(() => {
+    if (typeof window !== 'undefined' && window.__JCC_OTA_STATE__) {
+      return window.__JCC_OTA_STATE__;
+    }
+    return {
+      status: 'idle', // 'idle' | 'checking' | 'downloading' | 'ready_to_apply' | 'up_to_date' | 'offline'
+      activeVersion: (typeof window !== 'undefined' && window.__JCC_ACTIVE_VERSION__) || '2026.11.22',
+      remoteVersion: null,
+      source: (typeof window !== 'undefined' && window.__JCC_VERSION_SOURCE__) || 'embedded'
+    };
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (e) => {
+      if (e && e.detail) {
+        setOtaState((prev) => ({ ...prev, ...e.detail }));
+      }
+    };
+    window.addEventListener('jcc-ota-status', handler);
+    if (window.__JCC_OTA_STATE__) {
+      setOtaState((prev) => ({ ...prev, ...window.__JCC_OTA_STATE__ }));
+    }
+    return () => window.removeEventListener('jcc-ota-status', handler);
+  }, []);
+
+  // [🔄 최신 기능 업데이트] 버튼 클릭 핸들러
+  const handleTriggerOtaUpdate = async () => {
+    if (typeof window === 'undefined') return;
+    if (typeof window.__JCC_CHECK_OTA_UPDATE__ === 'function') {
+      window.__JCC_CHECK_OTA_UPDATE__(true);
+      return;
+    }
+    // 일반 온라인 웹(Vercel) 또는 로컬 개발 환경인 경우: 서버 메타 확인 후 브라우저 리로드
+    try {
+      showAccountTempNotice('🔄 온라인 서버의 최신 기능 버전을 확인하고 있습니다...');
+      const res = await fetch('/ota-meta.json?_t=' + Date.now());
+      if (res.ok) {
+        const meta = await res.json();
+        const curVer = otaState.activeVersion;
+        if (meta && meta.version && meta.version > curVer) {
+          const proceed = window.confirm(
+            `✨ 새로운 최신 기능(v${meta.version})이 준비되어 있습니다.\n지금 화면을 새로고침하여 최신 기능을 적용하시겠습니까?`
+          );
+          if (proceed) {
+            window.location.reload();
+          }
+          return;
+        } else {
+          alert(`✅ 현재 이미 온라인 서버의 최신 기능(v${meta?.version || curVer})을 사용 중입니다.`);
+          return;
+        }
+      }
+      window.location.reload();
+    } catch {
+      window.location.reload();
+    }
+  };
+
   // 관리자 전용 계정 설정 모달 상태
   const [showAdminAccountModal, setShowAdminAccountModal] = useState(false);
   const [newAccId, setNewAccId] = useState('');
@@ -6919,13 +6979,51 @@ export default function BenefitCalculator({ onBack }) {
   // ============================================================================
   if (!isAuthenticated) {
     return (
-      <section className="container" style={{ paddingTop: '3.2rem', minHeight: '82vh' }}>
+      <section className="container" style={{ paddingTop: '2.5rem', minHeight: '82vh' }}>
+        {otaState.status === 'ready_to_apply' && (
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #b45309, #d97706)',
+              color: '#ffffff',
+              padding: '0.65rem 1rem',
+              borderRadius: '10px',
+              textAlign: 'center',
+              fontSize: '0.86rem',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.75rem',
+              marginBottom: '1rem',
+              boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)'
+            }}
+          >
+            <span>✨ 온라인 서버에 새로운 기능(v{otaState.remoteVersion || ''})이 업데이트되었습니다!</span>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              style={{
+                background: '#ffffff',
+                color: '#92400e',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '0.3rem 0.75rem',
+                fontWeight: 900,
+                fontSize: '0.78rem',
+                cursor: 'pointer'
+              }}
+            >
+              🚀 지금 최신 기능 적용하기
+            </button>
+          </div>
+        )}
+
         {onBack && (
           <button onClick={onBack} className="btn-back">
             <span>←</span> 홈으로 돌아가기
           </button>
         )}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.8rem' }}>
           <div
             className="glass-panel"
             style={{
@@ -6937,6 +7035,55 @@ export default function BenefitCalculator({ onBack }) {
               boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)'
             }}
           >
+            {/* 오프라인 HTML 최신 기능 업데이트 버튼 바 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', padding: '0.4rem 0.65rem', background: 'rgba(15, 23, 42, 0.7)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <span style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600 }}>
+                {otaState.activeVersion ? `버전: v${otaState.activeVersion}` : '오프라인 HTML'}
+              </span>
+              <button
+                type="button"
+                onClick={otaState.status === 'ready_to_apply' ? () => window.location.reload() : handleTriggerOtaUpdate}
+                disabled={otaState.status === 'checking' || otaState.status === 'downloading'}
+                style={{
+                  height: '28px',
+                  padding: '0 0.65rem',
+                  borderRadius: '6px',
+                  border: otaState.status === 'ready_to_apply' ? '1px solid #fbbf24' : '1px solid rgba(56, 189, 248, 0.45)',
+                  background: otaState.status === 'ready_to_apply' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'rgba(14, 165, 233, 0.14)',
+                  color: otaState.status === 'ready_to_apply' ? '#ffffff' : '#7dd3fc',
+                  fontSize: '0.74rem',
+                  fontWeight: 800,
+                  cursor: (otaState.status === 'checking' || otaState.status === 'downloading') ? 'wait' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem'
+                }}
+                title="온라인 서버의 최신 기능 추가 및 수정사항을 지금 즉시 동기화합니다."
+              >
+                {otaState.status === 'ready_to_apply' ? (
+                  <>
+                    <Sparkles size={12} color="#ffffff" />
+                    <span>🚀 최신 기능 적용하기</span>
+                  </>
+                ) : otaState.status === 'downloading' ? (
+                  <>
+                    <RotateCw size={12} />
+                    <span>다운로드 중...</span>
+                  </>
+                ) : otaState.status === 'checking' ? (
+                  <>
+                    <RotateCw size={12} />
+                    <span>확인 중...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCw size={12} />
+                    <span>🔄 최신 기능 업데이트</span>
+                  </>
+                )}
+              </button>
+            </div>
+
             {/* 상단 탭 전환: [기존 계정 로그인] vs [신규 아이디 사용 신청] */}
             <div
               style={{
@@ -7526,6 +7673,52 @@ export default function BenefitCalculator({ onBack }) {
   // 접속자 정보 · 권한 레벨 표시 및 관리자 계정설정 바 + 계산기 모드 전환 탭 바
   const renderModeTabs = () => (
     <div className="container no-print" style={{ maxWidth: '1100px', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+      {/* 새 기능 다운로드 완료 시 즉시 적용 안내 배너 */}
+      {otaState.status === 'ready_to_apply' && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #b45309, #d97706)',
+            color: '#ffffff',
+            padding: '0.65rem 1rem',
+            borderRadius: '10px',
+            textAlign: 'center',
+            fontSize: '0.86rem',
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.6rem',
+            boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Sparkles size={18} color="#fde68a" />
+            <span>✨ 온라인 서버에 새로운 기능(v{otaState.remoteVersion || ''})이 다운로드되었습니다!</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            style={{
+              background: '#ffffff',
+              color: '#92400e',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '0.35rem 0.85rem',
+              fontWeight: 900,
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+            }}
+          >
+            🚀 지금 최신 기능 적용하기
+          </button>
+        </div>
+      )}
+
       {/* 상단 접속자 계정 & 레벨 상태 바 */}
       <div
         style={{
@@ -7586,6 +7779,57 @@ export default function BenefitCalculator({ onBack }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+          {/* [🔄 최신 기능 업데이트] 버튼 */}
+          <button
+            type="button"
+            onClick={otaState.status === 'ready_to_apply' ? () => window.location.reload() : handleTriggerOtaUpdate}
+            disabled={otaState.status === 'checking' || otaState.status === 'downloading'}
+            style={{
+              height: '32px',
+              padding: '0 0.8rem',
+              borderRadius: '8px',
+              border:
+                otaState.status === 'ready_to_apply'
+                  ? '1.5px solid #fbbf24'
+                  : '1px solid rgba(56, 189, 248, 0.45)',
+              background:
+                otaState.status === 'ready_to_apply'
+                  ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                  : 'rgba(14, 165, 233, 0.14)',
+              color: otaState.status === 'ready_to_apply' ? '#ffffff' : '#7dd3fc',
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              cursor: (otaState.status === 'checking' || otaState.status === 'downloading') ? 'wait' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              boxShadow: otaState.status === 'ready_to_apply' ? '0 0 12px rgba(245, 158, 11, 0.5)' : 'none'
+            }}
+            title="온라인 서버의 최신 기능 추가 및 수정사항을 지금 즉시 동기화합니다."
+          >
+            {otaState.status === 'ready_to_apply' ? (
+              <>
+                <Sparkles size={14} color="#ffffff" />
+                <span>🚀 최신 기능 적용</span>
+              </>
+            ) : otaState.status === 'downloading' ? (
+              <>
+                <RotateCw size={13} />
+                <span>동기화 중...</span>
+              </>
+            ) : otaState.status === 'checking' ? (
+              <>
+                <RotateCw size={13} />
+                <span>확인 중...</span>
+              </>
+            ) : (
+              <>
+                <RotateCw size={13} />
+                <span>최신 기능 업데이트</span>
+              </>
+            )}
+          </button>
+
           {isAdminUser && (
             <button
               type="button"
