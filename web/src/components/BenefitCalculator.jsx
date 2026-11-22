@@ -2272,12 +2272,13 @@ export default function BenefitCalculator({ onBack }) {
           ? Number(subSegmentCardOverrides[endMonth]) || 0
           : cardMonthlyNum);
 
-    // 삼성카드의 경우: 구독료 7만원 이상일 때 70만원 실적에 26,000원, 7만원 미만이면 30만원 구간에 16,000원 자동 반영 (70만원 구간 제한)
+    // 삼성카드의 경우: 구독료 7만원 미만이면 30만원 구간(최대 16,000원)으로 제한
     if (isSamsungCard && subCards.length > 0) {
       if (baseMonthly < 70000) {
         if (targetCard > 16000) targetCard = 16000;
         if (!hasManualCardOverride && (targetCard === 0 || targetCard > 16000)) targetCard = 16000;
-      } else if (!hasManualCardOverride && (targetCard === 0 || targetCard === 16000)) {
+      } else if (!hasManualCardOverride && targetCard === 0) {
+        // 미입력(0)일 때만 기본값 26,000원 적용 (사용자가 직접 16,000원 또는 타 금액을 입력했으면 그대로 유지)
         targetCard = 26000;
       }
     }
@@ -2513,11 +2514,12 @@ export default function BenefitCalculator({ onBack }) {
     const cardMonths = Number(c.months) || modelMonths;
     let monthlyNum = Number(c.monthly) || 0;
 
-    // 삼성카드인 경우 월할인 미입력 시 대상 구독료 기준(7만원 이상 26,000 / 미만 16,000) 자동 적용 (구독료 7만원 미만이면 16,000원 초과 불가)
+    // 삼성카드인 경우 월할인 미입력(0) 시 대상 구독료 기준(7만원 이상 26,000 / 미만 16,000) 자동 적용 (구독료 7만원 미만이면 16,000원 초과 불가)
     if (isSamsung) {
       if (planMonthlyFee < 70000) {
         if (monthlyNum > 16000 || monthlyNum === 0) monthlyNum = 16000;
-      } else if (monthlyNum === 0 || monthlyNum === 16000) {
+      } else if (monthlyNum === 0) {
+        // 미입력(0)일 때만 26,000원 자동 적용 (사용자가 16,000원이나 다른 금액을 직접 입력했으면 강제 변경하지 않음)
         monthlyNum = 26000;
       }
     }
@@ -2608,7 +2610,7 @@ export default function BenefitCalculator({ onBack }) {
     ? 0
     : isSingleCardMode
       ? (isMixedMode
-          ? (cardDetails[0]?.isSamsung && (!subCards[0]?.monthly || Number(subCards[0]?.monthly) === 0 || Number(subCards[0]?.monthly) === 16000 || Number(subCards[0]?.monthly) === 26000)
+          ? (cardDetails[0]?.isSamsung && (!subCards[0]?.monthly || Number(subCards[0]?.monthly) === 0)
               ? (subSegments[0]?.appliedCard || (cardDetails[0]?.planMonthlyFee >= 70000 ? 26000 : 16000))
               : (Number(subCards[0]?.monthly) || cardMonthlyNum))
           : (subSegments[0]?.appliedCard || cardMonthlyNum))
@@ -14194,6 +14196,12 @@ export default function BenefitCalculator({ onBack }) {
                                           return;
                                         }
                                         handleSegmentSpendOverride(seg.endMonth, val, idx === 0);
+                                        if (isSamsung && (val.includes('30') || val === '30만') && segCardVal === 26000) {
+                                          handleSegmentCardOverride(seg.endMonth, 16000, idx === 0);
+                                        }
+                                        if (isSamsung && seg.baseMonthly >= 70000 && (val.includes('70') || val === '70만') && segCardVal === 16000) {
+                                          handleSegmentCardOverride(seg.endMonth, 26000, idx === 0);
+                                        }
                                       }}
                                       placeholder={idx === 0 ? '예: 70만 / 50만' : '예: 30만 / 50만'}
                                       style={{
@@ -14232,9 +14240,16 @@ export default function BenefitCalculator({ onBack }) {
                                         if (isSamsung && seg.baseMonthly < 70000 && numVal > 16000) {
                                           alert(`삼성카드는 월 구독료가 7만원 미만(${formatWon(seg.baseMonthly)})일 때 최대 16,000원(30만원 실적)까지만 청구할인 가능합니다.`);
                                           handleSegmentCardOverride(seg.endMonth, 16000, idx === 0);
+                                          handleSegmentSpendOverride(seg.endMonth, '30만', idx === 0);
                                           return;
                                         }
                                         handleSegmentCardOverride(seg.endMonth, numVal, idx === 0);
+                                        if (isSamsung && numVal === 16000 && isSpend70kOrMore(segSpendVal)) {
+                                          handleSegmentSpendOverride(seg.endMonth, '30만', idx === 0);
+                                        }
+                                        if (isSamsung && seg.baseMonthly >= 70000 && numVal === 26000 && (segSpendVal?.includes('30') || segSpendVal === '30만')) {
+                                          handleSegmentSpendOverride(seg.endMonth, '70만', idx === 0);
+                                        }
                                       }}
                                       placeholder="예: 26,000 / 16,000"
                                       style={{
@@ -14290,8 +14305,20 @@ export default function BenefitCalculator({ onBack }) {
                                       if (cardIdx === 0) setSubSegmentSpendOverrides({});
                                       return;
                                     }
-                                    handleUpdateCard(cardItem.id, { minSpend: val });
-                                    if (cardIdx === 0) setSubSegmentSpendOverrides({});
+                                    const patch = { minSpend: val };
+                                    // 삼성카드 실적 30만 입력 시: 청구할인이 26,000원이면 16,000원으로 자동 동기화
+                                    if (isSamsung && (val.includes('30') || val === '30만') && Number(cardItem.monthly) === 26000) {
+                                      patch.monthly = 16000;
+                                    }
+                                    // 삼성카드 실적 70만 입력 시: 구독료 7만 이상이고 청구할인이 16,000원이면 26,000원으로 자동 동기화
+                                    if (isSamsung && !isSamsungFeeUnder70k && (val.includes('70') || val === '70만') && Number(cardItem.monthly) === 16000) {
+                                      patch.monthly = 26000;
+                                    }
+                                    handleUpdateCard(cardItem.id, patch);
+                                    if (cardIdx === 0) {
+                                      setSubSegmentSpendOverrides({});
+                                      if (patch.monthly !== undefined) setSubSegmentCardOverrides({});
+                                    }
                                   }}
                                   placeholder="필요 실적 직접 입력 (예: 50만 / 30만원)"
                                   style={{
@@ -14333,12 +14360,24 @@ export default function BenefitCalculator({ onBack }) {
                                     const val = raw ? parseInt(raw, 10) : 0;
                                     if (isSamsungFeeUnder70k && val > 16000) {
                                       alert(`삼성카드는 적용 모델의 월 구독료가 7만원 미만(${formatWon(pFee)})일 경우 최대 16,000원(30만원 실적)까지만 청구할인 가능합니다.`);
-                                      handleUpdateCard(cardItem.id, { monthly: 16000 });
+                                      handleUpdateCard(cardItem.id, { monthly: 16000, minSpend: '30만' });
                                       if (cardIdx === 0) setSubSegmentCardOverrides({});
                                       return;
                                     }
-                                    handleUpdateCard(cardItem.id, { monthly: val });
-                                    if (cardIdx === 0) setSubSegmentCardOverrides({});
+                                    const patch = { monthly: val };
+                                    // 삼성카드 16,000원 입력 시 실적이 70만이면 30만으로 자동 동기화
+                                    if (isSamsung && val === 16000 && isSpend70kOrMore(cardItem.minSpend)) {
+                                      patch.minSpend = '30만';
+                                    }
+                                    // 삼성카드 26,000원 입력 시 실적이 30만이면 70만으로 자동 동기화 (구독료 7만 이상일 때)
+                                    if (isSamsung && !isSamsungFeeUnder70k && val === 26000 && (cardItem.minSpend?.includes('30') || cardItem.minSpend === '30만')) {
+                                      patch.minSpend = '70만';
+                                    }
+                                    handleUpdateCard(cardItem.id, patch);
+                                    if (cardIdx === 0) {
+                                      setSubSegmentCardOverrides({});
+                                      if (patch.minSpend !== undefined) setSubSegmentSpendOverrides({});
+                                    }
                                   }}
                                   placeholder="월 청구할인 금액 직접 입력 (예: 26,000 / 16,000)"
                                   style={{
