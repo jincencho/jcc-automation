@@ -725,6 +725,22 @@ const getDisplayUserName = (user) => {
   return rawName || rawId;
 };
 
+// 최근 접속 일시 포맷 헬퍼 (MM/DD HH:mm)
+const formatLoginTime = (isoStr) => {
+  if (!isoStr) return '';
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return '';
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${m}/${day} ${hh}:${mm}`;
+  } catch {
+    return '';
+  }
+};
+
 function sanitizeUserAccounts(rawList) {
   if (!Array.isArray(rawList) || rawList.length === 0) {
     return DEFAULT_USER_ACCOUNTS;
@@ -747,6 +763,8 @@ function sanitizeUserAccounts(rawList) {
               ? 'lv2'
               : 'lv1',
         isMaster: Boolean(it.isMaster),
+        loginCount: Number(it.loginCount) || 0,
+        lastLoginAt: it.lastLoginAt || '',
         createdAt: it.createdAt || '2026-11-21',
         requestedAt: it.requestedAt || it.createdAt || '2026-11-21'
       };
@@ -1441,10 +1459,12 @@ export default function BenefitCalculator({ onBack }) {
     setIsAccountCloudSyncing(true);
     const res = await saveCloudUserAccounts(sanitized);
     setIsAccountCloudSyncing(false);
-    if (res.success) {
-      showAccountTempNotice(`✓ ${noticeMsg} (로컬·HTML·온라인 클라우드 실시간 반영 완료)`);
-    } else {
-      showAccountTempNotice(`✓ ${noticeMsg} (현재 기기에 저장됨)`);
+    if (noticeMsg) {
+      if (res.success) {
+        showAccountTempNotice(`✓ ${noticeMsg} (로컬·HTML·온라인 클라우드 실시간 반영 완료)`);
+      } else {
+        showAccountTempNotice(`✓ ${noticeMsg} (현재 기기에 저장됨)`);
+      }
     }
   };
 
@@ -1578,6 +1598,23 @@ export default function BenefitCalculator({ onBack }) {
         sessionStorage.removeItem(AUTH_SCREEN_LOCKED_KEY);
         sessionStorage.setItem(AUTH_LAST_ACTIVE_KEY, String(nowTs));
       } catch {}
+
+      // 매니저/사용자 접속 횟수 및 최근 접속 일시 기록
+      try {
+        const nowIso = new Date().toISOString();
+        const updatedAccounts = userAccounts.map((acc) => {
+          if (acc.uid === matched.uid || acc.id.toLowerCase() === matched.id.toLowerCase()) {
+            return {
+              ...acc,
+              loginCount: (Number(acc.loginCount) || 0) + 1,
+              lastLoginAt: nowIso
+            };
+          }
+          return acc;
+        });
+        persistAndSyncUserAccounts(updatedAccounts, null).catch(() => {});
+      } catch {}
+
       setCurrentUser(sessionUser);
       setIsAuthenticated(true);
       setIsScreenLocked(false);
@@ -6473,7 +6510,7 @@ export default function BenefitCalculator({ onBack }) {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#e2e8f0' }}>
-                  승인 완료된 활성 계정 목록 ({approvedUserAccounts.length}개) — 클릭 한 번으로 Lv.1 ↔ Lv.2 권한을 즉시 변경할 수 있습니다
+                  승인 완료된 활성 계정 목록 ({approvedUserAccounts.length}개) — 매니저별 접속 횟수·최근 접속 확인 및 권한(Lv.1 ↔ Lv.2) 즉시 변경
                 </span>
                 <button
                   type="button"
@@ -6666,18 +6703,40 @@ export default function BenefitCalculator({ onBack }) {
                             </span>
 
                             <div>
-                              <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
                                 <span>{getDisplayUserName(acc)}</span>
                                 {isMe && (
                                   <span style={{ fontSize: '0.7rem', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '1px 6px', borderRadius: '4px' }}>
                                     현재 접속중
                                   </span>
                                 )}
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 800,
+                                    padding: '1px 7px',
+                                    borderRadius: '6px',
+                                    background: (acc.loginCount || 0) > 0 ? 'rgba(56, 189, 248, 0.15)' : 'rgba(148, 163, 184, 0.12)',
+                                    border: (acc.loginCount || 0) > 0 ? '1px solid rgba(56, 189, 248, 0.45)' : '1px solid rgba(148, 163, 184, 0.25)',
+                                    color: (acc.loginCount || 0) > 0 ? '#38bdf8' : '#94a3b8'
+                                  }}
+                                  title="매니저가 지금까지 로그인하여 계산기를 이용한 총 접속 횟수입니다."
+                                >
+                                  📊 접속 {Number(acc.loginCount) || 0}회
+                                </span>
                               </div>
                               <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', fontFamily: 'monospace' }}>
                                 ID: <strong style={{ color: '#38bdf8' }}>{maskAccountId(acc.id)}</strong>
                                 <span style={{ margin: '0 8px', color: '#475569' }}>|</span>
                                 PW: <strong style={{ color: '#fcd34d' }}>{showPasswordsInAdmin ? (isProtectedAdminId(acc.id) ? '••••••••' : acc.pw) : '••••••'}</strong>
+                                {acc.lastLoginAt && (
+                                  <>
+                                    <span style={{ margin: '0 8px', color: '#475569' }}>|</span>
+                                    <span style={{ color: '#94a3b8', fontSize: '0.74rem' }}>
+                                      최근: <strong style={{ color: '#a5f3fc' }}>{formatLoginTime(acc.lastLoginAt)}</strong>
+                                    </span>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
