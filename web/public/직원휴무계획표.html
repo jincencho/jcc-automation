@@ -4,69 +4,17 @@
   <!-- JCC CLOUD OTA HOT-UPDATE BOOTLOADER -->
   <script id="jcc-ota-bootloader">
     (function() {
-      window.__JCC_EMBEDDED_VERSION__ = "2026.11.22-v12";
-      window.__JCC_EMBEDDED_BUILT_AT__ = "2026-11-22 18:45";
-      window.__JCC_ACTIVE_VERSION__ = "2026.11.22-v12";
+      window.__JCC_EMBEDDED_VERSION__ = "2026.11.22-v99";
+      window.__JCC_BUILD_NUMBER__ = 2026112213;
+      window.__JCC_EMBEDDED_BUILT_AT__ = "2026-11-22 18:56";
+      window.__JCC_ACTIVE_VERSION__ = "2026.11.22-v99";
 
-      var DB_NAME = "jcc_staff_schedule_ota_v1";
-      var STORE_NAME = "bundles";
-      var BUNDLE_KEY = "latest_html_bundle";
-
-      function openDb() {
-        return new Promise(function(resolve) {
-          if (typeof indexedDB === 'undefined') return resolve(null);
-          try {
-            var req = indexedDB.open(DB_NAME, 1);
-            req.onupgradeneeded = function(e) {
-              var db = e.target.result;
-              if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
-            };
-            req.onsuccess = function(e) { resolve(e.target.result); };
-            req.onerror = function() { resolve(null); };
-          } catch(e) { resolve(null); }
-        });
-      }
-
-      function getCachedBundle() {
-        return openDb().then(function(db) {
-          if (!db) return null;
-          return new Promise(function(resolve) {
-            try {
-              var tx = db.transaction(STORE_NAME, 'readonly');
-              var store = tx.objectStore(STORE_NAME);
-              var req = store.get(BUNDLE_KEY);
-              req.onsuccess = function() { resolve(req.result || null); };
-              req.onerror = function() { resolve(null); };
-            } catch(e) { resolve(null); }
-          });
-        });
-      }
-
-      // 이미 OTA 부팅된 상태이면 중복 실행 방지
-      if (window.__JCC_OTA_BOOTED__) return;
-
-      // 내장된 버전보다 최신인 클라우드 패치본이 IndexedDB에 있으면 사용자 입력 휴무 데이터를 100% 보존한 채로 부팅
-      getCachedBundle().then(function(cached) {
-        if (cached && cached.version && cached.version > window.__JCC_EMBEDDED_VERSION__ && cached.fullHtml) {
-          console.log('[JCC OTA] Booting newer cloud-cached version (preserving user schedule data):', cached.version);
-          try {
-            var masterData = localStorage.getItem('JIN_SCHEDULE_MASTER_PERMANENT_DATA') ||
-                             localStorage.getItem('JIN_SCHEDULE_PLANNER_2026_12_V4') ||
-                             localStorage.getItem('JIN_SCHEDULE_PLANNER_2026_12_V3');
-            if (masterData) {
-              window.__JCC_PRESERVED_USER_STATE__ = masterData;
-              localStorage.setItem('JIN_SCHEDULE_MASTER_PERMANENT_DATA', masterData);
-            }
-          } catch (e) {}
-          window.__JCC_OTA_BOOTED__ = true;
-          window.__JCC_APP_INITIALIZED__ = false;
-          window.__JCC_ACTIVE_VERSION__ = cached.version;
-          window.__JCC_VERSION_SOURCE__ = 'cloud_ota';
-          document.open();
-          document.write(cached.fullHtml);
-          document.close();
+      // 구버전(v6~v9) IndexedDB document.write 캐시가 화면 초기화를 막는 현상을 원천 제거
+      try {
+        if (typeof indexedDB !== 'undefined') {
+          indexedDB.deleteDatabase("jcc_staff_schedule_ota_v1");
         }
-      });
+      } catch (e) {}
     })();
   </script>
   <meta charset="UTF-8">
@@ -2376,7 +2324,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         </div>
         <div style="font-size: 0.78rem; color: #64748b; line-height: 1.6;">
           • 연동 서버: <code style="background: #e2e8f0; padding: 1px 5px; border-radius: 4px; color: #1e293b;">nuptkcozqdwirafrbfyx.supabase.co</code> (진센조 클라우드)<br>
-          • 시스템 버전: <span id="modalAppVersionText" style="font-weight: 700; color: #0f172a;">v2026.11.22-v12</span><br>
+          • 시스템 버전: <span id="modalAppVersionText" style="font-weight: 700; color: #0f172a;">v2026.11.22-v99</span><br>
           • 최근 클라우드 동기화: <span id="modalLastSyncTime" style="font-weight: 700; color: #0f172a;">방금 전</span>
         </div>
       </div>
@@ -3259,7 +3207,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       tableName: "saved_quotes",
       scheduleDocId: "__jcc_staff_schedule_v1__",
       metaDocId: "__jcc_staff_schedule_meta_v1__",
-      appVersion: "2026.11.22-v12",
+      appVersion: "2026.11.22-v99",
       appName: "진센조 직원 휴무 계획표"
     };
 
@@ -3525,7 +3473,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
             const meta = rows[0].data;
             const currentVer = window.__JCC_ACTIVE_VERSION__ || window.__JCC_EMBEDDED_VERSION__ || JCC_CLOUD_CONFIG.appVersion;
 
-            if (meta.version && meta.version > currentVer) {
+            const parseVerNum = (v) => {
+              const m = String(v || '').match(/v(\d+)$/);
+              return m ? parseInt(m[1], 10) : 0;
+            };
+            if (meta.version && parseVerNum(meta.version) > parseVerNum(currentVer)) {
               console.log(`[JCC OTA] New version detected: v${meta.version} (current: v${currentVer})`);
 
               // 클라우드 서버에서 최신 수정본 HTML 번들 다운로드
