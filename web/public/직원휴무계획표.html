@@ -4,9 +4,9 @@
   <!-- JCC CLOUD OTA HOT-UPDATE BOOTLOADER -->
   <script id="jcc-ota-bootloader">
     (function() {
-      window.__JCC_EMBEDDED_VERSION__ = "2026.11.22-v7";
-      window.__JCC_EMBEDDED_BUILT_AT__ = "2026-11-22 18:00";
-      window.__JCC_ACTIVE_VERSION__ = "2026.11.22-v7";
+      window.__JCC_EMBEDDED_VERSION__ = "2026.11.22-v8";
+      window.__JCC_EMBEDDED_BUILT_AT__ = "2026-11-22 18:20";
+      window.__JCC_ACTIVE_VERSION__ = "2026.11.22-v8";
 
       var DB_NAME = "jcc_staff_schedule_ota_v1";
       var STORE_NAME = "bundles";
@@ -1523,6 +1523,151 @@
       transform: scale(1.08);
     }
 
+
+    /* === [v8 최적화] 근무입력(스케줄러) PC 한 화면 100% 맞춤 (가로/세로 스크롤 제거) === */
+    body.matrix-fullview-mode header {
+      padding: 8px 16px !important;
+    }
+    body.matrix-fullview-mode .brand-title h1 {
+      font-size: 1.15rem !important;
+    }
+    body.matrix-fullview-mode .season-banner,
+    body.matrix-fullview-mode .kpi-grid {
+      display: none !important;
+    }
+    body.matrix-fullview-mode main {
+      max-width: 100% !important;
+      margin: 6px auto !important;
+      padding: 0 8px !important;
+    }
+    body.matrix-fullview-mode .tab-bar {
+      padding: 5px 8px !important;
+      margin-bottom: 6px !important;
+    }
+    body.matrix-fullview-mode .tab-btn {
+      padding: 6px 14px !important;
+      font-size: 0.85rem !important;
+    }
+
+    #tab-matrix .matrix-card {
+      border-radius: 10px;
+    }
+    #tab-matrix .matrix-toolbar {
+      padding: 6px 12px !important;
+      gap: 8px !important;
+    }
+    #tab-matrix .matrix-toolbar .btn {
+      padding: 4px 10px !important;
+      font-size: 0.78rem !important;
+    }
+    #tab-matrix .table-scroll-container {
+      max-height: none !important;
+      overflow-x: hidden !important;
+      overflow-y: visible !important;
+      width: 100% !important;
+    }
+    #tab-matrix .matrix-table {
+      width: 100% !important;
+      table-layout: fixed !important;
+      border-collapse: collapse !important;
+      font-size: 0.72rem !important;
+    }
+    #tab-matrix .matrix-table th,
+    #tab-matrix .matrix-table td {
+      padding: 1px 1px !important;
+      height: 23px !important;
+      line-height: 1.1 !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      box-sizing: border-box !important;
+    }
+    #tab-matrix .matrix-table thead tr th {
+      height: 20px !important;
+      font-size: 0.7rem !important;
+    }
+    #tab-matrix .matrix-table thead tr:nth-child(2) th {
+      top: 20px !important;
+      font-size: 0.74rem !important;
+      font-weight: 800 !important;
+    }
+    #tab-matrix .matrix-table thead tr:nth-child(3) th {
+      top: 40px !important;
+      height: 18px !important;
+      font-size: 0.6rem !important;
+      letter-spacing: -0.5px !important;
+    }
+    #tab-matrix .sticky-col-1 {
+      width: 68px !important;
+      min-width: 68px !important;
+      max-width: 68px !important;
+      padding: 1px 3px !important;
+      font-size: 0.75rem !important;
+    }
+    #tab-matrix .sticky-col-2 {
+      left: 68px !important;
+      width: 50px !important;
+      min-width: 50px !important;
+      max-width: 50px !important;
+      padding: 1px 2px !important;
+      font-size: 0.68rem !important;
+    }
+    #tab-matrix .sum-col-num {
+      width: 30px !important;
+      min-width: 30px !important;
+      max-width: 30px !important;
+      font-size: 0.72rem !important;
+    }
+    #tab-matrix .sum-col-chk {
+      width: 54px !important;
+      min-width: 54px !important;
+      max-width: 54px !important;
+      font-size: 0.68rem !important;
+    }
+    #tab-matrix .matrix-cell {
+      width: auto !important;
+      min-width: 0 !important;
+      height: 23px !important;
+      font-size: 0.7rem !important;
+      letter-spacing: -0.6px !important;
+    }
+    #tab-matrix .matrix-cell:hover {
+      background: #bfdbfe !important;
+      box-shadow: inset 0 0 0 1.5px #1d4ed8 !important;
+      z-index: 2;
+    }
+    #tab-matrix .matrix-name-cell {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      padding: 1px 2px;
+      border-radius: 4px;
+      transition: background 0.12s;
+    }
+    #tab-matrix .matrix-name-cell:hover {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    #tab-matrix .matrix-name-cell .edit-icon {
+      font-size: 0.65rem;
+      color: #3b82f6;
+      opacity: 0.75;
+    }
+    #tab-matrix .total-row td {
+      height: 21px !important;
+      font-size: 0.7rem !important;
+    }
+    #tab-matrix .status-short {
+      padding: 1px 3px !important;
+      font-size: 0.64rem !important;
+      letter-spacing: -0.4px !important;
+    }
+    #tab-matrix .status-ok {
+      font-size: 0.66rem !important;
+      letter-spacing: -0.3px !important;
+    }
+
   </style>
   <style id="dynamicThemeStyles"></style>
 <script id="xlsx-mini-embedded">
@@ -1731,26 +1876,27 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
           <table class="matrix-table" id="matrixTable">
             <thead>
               <tr id="matrixHeaderWeekdays">
-                <th class="sticky-col-1">직원명</th>
+                <th class="sticky-col-1">직원명(가나다)</th>
                 <th class="sticky-col-2">소속</th>
                 <!-- Day of week th injected here -->
-                <th class="summary-th" colspan="3">당월 집계 및 주간 점검</th>
+                <th class="summary-th sum-col-num" colspan="2">당월합계</th>
+                <th class="summary-th sum-col-chk">주간점검</th>
               </tr>
               <tr id="matrixHeaderDates">
                 <th class="sticky-col-1">날짜</th>
-                <th class="sticky-col-2">-</th>
+                <th class="sticky-col-2">지점</th>
                 <!-- Dates th injected here -->
-                <th class="summary-th">기본휴무</th>
-                <th class="summary-th">추가휴무</th>
-                <th class="summary-th">주간 필수점검</th>
+                <th class="summary-th sum-col-num">기본</th>
+                <th class="summary-th sum-col-num">추가</th>
+                <th class="summary-th sum-col-chk">필수휴무</th>
               </tr>
               <tr id="matrixHeaderHolidays">
-                <th class="sticky-col-1">공휴일</th>
+                <th class="sticky-col-1">공휴일/이슈</th>
                 <th class="sticky-col-2">-</th>
                 <!-- Holiday names injected here -->
-                <th class="summary-th">권장: 2일/주</th>
-                <th class="summary-th">연차 등</th>
-                <th class="summary-th">1주~5주</th>
+                <th class="summary-th sum-col-num" style="font-size:0.62rem;">2일/주</th>
+                <th class="summary-th sum-col-num" style="font-size:0.62rem;">연차등</th>
+                <th class="summary-th sum-col-chk" style="font-size:0.62rem;">1~5주</th>
               </tr>
             </thead>
             <tbody id="matrixTableBody">
@@ -1759,13 +1905,13 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
             <tfoot>
               <tr class="total-row" id="matrixFooterMainAbsence">
                 <td class="sticky-col-1">본점 부재</td>
-                <td class="sticky-col-2">한도: 8명</td>
+                <td class="sticky-col-2">한도8</td>
                 <!-- Main branch daily absence counts injected here -->
                 <td colspan="3">-</td>
               </tr>
               <tr class="total-row" id="matrixFooterGalAbsence">
                 <td class="sticky-col-1">갤러리아</td>
-                <td class="sticky-col-2">한도: 2명</td>
+                <td class="sticky-col-2">한도2</td>
                 <!-- Galleria daily absence counts injected here -->
                 <td colspan="3">-</td>
               </tr>
@@ -2194,7 +2340,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         </div>
         <div style="font-size: 0.78rem; color: #64748b; line-height: 1.6;">
           • 연동 서버: <code style="background: #e2e8f0; padding: 1px 5px; border-radius: 4px; color: #1e293b;">nuptkcozqdwirafrbfyx.supabase.co</code> (진센조 클라우드)<br>
-          • 시스템 버전: <span id="modalAppVersionText" style="font-weight: 700; color: #0f172a;">v2026.11.22-v7</span><br>
+          • 시스템 버전: <span id="modalAppVersionText" style="font-weight: 700; color: #0f172a;">v2026.11.22-v8</span><br>
           • 최근 클라우드 동기화: <span id="modalLastSyncTime" style="font-weight: 700; color: #0f172a;">방금 전</span>
         </div>
       </div>
@@ -2917,7 +3063,12 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         }
       });
 
-      // 지점(본점, 갤러리아) 행이 누락되었으면 하단에 1개씩만 보장
+      // 일반 직원 명단 언제나 가나다순(한글 사전순) 자동 정렬! (추가/수정/불러오기 시 항상 유지)
+      cleanStaff.sort(function(a, b) {
+        return a.name.localeCompare(b.name, 'ko');
+      });
+
+      // 지점(본점, 갤러리아) 행이 누락되었으면 하단에 1개씩만 보장 (본점 -> 갤러리아 순서 고정)
       if (!seenStaffNames.has('본점')) {
         storeStaff.push({ id: 901, name: '본점', branch: '본점', isStore: true });
         seenStaffNames.add('본점');
@@ -2926,6 +3077,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         storeStaff.push({ id: 902, name: '갤러리아', branch: '갤러리아', isStore: true });
         seenStaffNames.add('갤러리아');
       }
+      storeStaff.sort(function(a, b) {
+        if (a.name === '본점') return -1;
+        if (b.name === '본점') return 1;
+        return a.name.localeCompare(b.name, 'ko');
+      });
 
       AppState.staff = cleanStaff.concat(storeStaff);
 
@@ -2992,7 +3148,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       tableName: "saved_quotes",
       scheduleDocId: "__jcc_staff_schedule_v1__",
       metaDocId: "__jcc_staff_schedule_meta_v1__",
-      appVersion: "2026.11.22-v7",
+      appVersion: "2026.11.22-v8",
       appName: "진센조 직원 휴무 계획표"
     };
 
@@ -3961,7 +4117,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       const trHolidays = document.getElementById('matrixHeaderHolidays');
 
       // Clear existing date columns (keep sticky cols 1 & 2, and last 3 summary cols)
-      while (trWeekdays.children.length > 3) trWeekdays.removeChild(trWeekdays.children[2]);
+      while (trWeekdays.children.length > 4) trWeekdays.removeChild(trWeekdays.children[2]);
       while (trDates.children.length > 5) trDates.removeChild(trDates.children[2]);
       while (trHolidays.children.length > 5) trHolidays.removeChild(trHolidays.children[2]);
 
@@ -4018,13 +4174,13 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
           tr.className = 'store-matrix-row';
         }
 
-        // Sticky Col 1: Staff Name (Clickable to edit)
+        // Sticky Col 1: Staff Name (Clickable to edit, 가나다순)
         const tdName = document.createElement('td');
         tdName.className = 'sticky-col-1';
         if (emp.isStore) {
-          tdName.innerHTML = `<span class="store-matrix-label">${emp.name === '본점' ? '🏢 본점' : '🏬 갤러리아'}</span> <span style="font-size:0.68rem; color:#db2777;">(매장휴무)</span>`;
+          tdName.innerHTML = `<span class="store-matrix-label" title="${emp.name} 매장휴무 설정">${emp.name === '본점' ? '🏢 본점휴무' : '🏬 갤러리아'}</span>`;
         } else {
-          tdName.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; padding:0 2px;"><span style="cursor:pointer;" onclick="openEditStaffModal('${emp.name}')" title="클릭하여 이름/소속 수정">${emp.name}</span> <span style="cursor:pointer; font-size:0.7rem; opacity:0.6;" onclick="openEditStaffModal('${emp.name}')" title="직원 정보 수정">✏️</span></div>`;
+          tdName.innerHTML = `<div class="matrix-name-cell" onclick="openEditStaffModal('${emp.name}')" title="클릭하여 [${emp.name}] 이름/소속 수정"><span>${emp.name}</span><span class="edit-icon">✎</span></div>`;
         }
         tr.appendChild(tdName);
 
@@ -4034,10 +4190,10 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         const curBranch = emp.isStore ? emp.branch : getStaffBranch(emp.name, year, month);
 
         if (emp.isStore) {
-          tdBranch.innerHTML = `<span style="color:#db2777; font-weight:800;">${emp.branch}</span>`;
+          tdBranch.innerHTML = `<span style="color:#db2777; font-weight:800; font-size:0.68rem;">매장</span>`;
         } else {
           tdBranch.innerHTML = `
-            <select class="branch-select" onchange="setStaffBranch('${emp.name}', this.value)" style="border: 1px solid var(--border-dark); border-radius: 4px; padding: 2px 2px; font-weight: 800; font-size: 0.75rem; background: ${curBranch === '갤러리아' ? '#f5f3ff' : '#eff6ff'}; color: ${curBranch === '갤러리아' ? 'var(--galleria)' : 'var(--primary)'}; cursor: pointer; outline: none; width: 100%;">
+            <select class="branch-select" onchange="setStaffBranch('${emp.name}', this.value)" style="border: 1px solid var(--border-dark); border-radius: 3px; padding: 0 1px; height: 20px; font-weight: 800; font-size: 0.68rem; background: ${curBranch === '갤러리아' ? '#f5f3ff' : '#eff6ff'}; color: ${curBranch === '갤러리아' ? 'var(--galleria)' : 'var(--primary)'}; cursor: pointer; outline: none; width: 100%;">
               <option value="본점" ${curBranch === '본점' ? 'selected' : ''}>본점</option>
               <option value="갤러리아" ${curBranch === '갤러리아' ? 'selected' : ''}>갤러리아</option>
             </select>
@@ -4121,19 +4277,19 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         } else {
           // Summary Col 1: Total Basic Leave
           const tdBasic = document.createElement('td');
-          tdBasic.className = 'summary-td';
-          tdBasic.textContent = totalBasic.toFixed(1);
+          tdBasic.className = 'summary-td sum-col-num';
+          tdBasic.textContent = Number.isInteger(totalBasic) ? totalBasic : totalBasic.toFixed(1);
           tr.appendChild(tdBasic);
 
           // Summary Col 2: Total Extra Leave
           const tdExtra = document.createElement('td');
-          tdExtra.className = 'summary-td';
-          tdExtra.textContent = totalExtra.toFixed(2);
+          tdExtra.className = 'summary-td sum-col-num';
+          tdExtra.textContent = Number.isInteger(totalExtra) ? totalExtra : Number(totalExtra.toFixed(2));
           tr.appendChild(tdExtra);
 
           // Summary Col 3: Weekly Audit Check
           const tdWeekly = document.createElement('td');
-          tdWeekly.className = 'summary-td';
+          tdWeekly.className = 'summary-td sum-col-chk';
 
           const shortWeeks = [];
           const totalWeeks = Math.round(calDays.length / 7);
@@ -4154,9 +4310,9 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
           }
 
           if (shortWeeks.length === 0) {
-            tdWeekly.innerHTML = `<span class="status-ok">✔ 충족</span>`;
+            tdWeekly.innerHTML = `<span class="status-ok">✔충족</span>`;
           } else {
-            tdWeekly.innerHTML = `<span class="status-short">⚠ 미달 ${shortWeeks.join(',')}주</span>`;
+            tdWeekly.innerHTML = `<span class="status-short" title="미달 주차: ${shortWeeks.join(', ')}주차">⚠${shortWeeks.join(',')}주</span>`;
           }
           tr.appendChild(tdWeekly);
         }
@@ -4854,9 +5010,16 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       document.querySelectorAll('.tab-pane').forEach(pane => {
         pane.classList.toggle('active', pane.id === tabId);
       });
+      // 근무입력(스케줄러) 탭에서는 PC 한 화면에 표 전체가 들어오도록 상단 배너/KPI 여백 자동 최적화
+      if (tabId === 'tab-matrix') {
+        document.body.classList.add('matrix-fullview-mode');
+      } else {
+        document.body.classList.remove('matrix-fullview-mode');
+      }
     }
 
     function refreshAllViews() {
+      deduplicateCustomHolidays();
       applyDynamicThemeStyles();
       syncColorSettingsUI();
       renderCalendar();
