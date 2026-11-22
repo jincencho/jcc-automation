@@ -40,6 +40,7 @@ import {
   Sliders,
   Cloud,
   RefreshCw,
+  RotateCw,
   Check,
   Minus,
   Crown,
