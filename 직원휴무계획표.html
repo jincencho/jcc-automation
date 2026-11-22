@@ -4,17 +4,61 @@
   <!-- JCC CLOUD OTA HOT-UPDATE BOOTLOADER -->
   <script id="jcc-ota-bootloader">
     (function() {
-      window.__JCC_EMBEDDED_VERSION__ = "2026.11.22-v101";
-      window.__JCC_BUILD_NUMBER__ = 2026112213;
-      window.__JCC_EMBEDDED_BUILT_AT__ = "2026-11-22 19:14";
-      window.__JCC_ACTIVE_VERSION__ = "2026.11.22-v101";
+      window.__JCC_EMBEDDED_VERSION__ = "2026.11.22-v992";
+      window.__JCC_BUILD_NUMBER__ = 992;
+      window.__JCC_EMBEDDED_BUILT_AT__ = "2026-11-22 19:22";
+      window.__JCC_ACTIVE_VERSION__ = "2026.11.22-v992";
 
-      // 구버전(v6~v9) IndexedDB document.write 캐시가 화면 초기화를 막는 현상을 원천 제거
-      try {
-        if (typeof indexedDB !== 'undefined') {
-          indexedDB.deleteDatabase("jcc_staff_schedule_ota_v1");
-        }
-      } catch (e) {}
+      if (window.__JCC_OTA_BOOTED__) return;
+
+      var DB_NAME = "jcc_staff_schedule_ota_v1";
+      var STORE_NAME = "bundles";
+      var BUNDLE_KEY = "latest_html_bundle";
+
+      function parseVerNum(v) {
+        var m = String(v || '').match(/v(\d+)$/);
+        return m ? parseInt(m[1], 10) : 0;
+      }
+
+      function openDb() {
+        return new Promise(function(resolve) {
+          if (typeof indexedDB === 'undefined') return resolve(null);
+          try {
+            var req = indexedDB.open(DB_NAME, 1);
+            req.onupgradeneeded = function(e) {
+              var db = e.target.result;
+              if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+            };
+            req.onsuccess = function(e) { resolve(e.target.result); };
+            req.onerror = function() { resolve(null); };
+          } catch(e) { resolve(null); }
+        });
+      }
+
+      openDb().then(function(db) {
+        if (!db) return;
+        try {
+          var tx = db.transaction(STORE_NAME, 'readonly');
+          var store = tx.objectStore(STORE_NAME);
+          var req = store.get(BUNDLE_KEY);
+          req.onsuccess = function() {
+            var cached = req.result;
+            if (!cached || !cached.version || !cached.fullHtml) return;
+            var cachedNum = parseVerNum(cached.version);
+            var embeddedNum = parseVerNum(window.__JCC_EMBEDDED_VERSION__);
+            // 구버전(v990 미만) 불완전 캐시는 무시하고, 더 높은 최신 버전일 때만 OTA 부팅
+            if (cachedNum >= 992 && cachedNum > embeddedNum) {
+              window.__JCC_OTA_BOOTED__ = true;
+              window.__JCC_APP_INITIALIZED__ = false;
+              window.__JCC_ACTIVE_VERSION__ = cached.version;
+              window.__JCC_VERSION_SOURCE__ = 'cloud_ota';
+              document.open();
+              document.write(cached.fullHtml);
+              document.close();
+            }
+          };
+        } catch(e) {}
+      });
     })();
   </script>
   <meta charset="UTF-8">
@@ -2442,7 +2486,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         </div>
         <div style="font-size: 0.78rem; color: #64748b; line-height: 1.6;">
           • 연동 서버: <code style="background: #e2e8f0; padding: 1px 5px; border-radius: 4px; color: #1e293b;">nuptkcozqdwirafrbfyx.supabase.co</code> (진센조 클라우드)<br>
-          • 시스템 버전: <span id="modalAppVersionText" style="font-weight: 700; color: #0f172a;">v2026.11.22-v101</span><br>
+          • 시스템 버전: <span id="modalAppVersionText" style="font-weight: 700; color: #0f172a;">v2026.11.22-v992</span><br>
           • 최근 클라우드 동기화: <span id="modalLastSyncTime" style="font-weight: 700; color: #0f172a;">방금 전</span>
         </div>
       </div>
@@ -2603,6 +2647,9 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   </div>
 
   <script>
+    /* === JCC_IIFE_SCOPE_GUARD === */
+    (function() {
+
     // [구형 브라우저 & Edge 호환성 폴리필]
     if (window.NodeList && !NodeList.prototype.forEach) {
       NodeList.prototype.forEach = Array.prototype.forEach;
@@ -3325,7 +3372,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       tableName: "saved_quotes",
       scheduleDocId: "__jcc_staff_schedule_v1__",
       metaDocId: "__jcc_staff_schedule_meta_v1__",
-      appVersion: "2026.11.22-v101",
+      appVersion: "2026.11.22-v992",
       appName: "진센조 직원 휴무 계획표"
     };
 
@@ -3615,7 +3662,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
                   const newBundle = bRows[0].data;
                   // 업데이트 적용 전 현재 입력된 모든 휴무 데이터를 영구 저장소에 100% 잠금 보존
                   AppState.userModified = true;
-                  AppState.baselineLockedV11 = true;
+                  AppState.baselineLockedV991 = true;
                   try {
                     var lockedJson = JSON.stringify(AppState);
                     localStorage.setItem(STORAGE_KEY, lockedJson);
@@ -3798,7 +3845,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
           // 만약 구버전(v10 이전)에서 일부 직원(김장미, 이인규, 정봉주, 조준석) 데이터가 유실되었던 상태라면,
           // 기본 확정 휴무표(DEFAULT_APP_STATE)의 데이터를 밑바탕으로 깔고 그 위에 사용자 입력 데이터를 안전하게 병합!
           var mergedEntries = JSON.parse(JSON.stringify(DEFAULT_APP_STATE.entries || {}));
-          if (parsed.userModified && parsed.baselineLockedV11) {
+          if (parsed.userModified && parsed.baselineLockedV991) {
             // v11 이후 사용자가 직접 수정/삭제한 상태는 사용자 상태를 100% 그대로 신뢰 (삭제한 것도 그대로 유지)
             mergedEntries = parsed.entries || {};
           } else if (parsed.entries) {
@@ -3818,7 +3865,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
             entries: mergedEntries,
             dailyBranches: mergedDailyBranches,
             monthlyBranches: mergedMonthlyBranches,
-            baselineLockedV11: true
+            baselineLockedV991: true
           });
         } catch (e) {
           console.error("Load state error", e);
@@ -3827,7 +3874,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 
       if (!AppState.dailyBranches) AppState.dailyBranches = {};
       if (!AppState.monthlyBranches) AppState.monthlyBranches = {};
-      AppState.baselineLockedV11 = true;
+      AppState.baselineLockedV991 = true;
       deduplicateCustomHolidays();
 
       // 로드 직후 영구 마스터 키에 동기화 저장하여 향후 어떤 버전 업데이트에도 유실 원천 차단
@@ -3841,7 +3888,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       const now = Date.now();
       AppState.updatedAt = now;
       AppState.userModified = true;
-      AppState.baselineLockedV11 = true;
+      AppState.baselineLockedV991 = true;
       var serialized = JSON.stringify(AppState);
       try {
         localStorage.setItem(STORAGE_KEY, serialized);
@@ -6839,11 +6886,36 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         }
       }).catch(() => {});
     }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initSchedulePlannerApp);
-    } else {
-      initSchedulePlannerApp();
+    // 일반 로딩 및 구버전 파일의 OTA document.write() 핫리로드 시 모두 100% 즉시 초기화 보장
+    try { initSchedulePlannerApp(); } catch (e) { console.error(e); }
+    setTimeout(initSchedulePlannerApp, 30);
+    document.addEventListener('DOMContentLoaded', initSchedulePlannerApp);
+  
+
+    // [전역 인라인 핸들러 및 상태 연결 (document.write 재실행 시 const/let 중복 선언 오류 100% 차단)]
+    window.openEditStaffModal = openEditStaffModal;
+    window.setStaffBranch = setStaffBranch;
+    window.switchTab = switchTab;
+    window.removeStaff = removeStaff;
+    window.removeCustomHoliday = removeCustomHoliday;
+    window.openCellModal = openCellModal;
+    window.closeCellModal = closeCellModal;
+    window.refreshAllViews = refreshAllViews;
+    window.deduplicateCustomHolidays = deduplicateCustomHolidays;
+    window.pullStateFromCloud = pullStateFromCloud;
+    window.syncStateToCloud = syncStateToCloud;
+    window.checkCloudAppUpdates = checkCloudAppUpdates;
+    try {
+      Object.defineProperty(window, 'AppState', {
+        get: function() { return AppState; },
+        set: function(v) { AppState = v; },
+        configurable: true
+      });
+    } catch (e) {
+      window.AppState = AppState;
     }
+
+    })();
   </script>
 </body>
 </html>
