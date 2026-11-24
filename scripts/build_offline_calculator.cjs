@@ -344,6 +344,20 @@ try {
 
   fs.writeFileSync(path.join(publicDir, 'ota-meta.json'), JSON.stringify(otaMeta, null, 2), 'utf8');
   fs.writeFileSync(path.join(publicDir, 'ota-bundle.json'), JSON.stringify(otaBundle), 'utf8');
+
+  // JSONP / script 태그 방식의 크로스도메인 우회 파일 생성 (file:/// 프로토콜 및 사내망 보안 정책 완벽 통과)
+  const metaJs = `window.__JCC_LATEST_OTA_META__ = ${JSON.stringify(otaMeta)};
+if (typeof window.__JCC_HANDLE_REMOTE_META__ === 'function') {
+  window.__JCC_HANDLE_REMOTE_META__(window.__JCC_LATEST_OTA_META__);
+}`;
+  fs.writeFileSync(path.join(publicDir, 'ota-meta.js'), metaJs, 'utf8');
+
+  const bundleJs = `window.__JCC_LATEST_OTA_BUNDLE__ = ${JSON.stringify(otaBundle)};
+if (typeof window.__JCC_HANDLE_REMOTE_BUNDLE__ === 'function') {
+  window.__JCC_HANDLE_REMOTE_BUNDLE__(window.__JCC_LATEST_OTA_BUNDLE__);
+}`;
+  fs.writeFileSync(path.join(publicDir, 'ota-bundle.js'), bundleJs, 'utf8');
+
   console.log(`Generated OTA metadata and bundle in web/public/ (chunks: ${chunkCount})`);
 
   // 2) 오프라인 단독 HTML 파일 생성 (자동 OTA 부트로더 + IndexedDB 캐시 + 다중 우회 경로 동기화 엔진 내장)
@@ -357,6 +371,12 @@ try {
 
   var META_ENDPOINTS = [
     {
+      name: "vercel_prod",
+      url: "https://jcc-band.vercel.app/ota-meta.json",
+      headers: {},
+      parseMeta: function(json) { return json && json.version ? json : null; }
+    },
+    {
       name: "supabase_api",
       url: SUPABASE_URL + "/rest/v1/saved_quotes?id=eq.__jcc_ota_meta_v1__&select=data,updated_at",
       headers: {
@@ -366,24 +386,6 @@ try {
       parseMeta: function(json) {
         return Array.isArray(json) && json[0] && json[0].data ? json[0].data : null;
       }
-    },
-    {
-      name: "jsdelivr_cdn",
-      url: "https://cdn.jsdelivr.net/gh/jincencho/jcc-automation@main/web/public/ota-meta.json",
-      headers: {},
-      parseMeta: function(json) { return json && json.version ? json : null; }
-    },
-    {
-      name: "github_raw",
-      url: "https://raw.githubusercontent.com/jincencho/jcc-automation/main/web/public/ota-meta.json",
-      headers: {},
-      parseMeta: function(json) { return json && json.version ? json : null; }
-    },
-    {
-      name: "vercel_prod",
-      url: "https://jcc-band.vercel.app/ota-meta.json",
-      headers: {},
-      parseMeta: function(json) { return json && json.version ? json : null; }
     }
   ];
 
@@ -467,6 +469,60 @@ try {
     });
   }
 
+  function fetchMetaViaScript() {
+    return new Promise(function(resolve) {
+      var script = document.createElement("script");
+      var timer = setTimeout(function() {
+        cleanup();
+        resolve(null);
+      }, 7000);
+      function cleanup() {
+        clearTimeout(timer);
+        if (script.parentNode) script.parentNode.removeChild(script);
+        delete window.__JCC_HANDLE_REMOTE_META__;
+      }
+      window.__JCC_HANDLE_REMOTE_META__ = function(meta) {
+        cleanup();
+        resolve(meta && meta.version ? { meta: meta, route: "vercel_script" } : null);
+      };
+      script.src = "https://jcc-band.vercel.app/ota-meta.js?_t=" + Date.now();
+      script.onerror = function() {
+        cleanup();
+        resolve(null);
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  function fetchBundleViaScript() {
+    return new Promise(function(resolve, reject) {
+      var script = document.createElement("script");
+      var timer = setTimeout(function() {
+        cleanup();
+        reject(new Error("Script bundle timeout"));
+      }, 25000);
+      function cleanup() {
+        clearTimeout(timer);
+        if (script.parentNode) script.parentNode.removeChild(script);
+        delete window.__JCC_HANDLE_REMOTE_BUNDLE__;
+      }
+      window.__JCC_HANDLE_REMOTE_BUNDLE__ = function(bundle) {
+        cleanup();
+        if (bundle && bundle.jsBundle && bundle.jsBundle.length > 100000) {
+          resolve(bundle);
+        } else {
+          reject(new Error("Invalid script bundle"));
+        }
+      };
+      script.src = "https://jcc-band.vercel.app/ota-bundle.js?_t=" + Date.now();
+      script.onerror = function() {
+        cleanup();
+        reject(new Error("Script bundle load error"));
+      };
+      document.head.appendChild(script);
+    });
+  }
+
   async function findLatestRemoteMeta() {
     for (var i = 0; i < META_ENDPOINTS.length; i++) {
       var ep = META_ENDPOINTS[i];
@@ -479,6 +535,12 @@ try {
         }
       } catch (e) {}
     }
+    // CORS 및 사내망 보안 정책으로 fetch가 차단된 경우, Script 태그 주입 방식으로 2차 시도!
+    try {
+      var scriptResult = await fetchMetaViaScript();
+      if (scriptResult) return scriptResult;
+    } catch (scriptErr) {}
+
     return null;
   }
 
@@ -525,8 +587,6 @@ try {
 
   async function downloadFullBundleFromCdnOrWeb() {
     var urls = [
-      "https://cdn.jsdelivr.net/gh/jincencho/jcc-automation@main/web/public/ota-bundle.json",
-      "https://raw.githubusercontent.com/jincencho/jcc-automation/main/web/public/ota-bundle.json",
       "https://jcc-band.vercel.app/ota-bundle.json"
     ];
     for (var i = 0; i < urls.length; i++) {
@@ -537,6 +597,12 @@ try {
         }
       } catch (e) {}
     }
+    // fetch 다운로드가 차단된 경우 script 주입으로 최종 시도!
+    try {
+      var scriptBundle = await fetchBundleViaScript();
+      if (scriptBundle) return scriptBundle;
+    } catch (e) {}
+
     throw new Error("All bundle download routes failed");
   }
 
@@ -773,6 +839,11 @@ ${bootloaderScript}
 
   const outputPath = path.join(rootDir, 'JCC_혜택계산기.html');
   fs.writeFileSync(outputPath, html, 'utf8');
+
+  // 웹 서버 및 배포 경로에도 동일 파일 복사 (온라인 다운로드 및 프리뷰 지원)
+  fs.writeFileSync(path.join(publicDir, 'JCC_혜택계산기.html'), html, 'utf8');
+  fs.writeFileSync(path.join(publicDir, 'offline_calc.html'), html, 'utf8');
+
   console.log(`Success! Auto-syncing Offline HTML generated: ${outputPath} (${(html.length / 1024).toFixed(1)} KB, v${buildVersion})`);
 } finally {
   if (fs.existsSync(tempEntry)) {
