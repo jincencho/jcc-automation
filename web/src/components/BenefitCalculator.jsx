@@ -1006,7 +1006,7 @@ export default function BenefitCalculator({ onBack }) {
       setOtaState((prev) => ({ ...prev, ...window.__JCC_OTA_STATE__ }));
     }
     // 온라인 환경인 경우 최신 배포 버전 메타데이터를 자동 조회하여 시스템 버전을 동기화
-    if (!window.__JCC_IS_OFFLINE__) {
+    if (!window.__JCC_IS_OFFLINE__ && window.location.protocol !== 'file:') {
       fetch('/ota-meta.json?_t=' + Date.now())
         .then((res) => (res.ok ? res.json() : null))
         .then((meta) => {

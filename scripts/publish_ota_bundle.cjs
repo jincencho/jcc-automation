@@ -85,6 +85,22 @@ async function main() {
   });
 
   console.log(`✅ Successfully published OTA Bundle v${meta.version} to Supabase Cloud!`);
+
+  // jsDelivr CDN 캐시 즉시 퍼지 (사내 PC 구버전 HTML이 참조하는 jsDelivr 경로의 캐시 지연 완전 제거)
+  const purgeFiles = [
+    'https://purge.jsdelivr.net/gh/jincencho/jcc-automation@main/web/public/ota-meta.json',
+    'https://purge.jsdelivr.net/gh/jincencho/jcc-automation@main/web/public/ota-bundle.json',
+    'https://purge.jsdelivr.net/gh/jincencho/jcc-automation@main/web/public/ota-meta.js',
+    'https://purge.jsdelivr.net/gh/jincencho/jcc-automation@main/web/public/ota-bundle.js'
+  ];
+  for (const pUrl of purgeFiles) {
+    try {
+      const pRes = await fetch(pUrl);
+      console.log(`  ✓ Purged jsDelivr cache: ${pUrl.split('/').pop()} (HTTP ${pRes.status})`);
+    } catch (e) {
+      console.warn(`  ! Failed to purge ${pUrl}: ${e.message}`);
+    }
+  }
 }
 
 main().catch((err) => {
