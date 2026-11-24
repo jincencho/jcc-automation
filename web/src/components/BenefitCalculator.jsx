@@ -2184,8 +2184,8 @@ export default function BenefitCalculator({ onBack }) {
       const tag = target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') {
         const type = (target.type || 'text').toLowerCase();
-        // 체크박스, 라디오, 파일, 버튼 등 비텍스트 요소 제외
-        if (['checkbox', 'radio', 'file', 'button', 'submit', 'reset', 'range', 'color'].includes(type)) {
+        // 체크박스, 라디오, 파일, 버튼, 날짜/시간 등 비텍스트 및 피커 요소 제외
+        if (['checkbox', 'radio', 'file', 'button', 'submit', 'reset', 'range', 'color', 'date', 'datetime-local', 'time', 'month', 'week'].includes(type)) {
           return;
         }
         // 사용자가 직접 입력하는 모든 칸 클릭/포커스 시 기존 내용 전체 자동 선택
@@ -12089,7 +12089,20 @@ export default function BenefitCalculator({ onBack }) {
           </div>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-              <label className="calc-label-guide" style={{ marginBottom: 0 }}>
+              <label
+                htmlFor="jcc_consult_date_input"
+                className="calc-label-guide"
+                style={{ marginBottom: 0, cursor: 'pointer' }}
+                onClick={() => {
+                  try {
+                    const el = document.getElementById('jcc_consult_date_input');
+                    if (el) {
+                      el.focus();
+                      if (typeof el.showPicker === 'function') el.showPicker();
+                    }
+                  } catch {}
+                }}
+              >
                 <span>상담 일자</span>
                 <span className="calc-tag-type select">📅 날짜선택</span>
               </label>
@@ -12118,10 +12131,23 @@ export default function BenefitCalculator({ onBack }) {
               )}
             </div>
             <input
+              id="jcc_consult_date_input"
               type="date"
               value={consultDate}
               onChange={(e) => handleConsultDateChange(e.target.value)}
+              onClick={(e) => {
+                try {
+                  if (typeof e.target.showPicker === 'function') {
+                    e.target.showPicker();
+                  }
+                } catch {}
+              }}
               className="calc-input-editable"
+              style={{
+                cursor: 'pointer',
+                colorScheme: 'dark',
+                width: '100%'
+              }}
             />
           </div>
           <div>
