@@ -12173,8 +12173,8 @@ export default function BenefitCalculator({ onBack }) {
                             type="text"
                             maxLength={15}
                             value={item.name || ''}
-                            onChange={(e) => handleUpdateMixedLumpItem(item.id, 'name', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 15))}
-                            placeholder="모델명 입력 (예: RF85DB90F1AP · 영문·숫자 15자)"
+                            onChange={(e) => handleUpdateMixedLumpItem(item.id, 'name', e.target.value.slice(0, 15))}
+                            placeholder="모델명 입력 (예: RF85DB90F1AP · 최대 15자)"
                             className="calc-input-editable"
                             style={{ height: '38px', padding: '0 0.75rem', fontSize: '0.86rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           />
@@ -14011,8 +14011,8 @@ export default function BenefitCalculator({ onBack }) {
                             type="text"
                             maxLength={15}
                             value={item.name || ''}
-                            onChange={(e) => handleUpdateMixedSubItem(item.id, 'name', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 15))}
-                            placeholder="모델명 입력 (예: RF85DB90F1AP · 영문·숫자 15자)"
+                            onChange={(e) => handleUpdateMixedSubItem(item.id, 'name', e.target.value.slice(0, 15))}
+                            placeholder="모델명 입력 (예: RF85DB90F1AP · 최대 15자)"
                             className="calc-input-editable"
                             style={{ height: '38px', padding: '0 0.75rem', fontSize: '0.86rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           />
@@ -14468,7 +14468,7 @@ export default function BenefitCalculator({ onBack }) {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.3rem', flexWrap: 'wrap', gap: '0.3rem' }}>
                               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
                                 <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>품목 모델명</span>
-                                <span style={{ fontSize: '0.66rem', color: '#94a3b8', fontWeight: 500 }}>(영문·숫자 15자)</span>
+                                <span style={{ fontSize: '0.66rem', color: '#94a3b8', fontWeight: 500 }}>(최대 15자)</span>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
                                 {(() => {
@@ -14586,8 +14586,8 @@ export default function BenefitCalculator({ onBack }) {
                               type="text"
                               maxLength={15}
                               value={plan.name || ''}
-                              onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 15) })}
-                              placeholder="모델명 입력 (예: RF85DB90F1AP · 영문·숫자 15자)"
+                              onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value.slice(0, 15) })}
+                              placeholder="모델명 입력 (예: RF85DB90F1AP · 최대 15자)"
                               className="calc-input-editable"
                               style={{
                                 height: '40px',
