@@ -528,7 +528,9 @@ if (typeof window.__JCC_HANDLE_REMOTE_BUNDLE__ === 'function') {
       var ep = META_ENDPOINTS[i];
       try {
         var sep = ep.url.indexOf("?") >= 0 ? "&" : "?";
-        var json = await fetchWithTimeout(ep.url + sep + "_t=" + Date.now(), { headers: ep.headers }, 5000);
+        // PostgREST(Supabase)는 쿼리스트링 파라미터를 컬럼 필터로 파싱하므로 _t 파라미터 제외 (헤더로 캐시 무효화)
+        var queryUrl = ep.name.includes("supabase") ? ep.url : (ep.url + sep + "_t=" + Date.now());
+        var json = await fetchWithTimeout(queryUrl, { headers: ep.headers }, 5000);
         var meta = ep.parseMeta(json);
         if (meta && meta.version) {
           return { meta: meta, route: ep.name };
@@ -545,7 +547,8 @@ if (typeof window.__JCC_HANDLE_REMOTE_BUNDLE__ === 'function') {
   }
 
   async function downloadFullBundleFromSupabase(expectedMeta) {
-    var url = SUPABASE_URL + "/rest/v1/saved_quotes?mode=eq.system_ota_chunk&select=id,data&order=id.asc&_t=" + Date.now();
+    // Supabase PostgREST는 임의 쿼리 파라미터(_t) 사용 시 컬럼 부재 400 에러 발생하므로 순수 REST URL 사용
+    var url = SUPABASE_URL + "/rest/v1/saved_quotes?mode=eq.system_ota_chunk&select=id,data&order=id.asc";
     var rows = await fetchWithTimeout(url, {
       headers: {
         "apikey": SUPABASE_KEY,
@@ -843,6 +846,17 @@ ${bootloaderScript}
   // 웹 서버 및 배포 경로에도 동일 파일 복사 (온라인 다운로드 및 프리뷰 지원)
   fs.writeFileSync(path.join(publicDir, 'JCC_혜택계산기.html'), html, 'utf8');
   fs.writeFileSync(path.join(publicDir, 'offline_calc.html'), html, 'utf8');
+
+  // 사용자 바탕화면(Desktop) 경로에도 최신 파일 즉시 복사 업데이트
+  const desktopPath = 'C:/Users/진센조/Desktop/JCC_혜택계산기.html';
+  try {
+    if (fs.existsSync(path.dirname(desktopPath))) {
+      fs.writeFileSync(desktopPath, html, 'utf8');
+      console.log(`Updated Desktop HTML: ${desktopPath}`);
+    }
+  } catch (e) {
+    console.warn('Could not write to Desktop path:', e.message);
+  }
 
   console.log(`Success! Auto-syncing Offline HTML generated: ${outputPath} (${(html.length / 1024).toFixed(1)} KB, v${buildVersion})`);
 } finally {
