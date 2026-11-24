@@ -2385,9 +2385,8 @@ export default function BenefitCalculator({ onBack }) {
     // 선납금 + 할인구독료 적용 총액: 선납금 + (할인구독료 × 약정개월수 × 수량)
     const discountedGross = prepay + monthlyTotal;
 
-    // 구독료 할인 (순수 기본구독료 합계 - 순수 할인구독료 합계 차액)
-    // ※ 선납금은 별도 '선납금 합계' 항목으로 독립 표시되므로, 구독료 즉시할인에는 순수 월구독료 차액만 산출
-    const feeDiscount = Math.max(0, (baseMonthly - monthly) * months * qty);
+    // 구독료 할인: (기본구독총액 - 할인구독총액)에서 선납금(prepay)을 제외한 순수 할인 금액
+    const feeDiscount = Math.max(0, baseGross - monthlyTotal - prepay);
 
     const freeRepair = (Number(it.freeRepairFee) || 0) * months * qty;
     const selfCare = (Number(it.selfCareFee) || 0) * qty;
@@ -2480,7 +2479,8 @@ export default function BenefitCalculator({ onBack }) {
     const rowMonthly = unitMonthly * qty;
     const rowBaseGross = rowBaseMonthly * m;
     const rowGross = rowMonthly * m;
-    const rowFeeDiscountTotal = unitFeeDiscount * qty * m;
+    // 품목별 구독료 즉시할인: (기본구독총액 - 할인구독총액)에서 해당 품목의 선납금(rowPrepay) 제외
+    const rowFeeDiscountTotal = Math.max(0, rowBaseGross - rowGross - rowPrepay);
     const policyDisc = Number(p.policyDiscount) || 0;
 
     return {
@@ -2763,10 +2763,11 @@ export default function BenefitCalculator({ onBack }) {
   };
   const subBaseGrossTotal =
     normalizedPlans.reduce((sum, p) => sum + (p.rowBaseGross || p.rowGross), 0);
-  const subNetGrossTotal =
-    normalizedPlans.reduce((sum, p) => sum + p.rowGross, 0) + effectiveSubPrepay;
-  const subFeeDiscountTotal =
-    normalizedPlans.reduce((sum, p) => sum + (p.rowFeeDiscountTotal || 0), 0);
+  const subMonthlyGrossTotal =
+    normalizedPlans.reduce((sum, p) => sum + p.rowGross, 0);
+  const subNetGrossTotal = subMonthlyGrossTotal + effectiveSubPrepay;
+  // 구독료 즉시할인 총액: 기본구독총액 - 할인구독총액 - 선납금 총액 (선납금액 완벽 제외)
+  const subFeeDiscountTotal = Math.max(0, subBaseGrossTotal - subMonthlyGrossTotal - effectiveSubPrepay);
   const subGrossTotal = subBaseGrossTotal;
 
   // 복수 제휴카드 연산 (카드명이 입력되었거나 월 청구할인 금액 > 0)
@@ -3119,10 +3120,10 @@ export default function BenefitCalculator({ onBack }) {
   // 총 혜택 합계: 구독료 즉시할인 + 제휴카드 청구할인 + 캐시백
   const subTotalBenefitSum = subCashBenefitTotal;
 
-  // 삼성AI구독 최종 체감가: 기본구독총액 - 총할인합계 + 선납금 - (서비스 혜택 가치)까지 모두 반영하여 최종체감가 산출!
+  // 삼성AI구독 최종 체감가: (선납금 + 월할인구독료 총액) - 제휴카드할인 - 캐시백 - (서비스 혜택 가치)
   const subFinalPrice = Math.max(
     0,
-    subGrossTotal - subTotalBenefitSum + effectiveSubPrepay - (includeServiceInFinal ? subServiceTotal : 0)
+    subNetGrossTotal - subCardTotalDiscount - (Number(subPurchaseBenefit) || 0) - (includeServiceInFinal ? subServiceTotal : 0)
   );
 
   // 최종 차이가격: 일반구매 일시불 조건(lumpFinalPrice) 대비 비교
@@ -14676,26 +14677,29 @@ export default function BenefitCalculator({ onBack }) {
                             </div>
                           </div>
 
-                          {/* 기본구독료 > 할인구독료 즉시할인 및 선납금 요약 배너 (클릭 불가 자동산출) */}
+                          {/* 기본구독료 > 할인구독료 즉시할인 및 선납금 요약 배너 (선납금액 제외 순수 즉시할인 자동산출) */}
                           {(() => {
                             const b = Number(plan.baseMonthlyFee) || Number(plan.monthlyFee) || 0;
                             const d = Number(plan.discountMonthlyFee) || Number(plan.monthlyFee) || 0;
-                            const diff = b > d ? b - d : 0;
-                            const prepayAmt = Number(plan.prepay) || 0;
                             const m = Number(plan.months) || 72;
-                            if (diff <= 0 && prepayAmt <= 0) return null;
+                            const qty = plan.quantity === '' || plan.quantity === undefined ? 1 : Number(plan.quantity) || 1;
+                            const prepayAmt = (Number(plan.prepay) || 0) * qty;
+                            const rawDiffTotal = b > d ? (b - d) * m * qty : 0;
+                            const pureDiscountTotal = Math.max(0, rawDiffTotal - prepayAmt);
+                            const pureMonthlyDiff = m * qty > 0 ? Math.round(pureDiscountTotal / (m * qty)) : 0;
+                            if (pureDiscountTotal <= 0 && prepayAmt <= 0) return null;
                             return (
                               <div className="calc-display-readonly" style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px dashed rgba(52, 211, 153, 0.45)', borderRadius: '8px', padding: '0.45rem 0.75rem', fontSize: '0.76rem', flexWrap: 'wrap', gap: '0.35rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                                   <span className="calc-badge-auto">🔒 자동계산</span>
-                                  {diff > 0 && (
+                                  {pureDiscountTotal > 0 && (
                                     <span style={{ color: '#34d399', fontWeight: 800 }}>
-                                      구독료 즉시할인: 월 -{formatWon(diff)} (약정총액 -{formatWon(diff * m)})
+                                      구독료 즉시할인: -{formatWon(pureDiscountTotal)} (월 -{formatWon(pureMonthlyDiff)} · 선납제외)
                                     </span>
                                   )}
                                 </div>
                                 {prepayAmt > 0 && (
-                                  <span style={{ color: '#fcd34d', fontWeight: 800, marginLeft: diff > 0 ? 'auto' : '0' }}>
+                                  <span style={{ color: '#fcd34d', fontWeight: 800, marginLeft: pureDiscountTotal > 0 ? 'auto' : '0' }}>
                                     선납금: {formatWon(prepayAmt)}
                                   </span>
                                 )}
