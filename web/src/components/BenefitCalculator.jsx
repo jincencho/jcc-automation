@@ -59,6 +59,15 @@ import {
   saveCloudUserAccounts
 } from '../utils/cloudQuoteService.js';
 
+// 로컬 시스템 날짜(KST 등 브라우저 현지 시간 기준 YYYY-MM-DD 반환 - UTC 오차 방지)
+function getLocalTodayString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // 인쇄 및 모바일 PDF 출력 안전 텍스트 정제 (보이지 않는 제로위드, BOM, 특수공백, 개행문자 완전 제거)
 function cleanPrintText(str) {
   if (str === null || str === undefined) return '';
@@ -1215,13 +1224,46 @@ export default function BenefitCalculator({ onBack }) {
     setMixedSubItems((prev) => (prev.length > 1 ? prev.filter((it) => it.id !== id) : prev));
   };
 
-  // 고객 및 상담 기본 정보
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // 고객 및 상담 기본 정보 (현지 로컬 기준 오늘 날짜 자동 지정 및 사용자 변경 전까지 오늘 유지)
+  const todayStr = getLocalTodayString();
   const [customerName, setCustomerName] = useState('');
-  const [consultDate, setConsultDate] = useState(todayStr);
+  const [consultDate, setConsultDate] = useState(() => getLocalTodayString());
+  const [isManualConsultDate, setIsManualConsultDate] = useState(false);
   const [consultType, setConsultType] = useState('입주가전 맞춤설계');
   const [productSummary, setProductSummary] = useState('');
   const [memo, setMemo] = useState('');
+
+  // 사용자가 임의로 과거 등 특정 날짜로 변경하기 전까지는 항상 투데이(오늘)를 가리키도록 유지
+  useEffect(() => {
+    const syncTodayDateIfAuto = () => {
+      if (!isManualConsultDate) {
+        const curToday = getLocalTodayString();
+        setConsultDate((prev) => (prev !== curToday ? curToday : prev));
+      }
+    };
+
+    syncTodayDateIfAuto();
+    window.addEventListener('focus', syncTodayDateIfAuto);
+    document.addEventListener('visibilitychange', syncTodayDateIfAuto);
+    const dateInterval = setInterval(syncTodayDateIfAuto, 60000);
+
+    return () => {
+      window.removeEventListener('focus', syncTodayDateIfAuto);
+      document.removeEventListener('visibilitychange', syncTodayDateIfAuto);
+      clearInterval(dateInterval);
+    };
+  }, [isManualConsultDate]);
+
+  const handleConsultDateChange = (newVal) => {
+    const curToday = getLocalTodayString();
+    setConsultDate(newVal);
+    // 사용자가 오늘 날짜를 선택했거나 빈 값이면 자동 추적 복귀, 그 외 과거 등 다른 날짜를 선택하면 수동 고정
+    if (!newVal || newVal === curToday) {
+      setIsManualConsultDate(false);
+    } else {
+      setIsManualConsultDate(true);
+    }
+  };
 
   // 매니저 명함 정보 & 카드 최저금리 설정 (localStorage 저장)
   const [managerPhone, setManagerPhone] = useState(() => localStorage.getItem('jcc_calc_manager_phone') || '');
@@ -4249,7 +4291,8 @@ export default function BenefitCalculator({ onBack }) {
   const handleResetAll = () => {
     if (!window.confirm('입력하신 모든 계산 내역을 초기화하시겠습니까?')) return;
     setCustomerName('');
-    setConsultDate(todayStr);
+    setConsultDate(getLocalTodayString());
+    setIsManualConsultDate(false);
     setConsultType('신혼·혼수가전 맞춤설계');
     setProductSummary('');
     setMemo('');
@@ -4600,7 +4643,10 @@ export default function BenefitCalculator({ onBack }) {
     if (!d || typeof d !== 'object') return false;
 
     setCustomerName(d.customerName ?? '');
-    setConsultDate(d.consultDate || todayStr);
+    const curToday = getLocalTodayString();
+    const loadedDate = d.consultDate || curToday;
+    setConsultDate(loadedDate);
+    setIsManualConsultDate(Boolean(d.consultDate && d.consultDate !== curToday));
     setConsultType(d.consultType || '신혼·혼수가전 맞춤설계');
     setProductSummary(d.productSummary ?? '');
     setMemo(d.memo ?? '');
@@ -5165,7 +5211,7 @@ export default function BenefitCalculator({ onBack }) {
       if (!dataUrl) return;
 
       const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
-      const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
+      const safeDate = (consultDate || getLocalTodayString()).replace(/[^0-9-]/g, '');
       const filename = `JCC_POS지시서_${safeCustomer}_${safeDate}.png`;
 
       const res = await fetch(dataUrl);
@@ -5267,7 +5313,7 @@ export default function BenefitCalculator({ onBack }) {
       pdf.addImage(dataUrl, 'PNG', xOffset, margin, renderW, renderH, undefined, 'FAST');
 
       const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
-      const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
+      const safeDate = (consultDate || getLocalTodayString()).replace(/[^0-9-]/g, '');
       const filename = `JCC_POS지시서_${safeCustomer}_${safeDate}.pdf`;
 
       const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
@@ -5321,7 +5367,7 @@ export default function BenefitCalculator({ onBack }) {
       if (!dataUrl) return;
 
       const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
-      const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
+      const safeDate = (consultDate || getLocalTodayString()).replace(/[^0-9-]/g, '');
       const pSuffix = pageLabel ? `_${pageLabel}` : (nodes.length > 1 ? `_${pageIndex + 1}페이지` : '');
       const filename = `JCC_견적서_${safeCustomer}_${safeDate}${pSuffix}.png`;
 
@@ -5453,7 +5499,7 @@ export default function BenefitCalculator({ onBack }) {
       }
 
       const safeCustomer = (customerName || '소중한고객님').trim().replace(/[^a-zA-Z0-9가-힣_-]/g, '');
-      const safeDate = (consultDate || new Date().toISOString().slice(0, 10)).replace(/[^0-9-]/g, '');
+      const safeDate = (consultDate || getLocalTodayString()).replace(/[^0-9-]/g, '');
       const filename = `JCC_견적서_${safeCustomer}_${safeDate}.pdf`;
 
       // 모바일 공유 지원 여부 확인
@@ -5624,7 +5670,7 @@ export default function BenefitCalculator({ onBack }) {
                 POS 결제 및 사은행사 지시서
               </h2>
               <div style={{ fontSize: '0.82rem', color: '#64748b', display: 'flex', justifyContent: 'center', gap: '1.2rem', marginTop: '0.25rem' }}>
-                <span>일자: <strong style={{ color: '#0f172a' }}>{consultDate || new Date().toISOString().slice(0, 10)}</strong></span>
+                <span>일자: <strong style={{ color: '#0f172a' }}>{consultDate || getLocalTodayString()}</strong></span>
                 <span>고객: <strong>{customerName || '소중한고객님'}</strong></span>
                 <span>담당: <strong>조준석 매니저</strong></span>
               </div>
@@ -12042,14 +12088,39 @@ export default function BenefitCalculator({ onBack }) {
             />
           </div>
           <div>
-            <label className="calc-label-guide">
-              <span>상담 일자</span>
-              <span className="calc-tag-type select">📅 날짜선택</span>
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+              <label className="calc-label-guide" style={{ marginBottom: 0 }}>
+                <span>상담 일자</span>
+                <span className="calc-tag-type select">📅 날짜선택</span>
+              </label>
+              {consultDate === getLocalTodayString() ? (
+                <span style={{ fontSize: '0.68rem', color: '#38bdf8', fontWeight: 700, background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.35)', padding: '1px 6px', borderRadius: '4px' }}>
+                  오늘(Today) 자동지정
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleConsultDateChange(getLocalTodayString())}
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    border: '1px solid #3b82f6',
+                    color: '#93c5fd',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '1px 7px',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                  title="오늘 날짜로 재설정"
+                >
+                  오늘로 변경
+                </button>
+              )}
+            </div>
             <input
               type="date"
               value={consultDate}
-              onChange={(e) => setConsultDate(e.target.value)}
+              onChange={(e) => handleConsultDateChange(e.target.value)}
               className="calc-input-editable"
             />
           </div>
