@@ -2356,13 +2356,12 @@ export default function BenefitCalculator({ onBack }) {
     const monthly = rawDisc > 0 ? rawDisc : rawBase;
     const monthlyTotal = monthly * months * qty;
 
-    // 기본 구독 총액(할인 전 기준총액): 기본구독료 입력 시 (기본구독료 × 약정개월수 × 수량)
-    const rawBaseGross = rawBase > 0 ? rawBase * months * qty : prepay + monthlyTotal;
-    // 선납금 + 할인구독료 적용 총액: 할인구독료 입력 시 (선납금 + 할인구독료 × 약정개월수 × 수량)
-    const discountedGross = rawDisc > 0 ? prepay + monthlyTotal : rawBaseGross;
-    const baseGross = Math.max(rawBaseGross, discountedGross);
+    // 기본 구독 총액(할인 전 기준총액): 순수 기본구독료 × 약정개월수 × 수량 (선납금 미포함)
+    const baseGross = baseMonthly * months * qty;
+    // 선납금 + 할인구독료 적용 총액: 선납금 + (할인구독료 × 약정개월수 × 수량)
+    const discountedGross = prepay + monthlyTotal;
 
-    // 구독료 할인 (기본 구독 총액 - 선납 제외 순수 구독료 합계 차액)
+    // 구독료 할인 (순수 기본구독료 합계 - 순수 할인구독료 합계 차액)
     // ※ 선납금은 별도 '선납금 합계' 항목으로 독립 표시되므로, 구독료 즉시할인에는 순수 월구독료 차액만 산출
     const feeDiscount = Math.max(0, (baseMonthly - monthly) * months * qty);
 
@@ -2732,7 +2731,7 @@ export default function BenefitCalculator({ onBack }) {
     }
   };
   const subBaseGrossTotal =
-    normalizedPlans.reduce((sum, p) => sum + (p.rowBaseGross || p.rowGross), 0) + effectiveSubPrepay;
+    normalizedPlans.reduce((sum, p) => sum + (p.rowBaseGross || p.rowGross), 0);
   const subNetGrossTotal =
     normalizedPlans.reduce((sum, p) => sum + p.rowGross, 0) + effectiveSubPrepay;
   const subFeeDiscountTotal =
@@ -3061,10 +3060,10 @@ export default function BenefitCalculator({ onBack }) {
   // 총 혜택 합계: 구독료 즉시할인 + 제휴카드 청구할인 + 캐시백
   const subTotalBenefitSum = subCashBenefitTotal;
 
-  // 삼성AI구독 최종 체감가: 총 혜택 합계 + (서비스 혜택 가치)까지 모두 반영하여 최종체감가 산출!
+  // 삼성AI구독 최종 체감가: 기본구독총액 - 총할인합계 + 선납금 - (서비스 혜택 가치)까지 모두 반영하여 최종체감가 산출!
   const subFinalPrice = Math.max(
     0,
-    subGrossTotal - subTotalBenefitSum - (includeServiceInFinal ? subServiceTotal : 0)
+    subGrossTotal - subTotalBenefitSum + effectiveSubPrepay - (includeServiceInFinal ? subServiceTotal : 0)
   );
 
   // 최종 차이가격: 일반구매 일시불 조건(lumpFinalPrice) 대비 비교
@@ -4123,11 +4122,10 @@ export default function BenefitCalculator({ onBack }) {
   // 구독 총 혜택 (카드 청구할인 + 구독료 할인만 합산! 무상수리 및 케어서비스는 제외)
   const mixedSubOnlyDiscount = subCardTotalDiscount + mixedSubFeeDiscountTotal;
 
-  // 구독 최종 체감 소계: 기준총액 - (구독료할인 + 카드할인) - (서비스혜택 체감가 차감 반영 시 서비스혜택)
-  // ※ mixedSubGrossTotal - mixedSubFeeDiscountTotal (= mixedSubDiscountedGrossTotal)에 이미 선납금이 포함되어 있으므로 중복 합산하지 않음
+  // 구독 최종 체감 소계: 선납금 + 할인 월구독료 합계 - 제휴카드 할인 - (서비스혜택)
   const mixedSubPerceivedPrice = Math.max(
     0,
-    mixedSubGrossTotal - mixedSubOnlyDiscount - (includeServiceInFinal ? mixedSubServiceBenefit : 0)
+    mixedSubDiscountedGrossTotal - subCardTotalDiscount - (includeServiceInFinal ? mixedSubServiceBenefit : 0)
   );
 
   // 구독 최종 체감 소계 (선납금 포함)
@@ -4163,16 +4161,16 @@ export default function BenefitCalculator({ onBack }) {
     (mixedSpecialDiscountProof && mixedLumpSpecificDiscount > 0)
   );
 
-  // 전체 기준 총액 (일반 기준총액 + 구독 기준총액만 합산: 10,740,000원 + 11,850,000원)
+  // 전체 기준 총액 (일반 기준총액 + 구독 기준총액만 합산: 선납금 제외 순수 기본구독료의 합)
   const mixedGrandGross = mixedLumpGross + mixedSubGrossTotal;
   // 전체 총 혜택 = 구독 전용 직접할인 + 일반 특정조건 할인 + 통합 캐시백 + 상품권 지급 (무상/케어서비스 제외)
   const mixedGrandBenefit = mixedSubOnlyDiscount + mixedLumpDiscountTotal + mixedTotalCashback + mixedTotalVoucher;
-  // 고객 최종 실체감가: 총 적용 혜택 + 구독 전용 무상/케어 서비스 가치까지 모두 반영!
+  // 고객 최종 실체감가: 일반구매 혜택가 소계 + 구독 혜택가 소계 - 통합 캐시백/상품권
   const mixedGrandFinal = Math.max(
     0,
-    mixedGrandGross - mixedGrandBenefit - (includeServiceInFinal ? mixedSubServiceBenefit : 0)
+    mixedLumpBenefitSub + mixedSubFinalPrice - section3TotalBenefit
   );
-  const totalGrandSavings = mixedGrandBenefit + (includeServiceInFinal ? mixedSubServiceBenefit : 0);
+  const totalGrandSavings = Math.max(0, mixedGrandGross - mixedGrandFinal);
   const mixedGrandBenefitRate = mixedGrandGross > 0 ? ((totalGrandSavings / mixedGrandGross) * 100).toFixed(1) : '0.0';
 
   // 납부 분리:
@@ -9784,7 +9782,7 @@ export default function BenefitCalculator({ onBack }) {
                         <span>3. 통합 캐시백 / 상품권 지급 및 최종 실체감가</span>
                       </div>
                       <span style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 700 }}>
-                        총 할인 합계: - {formatWon(mixedGrandBenefit + mixedSubServiceBenefit)} ({mixedGrandGross > 0 ? (((mixedGrandBenefit + mixedSubServiceBenefit) / mixedGrandGross) * 100).toFixed(1) : '0.0'}% 절감)
+                        총 할인 합계: - {formatWon(totalGrandSavings)} ({mixedGrandBenefitRate}% 절감)
                       </span>
                     </div>
 
@@ -9801,7 +9799,7 @@ export default function BenefitCalculator({ onBack }) {
                               </span>
                             </span>
                             <span style={{ fontWeight: 800, color: '#1e40af' }}>
-                              {formatWon(mixedSubGrossTotal - mixedSubOnlyDiscount)}
+                              {formatWon(mixedSubFinalPrice)}
                             </span>
                           </div>
                         )}
@@ -9838,7 +9836,7 @@ export default function BenefitCalculator({ onBack }) {
                               소계 합계 (구독 혜택가 + 일반구매 혜택가)
                             </span>
                             <strong style={{ fontSize: '0.90rem', color: '#0f172a', fontWeight: 900 }}>
-                              {formatWon((mixedSubGrossTotal - mixedSubOnlyDiscount) + mixedLumpBenefitSub)}
+                              {formatWon(mixedSubFinalPrice + mixedLumpBenefitSub)}
                             </strong>
                           </div>
                         )}
@@ -9891,13 +9889,13 @@ export default function BenefitCalculator({ onBack }) {
                       {/* 최종 정산 요약 박스 */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', paddingTop: '0.35rem' }}>
                         <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>
-                          {`총 기준금액 ${formatWon(mixedGrandGross)} | 총 할인 합계 -${formatWon(mixedGrandBenefit + mixedSubServiceBenefit)}`}
+                          {`총 기준금액 ${formatWon(mixedGrandGross)} | 총 할인 합계 -${formatWon(totalGrandSavings)}`}
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.08rem' }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.45rem' }}>
                             <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>고객 최종 실체감가</span>
                             <strong style={{ fontSize: '1.48rem', fontWeight: 900, color: '#1e3a8a', letterSpacing: '-0.02em' }}>
-                              {formatWon(Math.max(0, mixedGrandGross - mixedGrandBenefit - mixedSubServiceBenefit))}
+                              {formatWon(mixedGrandFinal)}
                             </strong>
                           </div>
                           {mixedSubServiceBenefit > 0 && (
