@@ -1510,15 +1510,22 @@ html {
   .a4-print-sheet.a4-page-1 {
     justify-content: flex-start !important;
     gap: 0.35rem !important;
+    height: 297mm !important;
+    min-height: 0 !important;
+    max-height: 297mm !important;
   }
 
   .a4-page-1 .a4-mixed-unified-container {
     justify-content: flex-start !important;
   }
 
-  .a4-page-2 {
+  .a4-page-2,
+  .a4-print-sheet.a4-page-2 {
     page-break-after: avoid !important;
     break-after: avoid !important;
+    height: 297mm !important;
+    min-height: 0 !important;
+    max-height: 297mm !important;
   }
 
   .a4-header {

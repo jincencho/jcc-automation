@@ -2362,8 +2362,9 @@ export default function BenefitCalculator({ onBack }) {
     const discountedGross = rawDisc > 0 ? prepay + monthlyTotal : rawBaseGross;
     const baseGross = Math.max(rawBaseGross, discountedGross);
 
-    // 구독료 할인 (기본 구독 총액 - 선납포함 할인 구독 총액 차액)
-    const feeDiscount = Math.max(0, baseGross - discountedGross);
+    // 구독료 할인 (기본 구독 총액 - 선납 제외 순수 구독료 합계 차액)
+    // ※ 선납금은 별도 '선납금 합계' 항목으로 독립 표시되므로, 구독료 즉시할인에는 순수 월구독료 차액만 산출
+    const feeDiscount = Math.max(0, (baseMonthly - monthly) * months * qty);
 
     const freeRepair = (Number(it.freeRepairFee) || 0) * months * qty;
     const selfCare = (Number(it.selfCareFee) || 0) * qty;
@@ -9318,7 +9319,6 @@ export default function BenefitCalculator({ onBack }) {
                     className="a4-print-sheet a4-page-1 a4-page-break"
                     style={{
                       ...sheetStyle,
-                      minHeight: '1160px',
                       justifyContent: 'flex-start'
                     }}
                   >
@@ -9389,11 +9389,12 @@ export default function BenefitCalculator({ onBack }) {
                                   style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
+                                    gap: '2px',
                                     fontSize: '0.63rem',
                                     fontWeight: 800,
-                                    color: p.isMobile ? '#7c2d12' : '#1e40af',
-                                    background: p.isMobile ? '#fff7ed' : '#eff6ff',
-                                    border: p.isMobile ? '1px solid #fb923c' : '1px solid #60a5fa',
+                                    color: p.isMobile ? '#0369a1' : '#1e40af',
+                                    background: p.isMobile ? '#e0f2fe' : '#eff6ff',
+                                    border: p.isMobile ? '1px solid #7dd3fc' : '1px solid #60a5fa',
                                     borderRadius: '4px',
                                     padding: '1px 4.5px',
                                     lineHeight: 1.25,
@@ -9401,9 +9402,15 @@ export default function BenefitCalculator({ onBack }) {
                                     whiteSpace: 'nowrap'
                                   }}
                                 >
-                                  {p.isMobile
-                                    ? `${itemMonths}개월 무상수리 + 파손보험`
-                                    : `${itemMonths}개월 무상수리`}
+                                  {p.isMobile ? (
+                                    <>
+                                      <Smartphone size={8.5} strokeWidth={2.5} /> {itemMonths}개월 무상수리 + 파손보험
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ShieldCheck size={8.5} strokeWidth={2.5} /> {itemMonths}개월 무상수리
+                                    </>
+                                  )}
                                 </span>
                                 {hasCareService && (
                                   <span
@@ -9489,7 +9496,7 @@ export default function BenefitCalculator({ onBack }) {
                                   {feeDiscountTotal > 0 && (
                                     <span>
                                       <strong style={{ color: '#1e40af' }}>구독료 할인 -{formatWon(feeDiscountTotal)}</strong>{' '}
-                                      <span style={{ fontSize: '0.66rem', color: '#64748b' }}>(기준 {formatWon(itemBaseGross)} → {formatWon(itemDiscountedGross)})</span>
+                                      <span style={{ fontSize: '0.66rem', color: '#64748b' }}>(월 {formatWon(itemBase * qty)} → {formatWon(itemMonthly * qty)})</span>
                                     </span>
                                   )}
                                   {feeDiscountTotal > 0 && itemServiceTotal > 0 && <span style={{ color: '#94a3b8', margin: '0 2px' }}>|</span>}
@@ -9872,7 +9879,7 @@ export default function BenefitCalculator({ onBack }) {
                             <span>
                               <span style={{ color: '#0284c7', marginRight: '4px', fontWeight: 800 }}>•</span>
                               <span style={{ color: '#0369a1', fontWeight: 700 }}>구독케어혜택</span>
-                              <span style={{ fontSize: '0.70rem', color: '#0284c7', fontWeight: 600, marginLeft: '6px' }}>(무상수리연장, 방문케어, 소모품)</span>
+                              <span style={{ fontSize: '0.70rem', color: '#0284c7', fontWeight: 600, marginLeft: '6px' }}>({hasAnyMixedMobile ? '파손보험, 무상수리, 방문케어, 소모품' : '무상수리연장, 방문케어, 소모품'})</span>
                             </span>
                             <span className="a4-minus-blue" style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0284c7' }}>
                               - {formatWon(mixedSubServiceBenefit)} 상당
@@ -10178,9 +10185,29 @@ export default function BenefitCalculator({ onBack }) {
 
                               {/* 모델 옆 케어 아이콘 배지들 (콤팩트 미니 사이즈, flexShrink: 0으로 항상 보장) */}
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', flexShrink: 0, marginLeft: '2px' }}>
+                                {p.isMobile && (
+                                  <span
+                                    title="모바일 파손보험"
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '1.5px',
+                                      fontSize: '0.48rem',
+                                      fontWeight: 800,
+                                      color: '#0284c7',
+                                      background: '#e0f2fe',
+                                      border: '1px solid #7dd3fc',
+                                      borderRadius: '2.5px',
+                                      padding: '0px 2.5px',
+                                      lineHeight: 1.2
+                                    }}
+                                  >
+                                    <Smartphone size={7.5} strokeWidth={2.5} /> 파손보험
+                                  </span>
+                                )}
                                 {hasFree && (
                                   <span
-                                    title={`무상수리 연장 (${pFreeMonths}개월 보증)`}
+                                    title={p.isMobile ? `모바일 파손보험 + 무상수리 (${pFreeMonths}개월 보증)` : `무상수리 연장 (${pFreeMonths}개월 보증)`}
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -10346,7 +10373,7 @@ export default function BenefitCalculator({ onBack }) {
                           <div style={{ flex: 1, minWidth: 0, paddingRight: '6px', lineHeight: 1.25 }}>
                             <div style={{ fontSize: '0.78rem' }}>
                               <span style={{ color: '#0284c7', marginRight: '4px', fontWeight: 800 }}>•</span>
-                              <strong style={{ fontWeight: 900, color: '#0f172a' }}>구독케어: 모바일 무상수리</strong>
+                              <strong style={{ fontWeight: 900, color: '#0f172a' }}>구독케어: 모바일 파손보험+무상수리</strong>
                             </div>
                             <div style={{ fontSize: '0.64rem', color: '#0284c7', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap', opacity: 0.85 }}>
                               (모바일 {mobileFreeServiceCount > 0 ? `${mobileFreeServiceCount}개 품목 / ${mobileFreeServiceQuantity}대, 파손보험` : '보증혜택'})
@@ -10366,7 +10393,7 @@ export default function BenefitCalculator({ onBack }) {
                             <div style={{ fontSize: '0.78rem' }}>
                               <span style={{ color: hasAnyFreeServiceMobile ? '#0284c7' : '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
                               <strong style={{ fontWeight: 900, color: '#0f172a' }}>
-                                구독케어: {hasAnyFreeServiceMobile ? '모바일 무상수리' : '무상수리 연장 이용료'}
+                                구독케어: {hasAnyFreeServiceMobile ? '모바일 파손보험+무상수리' : '무상수리 연장 이용료'}
                               </strong>
                             </div>
                             <div style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
@@ -13794,6 +13821,25 @@ export default function BenefitCalculator({ onBack }) {
                           >
                             구독 모델 {idx + 1}
                           </span>
+                          {item.isMobile && (
+                            <span
+                              style={{
+                                background: 'rgba(56, 189, 248, 0.22)',
+                                border: '1px solid rgba(56, 189, 248, 0.5)',
+                                color: '#38bdf8',
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                padding: '0.2rem 0.45rem',
+                                borderRadius: '5px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                flexShrink: 0
+                              }}
+                            >
+                              <Smartphone size={11} /> 파손보험
+                            </span>
+                          )}
                           <input
                             type="text"
                             maxLength={15}
@@ -14245,6 +14291,26 @@ export default function BenefitCalculator({ onBack }) {
 
                                   return (
                                     <>
+                                      {plan.isMobile && (
+                                        <span
+                                          title="모바일 파손보험"
+                                          style={{
+                                            fontSize: '0.50rem',
+                                            fontWeight: 800,
+                                            color: '#38bdf8',
+                                            background: 'rgba(56, 189, 248, 0.18)',
+                                            border: '1px solid rgba(56, 189, 248, 0.45)',
+                                            borderRadius: '3px',
+                                            padding: '0.5px 3.5px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '1.5px',
+                                            lineHeight: 1.2
+                                          }}
+                                        >
+                                          <Smartphone size={8} /> 파손보험
+                                        </span>
+                                      )}
                                       {(Number(plan.freeRepairFee) || 0) > 0 && (
                                         <span
                                           title={`무상수리 연장 (${freeM}개월 보증)`}
