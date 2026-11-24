@@ -377,16 +377,151 @@ function checkIsSamsungCard(cardName) {
   return name.includes('삼성');
 }
 
-// 필요 실적이 70만원 이상 구간인지 판별 (삼성카드 구독료 7만원 미만 시 70만원 구간 제한용)
+// 26.11월 AI 구독 제휴카드(기본) 공식 정책표 데이터
+const AFFILIATE_CARD_TIERS = {
+  samsung: {
+    cardCompany: '삼성카드',
+    tiers: [
+      { spend: '30만', base: 13000, promo: 3000, total: 16000, label: '30만 (월 16,000원 할인)', note: '기본 1.3만 + 프로모션 0.3만' },
+      { spend: '70만', base: 17000, promo: 9000, total: 26000, minFee: 70000, label: '70만 (월 26,000원 할인 - 구독료 7만↑)', note: '월구독료 7만↑ 조건' },
+      { spend: '120만', base: 23000, promo: 7000, total: 30000, minFee: 70000, label: '120만 (월 30,000원 할인 - 구독료 7만↑)', note: '월구독료 7만↑ 조건' }
+    ]
+  },
+  lotte: {
+    cardCompany: '롯데카드',
+    tiers: [
+      { spend: '50만', base: 15000, promo: 7000, total: 22000, label: '50만 (월 22,000원 할인)', note: '기본 1.5만 + 프로모션 0.7만 (신규)' },
+      { spend: '100만', base: 20000, promo: 6000, total: 26000, label: '100만 (월 26,000원 할인)', note: '기본 2.0만 + 프로모션 0.6만' },
+      { spend: '200만', base: 27000, promo: 3000, total: 30000, label: '200만 (월 30,000원 할인)', note: '기본 2.7만 + 프로모션 0.3만' }
+    ]
+  },
+  kb: {
+    cardCompany: 'KB국민카드',
+    tiers: [
+      { spend: '30만', base: 10000, promo: 8000, total: 18000, label: '30만 (월 18,000원 할인)', note: '기본 1.0만 + 프로모션 0.8만 (36개월)' },
+      { spend: '70만', base: 12000, promo: 10000, total: 22000, label: '70만 (월 22,000원 할인)', note: '기본 1.2만 + 프로모션 1.0만 (36개월)' },
+      { spend: '100만', base: 14000, promo: 13000, total: 27000, label: '100만 (월 27,000원 할인)', note: '기본 1.4만 + 프로모션 1.3만 (36개월)' }
+    ]
+  },
+  woori: {
+    cardCompany: '우리카드',
+    tiers: [
+      { spend: '30만', base: 10000, promo: 7000, total: 17000, label: '30만 (월 17,000원 할인)', note: '기본 1.0만 + 프로모션 0.7만 (60개월)' },
+      { spend: '70만', base: 15000, promo: 5000, total: 20000, label: '70만 (월 20,000원 할인)', note: '기본 1.5만 + 프로모션 0.5만 (60개월)' },
+      { spend: '150만', base: 25000, promo: 1000, total: 26000, label: '150만 (월 26,000원 할인)', note: '기본 2.5만 + 프로모션 0.1만 (60개월)' }
+    ]
+  },
+  hana: {
+    cardCompany: '하나카드',
+    tiers: [
+      { spend: '30만', base: 13000, promo: 0, total: 13000, label: '30만 (월 13,000원 할인)', note: '기본 1.3만' },
+      { spend: '80만', base: 18000, promo: 0, total: 18000, label: '80만 (월 18,000원 할인)', note: '기본 1.8만 (연회비 캐시백 2.5만 1회)' },
+      { spend: '150만', base: 25000, promo: 0, total: 25000, label: '150만 (월 25,000원 할인)', note: '기본 2.5만' }
+    ]
+  }
+};
+
+const COMMON_SPEND_LIST = ['30만', '40만', '50만', '70만', '80만', '100만', '120만', '150만', '200만'];
+
+function getCardPolicyKey(cardName) {
+  if (!cardName || typeof cardName !== 'string') return null;
+  const lower = cardName.trim().toLowerCase();
+  if (lower.includes('kb') || lower.includes('국민')) return 'kb';
+  if (lower.includes('우리')) return 'woori';
+  if (lower.includes('하나')) return 'hana';
+  if (lower.includes('롯데') || lower.includes('로카') || lower.includes('amex')) return 'lotte';
+  if (checkIsSamsungCard(lower)) return 'samsung';
+  return null;
+}
+
+// 필요실적 텍스트(예: '70만', '50만원', '월 70만', '700000', '70')를 원 단위 숫자로 변환
+function parseSpendToWon(spendStr) {
+  if (!spendStr) return 0;
+  const s = String(spendStr).replace(/^월\s*/, '').replace(/^필요실적\s*/, '').replace(/\s*사용$/, '').trim();
+  const manMatch = s.match(/([\d.]+)\s*만/);
+  if (manMatch) {
+    return Math.round(parseFloat(manMatch[1]) * 10000);
+  }
+  const cleanNumStr = s.replace(/,/g, '').replace(/원/g, '').trim();
+  const numMatch = cleanNumStr.match(/^[\d.]+/);
+  if (!numMatch) return 0;
+  const val = parseFloat(numMatch[0]);
+  if (isNaN(val)) return 0;
+  if (val < 1000) {
+    return Math.round(val * 10000);
+  }
+  return Math.round(val);
+}
+
+function normalizeSpendValue(raw) {
+  if (!raw) return '30만';
+  const str = String(raw).trim();
+  const won = parseSpendToWon(str);
+  if (won > 0) {
+    const man = Math.round(won / 10000);
+    return `${man}만`;
+  }
+  return str;
+}
+
+// 필요 실적이 70만원 이상 구간인지 판별 (삼성카드 구독료 7만원 미만 시 70만/120만 구간 제한용)
 function isSpend70kOrMore(val) {
   if (!val) return false;
+  const won = parseSpendToWon(val);
+  if (won >= 700000) return true;
   const str = String(val).trim().replace(/,/g, '');
-  if (/70\s*만/.test(str)) return true;
-  if (/^70$/.test(str)) return true;
-  const num = parseFloat(str.replace(/[^0-9.]/g, ''));
-  if (!isNaN(num) && num >= 700000) return true;
-  if (!isNaN(num) && num === 70 && !str.includes('천')) return true;
+  if (/70\s*만/.test(str) || /120\s*만/.test(str) || /150\s*만/.test(str) || /200\s*만/.test(str)) return true;
   return false;
+}
+
+function getCardSpendOptions(cardName, pFee = 0) {
+  const policyKey = getCardPolicyKey(cardName);
+  const pol = policyKey ? AFFILIATE_CARD_TIERS[policyKey] : null;
+  const policyTiers = pol
+    ? pol.tiers.map((t) => ({
+        value: t.spend,
+        label: t.label,
+        discount: t.total,
+        minFee: t.minFee,
+        isPolicy: true
+      }))
+    : [];
+
+  const policySpendSet = new Set(policyTiers.map((t) => t.value));
+  const otherTiers = COMMON_SPEND_LIST
+    .filter((s) => !policySpendSet.has(s))
+    .map((s) => ({
+      value: s,
+      label: `${s}`,
+      isPolicy: false
+    }));
+
+  return {
+    policyKey,
+    cardCompany: pol?.cardCompany || getCardCompanyShort(cardName) || '제휴카드',
+    policyTiers,
+    otherTiers
+  };
+}
+
+function getDefaultDiscountForCardSpend(cardName, spendStr, currentDiscount = 0, pFee = 0) {
+  const norm = normalizeSpendValue(spendStr);
+  const policyKey = getCardPolicyKey(cardName);
+  if (!policyKey) {
+    return currentDiscount || 16000;
+  }
+  const pol = AFFILIATE_CARD_TIERS[policyKey];
+  const matchedTier = pol.tiers.find((t) => t.spend === norm);
+  if (matchedTier) {
+    if (policyKey === 'samsung' && matchedTier.minFee && pFee < matchedTier.minFee) {
+      return 16000;
+    }
+    return matchedTier.total;
+  }
+  if (policyKey === 'samsung') {
+    return parseSpendToWon(norm) >= 700000 && pFee >= 70000 ? 26000 : 16000;
+  }
+  return currentDiscount || 16000;
 }
 
 function getAffiliateCardPolicy(cardName) {
@@ -428,25 +563,6 @@ function checkIsSubFeeRecognizedCard(cardName) {
   const lower = cardName.trim().toLowerCase();
   if (lower.includes('롯데') || lower.includes('로카') || lower.includes('amex')) return true;
   return checkIsSamsungCard(cardName);
-}
-
-// 필요실적 텍스트(예: '70만', '50만원', '월 70만', '700000', '70')를 원 단위 숫자로 변환
-function parseSpendToWon(spendStr) {
-  if (!spendStr) return 0;
-  const s = String(spendStr).replace(/^월\s*/, '').replace(/^필요실적\s*/, '').replace(/\s*사용$/, '').trim();
-  const manMatch = s.match(/([\d.]+)\s*만/);
-  if (manMatch) {
-    return Math.round(parseFloat(manMatch[1]) * 10000);
-  }
-  const cleanNumStr = s.replace(/,/g, '').replace(/원/g, '').trim();
-  const numMatch = cleanNumStr.match(/^[\d.]+/);
-  if (!numMatch) return 0;
-  const val = parseFloat(numMatch[0]);
-  if (isNaN(val)) return 0;
-  if (val < 1000) {
-    return Math.round(val * 10000);
-  }
-  return Math.round(val);
 }
 
 // 카드 필요실적 및 월 구독료를 바탕으로 실질 필요실적 안내 문구 생성
@@ -1305,7 +1421,7 @@ export default function BenefitCalculator({ onBack }) {
       const firstIsSamsung = checkIsSamsungCard(prev[0]?.cardName || subCardName || '');
       const newCardName = firstIsSamsung ? '구독엔로카 AMEX' : '삼성전자 AI구독 삼성카드';
       const newSpend = firstIsSamsung ? '50만' : '70만';
-      const newMonthly = firstIsSamsung ? 16000 : 26000;
+      const newMonthly = firstIsSamsung ? 22000 : 26000;
 
       return [
         ...updatedPrev,
@@ -2537,18 +2653,29 @@ export default function BenefitCalculator({ onBack }) {
       // 다구간 수동 오버라이드를 초기화하여 깔끔하게 1구간(단일)으로 복귀
       setSubSegmentSpendOverrides({});
       setSubSegmentCardOverrides({});
-      if (cardFullName.includes('롯데') || cardFullName.includes('로카')) {
+      const policyKey = getCardPolicyKey(cardFullName);
+      if (policyKey === 'lotte') {
         setSubCardMinSpend('50만');
+        setSubCardMonthly(22000);
+      } else if (policyKey === 'kb') {
+        setSubCardMinSpend('30만');
+        setSubCardMonthly(18000);
+      } else if (policyKey === 'woori') {
+        setSubCardMinSpend('30만');
+        setSubCardMonthly(17000);
+      } else if (policyKey === 'hana') {
+        setSubCardMinSpend('30만');
+        setSubCardMonthly(13000);
       } else {
         setSubCardMinSpend('30만');
+        setSubCardMonthly(16000);
       }
-      setSubCardMonthly(16000);
     }
   };
 
   const handleSelectCardPresetForCard = (cardId, cardFullName) => {
-    const isSamsung = checkIsSamsungCard(cardFullName);
-    const isLotte = cardFullName.includes('롯데') || cardFullName.includes('로카');
+    const policyKey = getCardPolicyKey(cardFullName);
+    const isSamsung = policyKey === 'samsung';
     const cardItem = subCards.find((c) => c.id === cardId);
     const cardIdx = subCards.findIndex((c) => c.id === cardId);
     const isSingleCard = subCards.length === 1;
@@ -2569,8 +2696,24 @@ export default function BenefitCalculator({ onBack }) {
       targetMonths = selectedItems.length > 0 ? Math.max(...selectedItems.map((item) => Number(item.months) || 72)) : subMonths;
     }
 
-    const defaultSpend = isSamsung ? (targetMonthly >= 70000 ? '70만' : '30만') : isLotte ? '50만' : '30만';
-    const defaultMonthly = isSamsung ? (targetMonthly >= 70000 ? 26000 : 16000) : 16000;
+    let defaultSpend = '30만';
+    let defaultMonthly = 16000;
+    if (policyKey === 'samsung') {
+      defaultSpend = targetMonthly >= 70000 ? '70만' : '30만';
+      defaultMonthly = targetMonthly >= 70000 ? 26000 : 16000;
+    } else if (policyKey === 'lotte') {
+      defaultSpend = '50만';
+      defaultMonthly = 22000;
+    } else if (policyKey === 'kb') {
+      defaultSpend = '30만';
+      defaultMonthly = 18000;
+    } else if (policyKey === 'woori') {
+      defaultSpend = '30만';
+      defaultMonthly = 17000;
+    } else if (policyKey === 'hana') {
+      defaultSpend = '30만';
+      defaultMonthly = 13000;
+    }
 
     handleUpdateCard(cardId, {
       cardName: cardFullName,
@@ -15295,42 +15438,71 @@ export default function BenefitCalculator({ onBack }) {
                                   <div>
                                     <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#dbeafe', marginBottom: '0.28rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                       <span>2. 필요 실적 (전월 실적)</span>
-                                      <span className="calc-tag-type input">✏️ 직접입력</span>
+                                      <span className="calc-tag-type select">▼ 드롭다운</span>
                                     </div>
-                                    <input
-                                      type="text"
-                                      value={segSpendVal}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (isSamsung && seg.baseMonthly < 70000 && isSpend70kOrMore(val)) {
-                                          alert(`삼성카드는 해당 구간 월 구독료가 7만원 미만(${formatWon(seg.baseMonthly)})일 때 70만원 실적(26,000원 할인)을 적용할 수 없습니다.\n30만원 실적(16,000원 할인) 구간으로 적용됩니다.`);
-                                          handleSegmentSpendOverride(seg.endMonth, '30만', idx === 0);
-                                          handleSegmentCardOverride(seg.endMonth, 16000, idx === 0);
-                                          return;
-                                        }
-                                        handleSegmentSpendOverride(seg.endMonth, val, idx === 0);
-                                        if (isSamsung && (val.includes('30') || val === '30만') && segCardVal === 26000) {
-                                          handleSegmentCardOverride(seg.endMonth, 16000, idx === 0);
-                                        }
-                                        if (isSamsung && seg.baseMonthly >= 70000 && (val.includes('70') || val === '70만') && segCardVal === 16000) {
-                                          handleSegmentCardOverride(seg.endMonth, 26000, idx === 0);
-                                        }
-                                      }}
-                                      placeholder={idx === 0 ? '예: 70만 / 50만' : '예: 30만 / 50만'}
-                                      className="calc-input-editable"
-                                      style={{
-                                        width: '100%',
-                                        minHeight: '40px',
-                                        padding: '0.45rem 0.65rem',
-                                        fontSize: '0.85rem',
-                                        border: isSamsung && seg.baseMonthly < 70000 && isSpend70kOrMore(segSpendVal)
-                                          ? '1px solid #ef4444'
-                                          : undefined
-                                      }}
-                                    />
+                                    {(() => {
+                                      const { policyTiers, otherTiers, cardCompany } = getCardSpendOptions(cardItem.cardName, seg.baseMonthly);
+                                      const currentVal = normalizeSpendValue(segSpendVal);
+                                      const allValues = new Set([...policyTiers.map((t) => t.value), ...otherTiers.map((t) => t.value)]);
+                                      const hasCustom = !allValues.has(currentVal);
+
+                                      return (
+                                        <select
+                                          value={currentVal}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (isSamsung && seg.baseMonthly < 70000 && isSpend70kOrMore(val)) {
+                                              alert(`삼성카드는 해당 구간 월 구독료가 7만원 미만(${formatWon(seg.baseMonthly)})일 때 70만원/120만원 실적(26,000원 이상 할인)을 적용할 수 없습니다.\n30만원 실적(16,000원 할인) 구간으로 적용됩니다.`);
+                                              handleSegmentSpendOverride(seg.endMonth, '30만', idx === 0);
+                                              handleSegmentCardOverride(seg.endMonth, 16000, idx === 0);
+                                              return;
+                                            }
+                                            handleSegmentSpendOverride(seg.endMonth, val, idx === 0);
+                                            const autoDiscount = getDefaultDiscountForCardSpend(cardItem.cardName, val, segCardVal, seg.baseMonthly);
+                                            if (autoDiscount && autoDiscount !== segCardVal) {
+                                              handleSegmentCardOverride(seg.endMonth, autoDiscount, idx === 0);
+                                            }
+                                          }}
+                                          className="calc-select-clickable"
+                                          style={{
+                                            width: '100%',
+                                            minHeight: '40px',
+                                            padding: '0.45rem 0.65rem',
+                                            fontSize: '0.85rem',
+                                            border: isSamsung && seg.baseMonthly < 70000 && isSpend70kOrMore(segSpendVal)
+                                              ? '1px solid #ef4444'
+                                              : undefined
+                                          }}
+                                        >
+                                          {policyTiers.length > 0 && (
+                                            <optgroup label={`📋 ${cardCompany} 정책표 실적`}>
+                                              {policyTiers.map((t) => (
+                                                <option key={t.value} value={t.value}>
+                                                  {t.label}
+                                                </option>
+                                              ))}
+                                            </optgroup>
+                                          )}
+                                          {otherTiers.length > 0 && (
+                                            <optgroup label="기타 실적 구간">
+                                              {otherTiers.map((t) => (
+                                                <option key={t.value} value={t.value}>
+                                                  {t.label}
+                                                </option>
+                                              ))}
+                                            </optgroup>
+                                          )}
+                                          {hasCustom && (
+                                            <optgroup label="현재 설정값">
+                                              <option value={currentVal}>{currentVal} (설정됨)</option>
+                                            </optgroup>
+                                          )}
+                                        </select>
+                                      );
+                                    })()}
                                     {isSamsung && seg.baseMonthly < 70000 && (
                                       <div style={{ fontSize: '0.71rem', color: '#f87171', marginTop: '0.2rem', fontWeight: 600 }}>
-                                        ⚠️ 구독료 7만원 미만 구간: 70만원 실적 불가 (30만/1.6만 전용)
+                                        ⚠️ 구독료 7만원 미만 구간: 70만/120만 실적 불가 (30만/1.6만 전용)
                                       </div>
                                     )}
                                     {isDeducted && (
@@ -15406,52 +15578,79 @@ export default function BenefitCalculator({ onBack }) {
                               <div>
                                 <div style={{ marginBottom: '0.28rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                   <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>2. 필요 실적 (전월 실적)</span>
-                                  <span className="calc-tag-type input">✏️ 직접입력</span>
+                                  <span className="calc-tag-type select">▼ 드롭다운</span>
                                 </div>
-                                <input
-                                  type="text"
-                                  value={cardItem.minSpend}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    if (isSamsungFeeUnder70k && isSpend70kOrMore(val)) {
-                                      alert(`삼성카드는 적용 모델의 월 구독료가 7만원 미만(${formatWon(pFee)})일 경우 70만원 실적(26,000원 할인)을 적용할 수 없습니다.\n30만원 실적(16,000원 할인)으로 자동 변경됩니다.`);
-                                      handleUpdateCard(cardItem.id, {
-                                        minSpend: '30만',
-                                        monthly: Math.min(Number(cardItem.monthly) || 16000, 16000)
-                                      });
-                                      if (cardIdx === 0) setSubSegmentSpendOverrides({});
-                                      return;
-                                    }
-                                    const patch = { minSpend: val };
-                                    // 삼성카드 실적 30만 입력 시: 청구할인이 26,000원이면 16,000원으로 자동 동기화
-                                    if (isSamsung && (val.includes('30') || val === '30만') && Number(cardItem.monthly) === 26000) {
-                                      patch.monthly = 16000;
-                                    }
-                                    // 삼성카드 실적 70만 입력 시: 구독료 7만 이상이고 청구할인이 16,000원이면 26,000원으로 자동 동기화
-                                    if (isSamsung && !isSamsungFeeUnder70k && (val.includes('70') || val === '70만') && Number(cardItem.monthly) === 16000) {
-                                      patch.monthly = 26000;
-                                    }
-                                    handleUpdateCard(cardItem.id, patch);
-                                    if (cardIdx === 0) {
-                                      setSubSegmentSpendOverrides({});
-                                      if (patch.monthly !== undefined) setSubSegmentCardOverrides({});
-                                    }
-                                  }}
-                                  placeholder="필요 실적 직접 입력 (예: 50만 / 30만원)"
-                                  className="calc-input-editable"
-                                  style={{
-                                    width: '100%',
-                                    minHeight: '42px',
-                                    padding: '0.54rem 0.75rem',
-                                    fontSize: '0.88rem',
-                                    border: isSamsungFeeUnder70k && isSpend70kOrMore(cardItem.minSpend)
-                                      ? '1px solid #ef4444'
-                                      : undefined
-                                  }}
-                                />
+                                {(() => {
+                                  const { policyTiers, otherTiers, cardCompany } = getCardSpendOptions(cardItem.cardName, pFee);
+                                  const currentVal = normalizeSpendValue(cardItem.minSpend);
+                                  const allValues = new Set([...policyTiers.map((t) => t.value), ...otherTiers.map((t) => t.value)]);
+                                  const hasCustom = !allValues.has(currentVal);
+
+                                  return (
+                                    <select
+                                      value={currentVal}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (isSamsungFeeUnder70k && isSpend70kOrMore(val)) {
+                                          alert(`삼성카드는 적용 모델의 월 구독료가 7만원 미만(${formatWon(pFee)})일 경우 70만원/120만원 실적(26,000원 이상 할인)을 적용할 수 없습니다.\n30만원 실적(16,000원 할인)으로 자동 변경됩니다.`);
+                                          handleUpdateCard(cardItem.id, {
+                                            minSpend: '30만',
+                                            monthly: 16000
+                                          });
+                                          if (cardIdx === 0) setSubSegmentSpendOverrides({});
+                                          return;
+                                        }
+                                        const autoDiscount = getDefaultDiscountForCardSpend(cardItem.cardName, val, Number(cardItem.monthly) || 0, pFee);
+                                        const patch = { minSpend: val };
+                                        if (autoDiscount) {
+                                          patch.monthly = autoDiscount;
+                                        }
+                                        handleUpdateCard(cardItem.id, patch);
+                                        if (cardIdx === 0) {
+                                          setSubSegmentSpendOverrides({});
+                                          if (patch.monthly !== undefined) setSubSegmentCardOverrides({});
+                                        }
+                                      }}
+                                      className="calc-select-clickable"
+                                      style={{
+                                        width: '100%',
+                                        minHeight: '42px',
+                                        padding: '0.54rem 0.75rem',
+                                        fontSize: '0.88rem',
+                                        border: isSamsungFeeUnder70k && isSpend70kOrMore(cardItem.minSpend)
+                                          ? '1px solid #ef4444'
+                                          : undefined
+                                      }}
+                                    >
+                                      {policyTiers.length > 0 && (
+                                        <optgroup label={`📋 ${cardCompany} 정책표 실적`}>
+                                          {policyTiers.map((t) => (
+                                            <option key={t.value} value={t.value}>
+                                              {t.label}
+                                            </option>
+                                          ))}
+                                        </optgroup>
+                                      )}
+                                      {otherTiers.length > 0 && (
+                                        <optgroup label="기타 실적 구간">
+                                          {otherTiers.map((t) => (
+                                            <option key={t.value} value={t.value}>
+                                              {t.label}
+                                            </option>
+                                          ))}
+                                        </optgroup>
+                                      )}
+                                      {hasCustom && (
+                                        <optgroup label="현재 설정값">
+                                          <option value={currentVal}>{currentVal} (설정됨)</option>
+                                        </optgroup>
+                                      )}
+                                    </select>
+                                  );
+                                })()}
                                 {isSamsungFeeUnder70k && (
                                   <div style={{ fontSize: '0.71rem', color: '#f87171', marginTop: '0.24rem', fontWeight: 600 }}>
-                                    ⚠️ 적용 구독료 7만원 미만({formatWon(pFee)}): 70만원 실적 불가 (30만/1.6만 할인 제한)
+                                    ⚠️ 적용 구독료 7만원 미만({formatWon(pFee)}): 70만/120만 실적 불가 (30만/1.6만 할인 제한)
                                   </div>
                                 )}
                                 {isDeducted && (

@@ -411,6 +411,13 @@ html {
   color: #ffffff;
 }
 
+.calc-select-clickable optgroup {
+  background-color: #1e293b;
+  color: #38bdf8;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
 /* 3. 클릭할 수 있는 인터랙티브 버튼/토글 (Clickable Buttons / Pills / Toggles) */
 .calc-btn-interactive {
   display: inline-flex;
