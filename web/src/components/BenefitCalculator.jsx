@@ -988,7 +988,7 @@ export default function BenefitCalculator({ onBack }) {
     }
     return {
       status: 'idle', // 'idle' | 'checking' | 'downloading' | 'ready_to_apply' | 'up_to_date' | 'offline'
-      activeVersion: (typeof window !== 'undefined' && window.__JCC_ACTIVE_VERSION__) || '2026.11.22',
+      activeVersion: (typeof window !== 'undefined' && window.__JCC_ACTIVE_VERSION__) || '2026.11.24',
       remoteVersion: null,
       source: (typeof window !== 'undefined' && window.__JCC_VERSION_SOURCE__) || 'embedded'
     };
@@ -1004,6 +1004,22 @@ export default function BenefitCalculator({ onBack }) {
     window.addEventListener('jcc-ota-status', handler);
     if (window.__JCC_OTA_STATE__) {
       setOtaState((prev) => ({ ...prev, ...window.__JCC_OTA_STATE__ }));
+    }
+    // 온라인 환경인 경우 최신 배포 버전 메타데이터를 자동 조회하여 시스템 버전을 동기화
+    if (!window.__JCC_IS_OFFLINE__) {
+      fetch('/ota-meta.json?_t=' + Date.now())
+        .then((res) => (res.ok ? res.json() : null))
+        .then((meta) => {
+          if (meta && meta.version) {
+            setOtaState((prev) => ({
+              ...prev,
+              activeVersion: meta.version,
+              source: 'online'
+            }));
+            window.__JCC_ACTIVE_VERSION__ = meta.version;
+          }
+        })
+        .catch(() => {});
     }
     return () => window.removeEventListener('jcc-ota-status', handler);
   }, []);
@@ -8134,6 +8150,23 @@ export default function BenefitCalculator({ onBack }) {
           >
             ⏱️ 5분 미사용 시 자동잠금
           </span>
+          <span
+            style={{
+              fontSize: '0.73rem',
+              fontWeight: 800,
+              color: '#38bdf8',
+              background: 'rgba(56, 189, 248, 0.14)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              padding: '0.14rem 0.55rem',
+              borderRadius: '999px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.2rem'
+            }}
+            title="현재 실행 중인 시스템 버전"
+          >
+            🏷️ v{otaState.activeVersion || '2026.11.24'}
+          </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
@@ -9453,8 +9486,21 @@ export default function BenefitCalculator({ onBack }) {
                               </span>
                               <div style={{ flexShrink: 0, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', marginLeft: '0.45rem' }}>
                                 {itemPrepay > 0 && (
-                                  <span style={{ fontSize: '0.64rem', color: '#1e3a8a', fontWeight: 700, background: '#eff6ff', padding: '1px 4.5px', borderRadius: '4px', border: '1px solid #bfdbfe', display: 'inline-block' }}>
-                                    선납 {formatWon(itemPrepay)}
+                                  <span
+                                    title={`선납금 ${formatWon(itemPrepay)}`}
+                                    style={{
+                                      fontSize: '0.62rem',
+                                      color: '#b45309',
+                                      fontWeight: 800,
+                                      background: '#fef3c7',
+                                      padding: '1px 4px',
+                                      borderRadius: '3.5px',
+                                      border: '1px solid #fde68a',
+                                      display: 'inline-block',
+                                      lineHeight: 1.2
+                                    }}
+                                  >
+                                    선납
                                   </span>
                                 )}
                                 {diff > 0 ? (
@@ -10176,8 +10222,21 @@ export default function BenefitCalculator({ onBack }) {
                                 </span>
                               )}
                               {pPrepay > 0 && (
-                                <span style={{ flexShrink: 0, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '3px', padding: '0 3px', fontSize: '0.58rem', fontWeight: 800 }}>
-                                  선납 {formatWon(pPrepay)}
+                                <span
+                                  title={`선납금 ${formatWon(pPrepay)}`}
+                                  style={{
+                                    flexShrink: 0,
+                                    color: '#b45309',
+                                    background: '#fef3c7',
+                                    border: '1px solid #fde68a',
+                                    borderRadius: '3px',
+                                    padding: '0 3.5px',
+                                    fontSize: '0.58rem',
+                                    fontWeight: 800,
+                                    lineHeight: 1.2
+                                  }}
+                                >
+                                  선납
                                 </span>
                               )}
 
@@ -11157,6 +11216,20 @@ export default function BenefitCalculator({ onBack }) {
           }}
         >
           <Calculator size={15} /> JCC SMART BENEFIT CALCULATOR
+          <span
+            style={{
+              fontSize: '0.70rem',
+              color: '#38bdf8',
+              fontWeight: 800,
+              background: 'rgba(56, 189, 248, 0.2)',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              padding: '1px 6px',
+              borderRadius: '4px',
+              marginLeft: '0.2rem'
+            }}
+          >
+            v{otaState.activeVersion || '2026.11.24'}
+          </span>
         </div>
         <h2 style={{ fontSize: 'clamp(1.7rem, 4vw, 2.4rem)', fontWeight: 800, marginBottom: '0.5rem' }}>
           {isMixedMode ? (

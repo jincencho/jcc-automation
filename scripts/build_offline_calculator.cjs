@@ -111,7 +111,7 @@ function StandaloneApp() {
               borderRadius: '999px'
             }}
           >
-            사내망·오프라인 HTML (v{BUNDLE_VERSION})
+            사내망·오프라인 HTML (v{otaState.activeVersion || BUNDLE_VERSION})
           </span>
 
           {/* 실시간 기능 자동동기화 상태 배지 */}
@@ -524,6 +524,7 @@ if (typeof window.__JCC_HANDLE_REMOTE_BUNDLE__ === 'function') {
   }
 
   async function findLatestRemoteMeta() {
+    var candidates = [];
     for (var i = 0; i < META_ENDPOINTS.length; i++) {
       var ep = META_ENDPOINTS[i];
       try {
@@ -533,17 +534,24 @@ if (typeof window.__JCC_HANDLE_REMOTE_BUNDLE__ === 'function') {
         var json = await fetchWithTimeout(queryUrl, { headers: ep.headers }, 5000);
         var meta = ep.parseMeta(json);
         if (meta && meta.version) {
-          return { meta: meta, route: ep.name };
+          candidates.push({ meta: meta, route: ep.name });
         }
       } catch (e) {}
     }
     // CORS 및 사내망 보안 정책으로 fetch가 차단된 경우, Script 태그 주입 방식으로 2차 시도!
     try {
       var scriptResult = await fetchMetaViaScript();
-      if (scriptResult) return scriptResult;
+      if (scriptResult && scriptResult.meta) {
+        candidates.push(scriptResult);
+      }
     } catch (scriptErr) {}
 
-    return null;
+    if (candidates.length === 0) return null;
+    // Vercel과 Supabase 중 가장 최신 버전인 메타를 우선 선택
+    candidates.sort(function(a, b) {
+      return (b.meta.version || "").localeCompare(a.meta.version || "");
+    });
+    return candidates[0];
   }
 
   async function downloadFullBundleFromSupabase(expectedMeta) {
@@ -672,9 +680,12 @@ if (typeof window.__JCC_HANDLE_REMOTE_BUNDLE__ === 'function') {
             window.location.reload();
           }
         } else {
-          // 사용자가 아직 로그인 전이거나 폼 입력 전이라면 0.4초 후 즉시 자동 리로드하여 최신 버전 적용
+          // 미입력 상태이거나 로그인 전인 경우 0.4초 후 즉시 새로고침하여 최신 버전 적용
+          var isDirty = Array.from(document.querySelectorAll("input.calc-input-editable")).some(function(i) {
+            return i.value && i.value.trim() !== "" && i.value !== "0" && i.value !== "1";
+          });
           var hasAuth = sessionStorage.getItem("jcc_calc_auth") === "true";
-          if (!hasAuth) {
+          if (!hasAuth || !isDirty) {
             setTimeout(function() {
               window.location.reload();
             }, 400);
