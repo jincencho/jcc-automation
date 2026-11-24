@@ -5,6 +5,9 @@ import { jsPDF } from 'jspdf';
 import { DEPT_POS_BARCODES } from '../constants/deptBarcodes';
 import { BRAND_LOGO_B64, MANAGER_PROFILE_B64 } from '../constants/brandAssets';
 import {
+  User,
+  Users,
+  Globe,
   Lock,
   Unlock,
   Calculator,
@@ -45,7 +48,8 @@ import {
   Minus,
   Crown,
   ArrowRight,
-  FileDown
+  FileDown,
+  Package
 } from 'lucide-react';
 import {
   fetchCloudQuotes,
@@ -138,7 +142,7 @@ function BarcodeSvg({ value = '1041315089', width = 230, height = 44 }) {
   );
 }
 
-// 금액 입력 컴포넌트 (콤마 자동 포맷 + 원화 단위 보조 텍스트)
+// 금액 입력 컴포넌트 (콤마 자동 포맷 + 원화 단위 보조 텍스트 + 직접입력 시각 가이드)
 function MoneyInput({ value, onChange, placeholder = '0', accentColor = 'var(--accent-gold)', compact = false }) {
   const numericValue = Number(value) || 0;
   const displayValue = numericValue === 0 ? '' : numericValue.toLocaleString('ko-KR');
@@ -151,37 +155,21 @@ function MoneyInput({ value, onChange, placeholder = '0', accentColor = 'var(--a
   return (
     <div style={{ width: '100%' }}>
       <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          background: 'rgba(15, 23, 42, 0.75)',
-          border: '1px solid var(--glass-border)',
-          borderRadius: '10px',
-          padding: compact ? '0.5rem 0.75rem' : '0.68rem 0.85rem',
-          gap: '0.4rem',
-          transition: 'border-color 0.2s'
-        }}
+        className={`calc-money-wrapper ${compact ? 'compact' : ''}`}
+        style={accentColor ? { '--accent-input-color': accentColor } : undefined}
       >
+        <span style={{ color: '#64748b', fontSize: '0.74rem', marginRight: '0.2rem', pointerEvents: 'none' }} title="직접 입력 칸">
+          ✏️
+        </span>
         <input
           type="text"
           inputMode="numeric"
           value={displayValue}
           onChange={handleTextChange}
           placeholder={placeholder}
-          style={{
-            flex: 1,
-            width: '100%',
-            minWidth: 0,
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            color: 'white',
-            fontSize: compact ? '1rem' : '1.12rem',
-            fontWeight: 700,
-            textAlign: 'right'
-          }}
+          className="calc-money-input-field"
         />
-        <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600, flexShrink: 0 }}>원</span>
+        <span className="calc-money-unit-label">원</span>
       </div>
     </div>
   );
@@ -1447,10 +1435,42 @@ export default function BenefitCalculator({ onBack }) {
     );
   };
 
+  // 최고 혜택 풀패키지 구독케어 (무상60 + 방문36 + 소모품36) 원클릭 프리셋
+  const handleApplyFullCarePackage = (planId) => {
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const currentCareItems = Array.isArray(p.careItems) ? p.careItems : [];
+        const existingVisit = currentCareItems.find((c) => c.type === 'visit');
+        const existingConsumable = currentCareItems.find((c) => c.type === 'consumable' || c.type === 'all');
+        const visitItem = existingVisit
+          ? { ...existingVisit, cycle: 36, amount: Number(existingVisit.amount) > 0 ? existingVisit.amount : 50000 }
+          : { id: 1, type: 'visit', cycle: 36, count: 1, amount: 50000, customName: '' };
+        const consumableItem = existingConsumable
+          ? { ...existingConsumable, cycle: 36, amount: Number(existingConsumable.amount) > 0 ? existingConsumable.amount : 20000 }
+          : { id: 2, type: 'consumable', cycle: 36, count: 1, amount: 20000, customName: '' };
+        return {
+          ...p,
+          freeRepairFee: Number(p.freeRepairFee) > 0 ? p.freeRepairFee : 3000,
+          freeRepairMonths: 60,
+          careItems: [visitItem, consumableItem]
+        };
+      })
+    );
+  };
+
   const handleUpdateSubPlan = (id, patch) => {
     setSubPlans((prev) => {
       const isFirst = prev[0]?.id === id;
-      const updated = prev.map((p) => (p.id === id ? { ...p, ...patch } : p));
+      const updated = prev.map((p) => {
+        if (p.id !== id) return p;
+        const nextP = { ...p, ...patch };
+        // 약정기간 변경 시 무상수리 보증기간도 별도 지정하지 않았거나 기존 약정과 동일했던 경우 동기화
+        if (patch.months && (!p.freeRepairMonths || p.freeRepairMonths === p.months)) {
+          nextP.freeRepairMonths = patch.months;
+        }
+        return nextP;
+      });
       if (patch.months && (isFirst || prev.length === 1)) {
         // 1번 구독 약정기간이 변경되면, 제휴 무상서비스의 약정기간도 동일하게 기본 연동!
         setSubFreeServiceItems((prevFree) =>
@@ -2688,7 +2708,7 @@ export default function BenefitCalculator({ onBack }) {
           id: p.id,
           monthlyFee: Number(p.freeRepairFee) || 0,
           quantity: 1,
-          months: Number(p.months) || 72,
+          months: Number(p.freeRepairMonths) || Number(p.months) || 72,
           isMobile: Boolean(p.isMobile),
           name: p.name
         }));
@@ -2807,6 +2827,30 @@ export default function BenefitCalculator({ onBack }) {
     ? subCareServiceItems.filter((it) => (Number(it.amount) || 0) > 0)
     : activeSubCareItems;
   const validCareServiceCount = validCareServiceItems.length;
+
+  // 전문 케어서비스 종류별 갯수 요약 (예: 방문케어 1회 / 소모품 1개 - 모델명 제외하고 갯수만 간결 표시)
+  const careCountsByType = validCareServiceItems.reduce((acc, it) => {
+    const rawType = (it.serviceType || '케어').trim();
+    const typeLabel = rawType.includes('방문')
+      ? '방문케어'
+      : rawType.includes('소모품')
+        ? '소모품'
+        : rawType.includes('셀프')
+          ? '셀프케어'
+          : rawType;
+    const cnt = Number(it.count) || 1;
+    const unit = it.unit || (typeLabel.includes('소모품') ? '개' : '회');
+    if (!acc[typeLabel]) {
+      acc[typeLabel] = { count: 0, unit };
+    }
+    acc[typeLabel].count += cnt;
+    return acc;
+  }, {});
+
+  const careCountSummaryText = Object.entries(careCountsByType)
+    .map(([t, data]) => `${t} ${data.count}${data.unit}`)
+    .join(' / ') || (validCareServiceCount > 0 ? `총 ${validCareServiceCount}개 항목` : '케어서비스');
+
   const hasCareService = subCareServiceAmount > 0;
   const subServiceTotal = (Number(subFreeServiceAmount) || 0) + (Number(subCareServiceAmount) || 0);
   const subCashBenefitTotal = (subFeeDiscountTotal || 0) + subCardTotalDiscount + (Number(subPurchaseBenefit) || 0);
@@ -4087,6 +4131,11 @@ export default function BenefitCalculator({ onBack }) {
   const [activeQuoteId, setActiveQuoteId] = useState(null);
   const [saveNotice, setSaveNotice] = useState('');
 
+  // 매니저별 개인 저장소 및 팀 공용 저장소 분리 관리
+  const [quoteStorageTab, setQuoteStorageTab] = useState('private'); // 'private' (내 개인 보관함) | 'public' (팀 공용 보관함)
+  const [quoteSaveScope, setQuoteSaveScope] = useState('private'); // 'private' | 'public'
+  const [adminFilterManager, setAdminFilterManager] = useState('all'); // 'all' | managerId (관리자 전용 필터)
+
   useEffect(() => {
     try {
       localStorage.setItem('jcc_calc_saved_quotes_compare', JSON.stringify(savedQuotesCompare));
@@ -4111,6 +4160,29 @@ export default function BenefitCalculator({ onBack }) {
       setSavedQuotesCompare(updater);
     }
   };
+
+  // 공용 견적 (scope === 'public' 이거나 scope가 없는 기존 견적)
+  const publicQuotes = savedQuotes.filter((q) => q.scope === 'public' || (!q.scope && q.data?.scope !== 'private'));
+
+  // 개인 견적:
+  const allPrivateQuotes = savedQuotes.filter((q) => q.scope === 'private' || q.data?.scope === 'private');
+
+  const currentManagerPrivateQuotes = allPrivateQuotes.filter((q) => {
+    if (isAdminUser) {
+      if (adminFilterManager && adminFilterManager !== 'all') {
+        const qCreatorId = (q.creatorId || q.data?.creatorId || '').toLowerCase();
+        return qCreatorId === adminFilterManager.toLowerCase();
+      }
+      return true;
+    }
+    const currentId = (currentUser?.id || '').toLowerCase();
+    const currentUid = currentUser?.uid || '';
+    const qCreatorId = (q.creatorId || q.data?.creatorId || '').toLowerCase();
+    const qCreatorUid = q.creatorUid || q.data?.creatorUid || '';
+    return (currentUid && qCreatorUid === currentUid) || (currentId && qCreatorId === currentId);
+  });
+
+  const displayedQuotes = quoteStorageTab === 'public' ? publicQuotes : currentManagerPrivateQuotes;
 
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'synced' | 'error'
@@ -4171,7 +4243,7 @@ export default function BenefitCalculator({ onBack }) {
     }, 2800);
   };
 
-  const buildCurrentQuoteSnapshot = (customTitle) => {
+  const buildCurrentQuoteSnapshot = (customTitle, targetScope = quoteSaveScope) => {
     const autoTitle =
       [customerName && `${customerName} 고객님`, productSummary].filter(Boolean).join(' · ') ||
       `${consultType} (${consultDate})`;
@@ -4182,12 +4254,19 @@ export default function BenefitCalculator({ onBack }) {
     ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     const modeTag = isMixedMode ? 'mixed' : 'compare';
+    const creatorId = currentUser?.id || 'admin';
+    const creatorName = currentUser?.name || currentUser?.id || '관리자';
+    const creatorUid = currentUser?.uid || '';
 
     return {
       id: `q_${modeTag}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       mode: modeTag,
       title,
       savedAt,
+      scope: targetScope,
+      creatorId,
+      creatorName,
+      creatorUid,
       summary: {
         mode: modeTag,
         lumpFinalPrice,
@@ -4198,6 +4277,10 @@ export default function BenefitCalculator({ onBack }) {
         mixedSubMonthlyAfterCard
       },
       data: {
+        scope: targetScope,
+        creatorId,
+        creatorName,
+        creatorUid,
         customerName,
         consultDate,
         consultType,
@@ -4441,16 +4524,18 @@ export default function BenefitCalculator({ onBack }) {
     return true;
   };
 
-  const handleSaveNewQuote = () => {
-    const snapshot = buildCurrentQuoteSnapshot();
+  const handleSaveNewQuote = (customTitle, targetScope = quoteSaveScope) => {
+    const snapshot = buildCurrentQuoteSnapshot(customTitle, targetScope);
     setSavedQuotes((prev) => [snapshot, ...prev]);
     setActiveQuoteId(snapshot.id);
     setQuoteTitleInput(snapshot.title);
-    showTempNotice(`✓ '${snapshot.title}' 견적이 저장되었습니다. (클라우드 동기화 중...)`);
+    setQuoteStorageTab(targetScope);
+    const scopeLabel = targetScope === 'public' ? '팀 공용' : '내 개인';
+    showTempNotice(`✓ '${snapshot.title}' 견적이 [${scopeLabel} 보관함]에 저장되었습니다.`);
     saveCloudQuote(snapshot).then((res) => {
       if (res.success) {
         setCloudSyncStatus('synced');
-        showTempNotice(`✓ '${snapshot.title}' 견적이 클라우드에 실시간 동기화되었습니다.`);
+        showTempNotice(`✓ '${snapshot.title}' 견적이 클라우드(${scopeLabel})에 실시간 동기화되었습니다.`);
       }
     });
   };
@@ -4458,8 +4543,8 @@ export default function BenefitCalculator({ onBack }) {
   const handleOverwriteActiveQuote = () => {
     let targetId = activeQuoteId;
     if (!targetId) {
-      if (savedQuotes.length > 0) {
-        const latest = savedQuotes[0];
+      if (displayedQuotes.length > 0) {
+        const latest = displayedQuotes[0];
         const ok = window.confirm(
           `선택된 견적이 없습니다. 가장 최근 보관된 '${latest.title}' 견적에 덮어쓰시겠습니까?\n(취소 시 새 견적으로 저장됩니다)`
         );
@@ -4473,19 +4558,61 @@ export default function BenefitCalculator({ onBack }) {
       handleSaveNewQuote();
       return;
     }
-    const snapshot = buildCurrentQuoteSnapshot();
-    const updatedSnapshot = { ...snapshot, id: targetId };
+    const currentTarget = savedQuotes.find((q) => q.id === targetId);
+    const existingScope = currentTarget?.scope || currentTarget?.data?.scope || quoteSaveScope;
+    const snapshot = buildCurrentQuoteSnapshot(undefined, existingScope);
+    const updatedSnapshot = {
+      ...snapshot,
+      id: targetId,
+      scope: existingScope,
+      creatorId: currentTarget?.creatorId || snapshot.creatorId,
+      creatorName: currentTarget?.creatorName || snapshot.creatorName,
+      data: {
+        ...(snapshot.data || {}),
+        scope: existingScope,
+        creatorId: currentTarget?.creatorId || snapshot.creatorId,
+        creatorName: currentTarget?.creatorName || snapshot.creatorName
+      }
+    };
     setSavedQuotes((prev) =>
       prev.map((q) => (q.id === targetId ? updatedSnapshot : q))
     );
     setQuoteTitleInput(snapshot.title);
-    showTempNotice(`✓ '${snapshot.title}' 견적이 수정되었습니다. (클라우드 동기화 중...)`);
+    const scopeLabel = existingScope === 'public' ? '팀 공용' : '내 개인';
+    showTempNotice(`✓ '${snapshot.title}' 견적이 [${scopeLabel} 보관함]에 수정 저장되었습니다.`);
     saveCloudQuote(updatedSnapshot).then((res) => {
       if (res.success) {
         setCloudSyncStatus('synced');
         showTempNotice(`✓ '${snapshot.title}' 견적이 클라우드에 수정 반영되었습니다.`);
       }
     });
+  };
+
+  const handleToggleQuoteScope = (quote) => {
+    const isCurrentlyPrivate = quote.scope === 'private' || quote.data?.scope === 'private';
+    const nextScope = isCurrentlyPrivate ? 'public' : 'private';
+    const nextLabel = nextScope === 'public' ? '팀 공용' : '내 개인';
+    if (!window.confirm(`'${quote.title}' 견적을 [${nextLabel} 보관함]으로 전환하시겠습니까?\n(${nextScope === 'public' ? '지점 내 모든 매니저가 함께 볼 수 있습니다.' : '나만 볼 수 있는 개인 보관함으로 이동합니다.'})`)) return;
+
+    const updatedSnapshot = {
+      ...quote,
+      scope: nextScope,
+      creatorId: currentUser?.id || quote.creatorId || 'admin',
+      creatorName: currentUser?.name || quote.creatorName || '관리자',
+      creatorUid: currentUser?.uid || quote.creatorUid || '',
+      data: {
+        ...(quote.data || {}),
+        scope: nextScope,
+        creatorId: currentUser?.id || quote.creatorId || 'admin',
+        creatorName: currentUser?.name || quote.creatorName || '관리자',
+        creatorUid: currentUser?.uid || quote.creatorUid || ''
+      }
+    };
+
+    setSavedQuotes((prev) => prev.map((q) => (q.id === quote.id ? updatedSnapshot : q)));
+    setQuoteStorageTab(nextScope);
+    showTempNotice(`✓ '${quote.title}' 견적이 [${nextLabel} 보관함]으로 전환되었습니다.`);
+    saveCloudQuote(updatedSnapshot).catch((e) => console.error(e));
   };
 
   const handleLoadQuote = (quote) => {
@@ -4505,14 +4632,18 @@ export default function BenefitCalculator({ onBack }) {
   };
 
   const handleExportQuoteFile = () => {
-    const currentSnapshot = buildCurrentQuoteSnapshot();
+    const currentSnapshot = buildCurrentQuoteSnapshot(undefined, quoteSaveScope);
     const safeFileTitle = currentSnapshot.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
     const modeLabel = isMixedMode ? '2번_구독포함' : '1번_구독비교';
+    const scopeLabel = quoteStorageTab === 'public' ? '공용견적' : `개인견적_${currentUser?.id || 'manager'}`;
     const payloadType = isMixedMode ? 'JCC_QUOTE_MIXED_ARCHIVE' : 'JCC_QUOTE_COMPARE_ARCHIVE';
-    const currentList = isMixedMode ? savedQuotesMixed : savedQuotesCompare;
+    const currentList = displayedQuotes;
     const payload = {
       type: payloadType,
       mode: isMixedMode ? 'mixed' : 'compare',
+      scope: quoteStorageTab,
+      creatorId: currentUser?.id || 'admin',
+      creatorName: currentUser?.name || '관리자',
       exportedAt: new Date().toISOString(),
       currentQuote: currentSnapshot,
       savedQuotes: currentList.some((q) => q.id === activeQuoteId)
@@ -4523,12 +4654,12 @@ export default function BenefitCalculator({ onBack }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `JCC_${modeLabel}_${safeFileTitle}.json`;
+    a.download = `JCC_${modeLabel}_${scopeLabel}_${safeFileTitle}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showTempNotice(`✓ ${isMixedMode ? '2번 구독 포함' : '1번 구독 비교'} 견적 파일(JCC_${modeLabel}_${safeFileTitle}.json)이 다운로드되었습니다.`);
+    showTempNotice(`✓ ${isMixedMode ? '2번' : '1번'} [${quoteStorageTab === 'public' ? '공용' : '개인'}] 견적 파일(${a.download})이 다운로드되었습니다.`);
   };
 
   const handleImportQuoteFile = (e) => {
@@ -4570,8 +4701,17 @@ export default function BenefitCalculator({ onBack }) {
         }
 
         if (fileType === 'JCC_QUOTE_ARCHIVE' || fileType === 'JCC_QUOTE_COMPARE_ARCHIVE' || fileType === 'JCC_QUOTE_MIXED_ARCHIVE') {
-          const incomingList = Array.isArray(parsed.savedQuotes) ? parsed.savedQuotes : [];
-          const targetQuote = parsed.currentQuote || incomingList[0];
+          const rawIncomingList = Array.isArray(parsed.savedQuotes) ? parsed.savedQuotes : [];
+          const targetQuote = parsed.currentQuote || rawIncomingList[0];
+          const incomingScope = parsed.scope || quoteStorageTab;
+
+          const incomingList = rawIncomingList.map((q) => ({
+            ...q,
+            scope: q.scope || q.data?.scope || incomingScope,
+            creatorId: q.creatorId || q.data?.creatorId || currentUser?.id || 'admin',
+            creatorName: q.creatorName || q.data?.creatorName || currentUser?.name || '관리자'
+          }));
+
           if (incomingList.length > 0) {
             setSavedQuotes((prev) => {
               const existingIds = new Set(prev.map((q) => q.id));
@@ -4579,24 +4719,39 @@ export default function BenefitCalculator({ onBack }) {
               return merged;
             });
           } else if (targetQuote) {
-            setSavedQuotes((prev) => [targetQuote, ...prev.filter((q) => q.id !== targetQuote.id)]);
+            const wrappedTarget = {
+              ...targetQuote,
+              scope: targetQuote.scope || targetQuote.data?.scope || incomingScope,
+              creatorId: targetQuote.creatorId || targetQuote.data?.creatorId || currentUser?.id || 'admin',
+              creatorName: targetQuote.creatorName || targetQuote.data?.creatorName || currentUser?.name || '관리자'
+            };
+            setSavedQuotes((prev) => [wrappedTarget, ...prev.filter((q) => q.id !== wrappedTarget.id)]);
           }
           if (targetQuote && applyQuoteData(targetQuote)) {
-            showTempNotice(`✓ 파일에서 '${targetQuote.title}' 견적(${incomingList.length || 1}건)을 불러왔습니다.`);
+            setQuoteStorageTab(incomingScope);
+            showTempNotice(`✓ 파일에서 '${targetQuote.title}' 견적(${incomingList.length || 1}건, ${incomingScope === 'public' ? '공용' : '개인'})을 불러왔습니다.`);
           }
         } else if (parsed && typeof parsed === 'object') {
           const wrapped = parsed.data
-            ? parsed
+            ? {
+                ...parsed,
+                scope: parsed.scope || parsed.data?.scope || quoteStorageTab,
+                creatorId: parsed.creatorId || parsed.data?.creatorId || currentUser?.id || 'admin',
+                creatorName: parsed.creatorName || parsed.data?.creatorName || currentUser?.name || '관리자'
+              }
             : {
                 id: `q_${isMixedMode ? 'mixed' : 'compare'}_${Date.now()}`,
                 mode: isMixedMode ? 'mixed' : 'compare',
                 title: file.name.replace(/\.json$/i, ''),
                 savedAt: todayStr,
+                scope: quoteStorageTab,
+                creatorId: currentUser?.id || 'admin',
+                creatorName: currentUser?.name || '관리자',
                 data: parsed
               };
           setSavedQuotes((prev) => [wrapped, ...prev.filter((q) => q.id !== wrapped.id)]);
           applyQuoteData(wrapped);
-          showTempNotice(`✓ 파일에서 '${wrapped.title}' 견적을 불러왔습니다.`);
+          showTempNotice(`✓ 파일에서 '${wrapped.title}' 견적(${quoteStorageTab === 'public' ? '공용' : '개인'})을 불러왔습니다.`);
         }
       } catch {
         alert('견적 파일(.json) 형식이 올바르지 않습니다.');
@@ -7929,7 +8084,8 @@ export default function BenefitCalculator({ onBack }) {
           background: 'rgba(15, 23, 42, 0.85)',
           border: '1px solid var(--glass-border)',
           borderRadius: '12px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
+          boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+          flexWrap: 'wrap'
         }}
       >
         <button
@@ -7941,22 +8097,23 @@ export default function BenefitCalculator({ onBack }) {
             setSaveNotice('');
           }}
           style={{
-            flex: 1,
-            height: '42px',
-            padding: '0 1rem',
+            flex: '1 1 140px',
+            minHeight: '44px',
+            padding: '0.45rem 0.75rem',
             borderRadius: '8px',
             border: 'none',
             background: !isMixedMode ? 'linear-gradient(135deg, #1e3a8a, #2563eb)' : 'transparent',
             color: !isMixedMode ? '#ffffff' : 'var(--text-secondary)',
             fontWeight: 800,
-            fontSize: '0.90rem',
+            fontSize: '0.88rem',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.45rem',
             boxShadow: !isMixedMode ? '0 4px 12px rgba(37, 99, 235, 0.35)' : 'none',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            lineHeight: 1.3
           }}
         >
           <Scale size={17} /> 1번 구독 비교 계산기
@@ -7972,22 +8129,23 @@ export default function BenefitCalculator({ onBack }) {
               setSaveNotice('');
             }}
             style={{
-              flex: 1,
-              height: '42px',
-              padding: '0 1rem',
+              flex: '1 1 140px',
+              minHeight: '44px',
+              padding: '0.45rem 0.75rem',
               borderRadius: '8px',
               border: 'none',
               background: isMixedMode ? 'linear-gradient(135deg, #059669, #10b981)' : 'transparent',
               color: isMixedMode ? '#ffffff' : 'var(--text-secondary)',
               fontWeight: 800,
-              fontSize: '0.90rem',
+              fontSize: '0.88rem',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '0.45rem',
               boxShadow: isMixedMode ? '0 4px 12px rgba(16, 185, 129, 0.35)' : 'none',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              lineHeight: 1.3
             }}
           >
             <Layers size={17} /> 2번 구독 포함 계산기
@@ -8424,9 +8582,19 @@ export default function BenefitCalculator({ onBack }) {
           );
 
           const renderA4Footer = (showManager = true, showDisclaimer = !isMixedMode) => (
-            <>
+            <div
+              className="a4-footer-wrapper"
+              style={{
+                marginTop: 'auto',
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.35rem',
+                flexShrink: 0
+              }}
+            >
               {showDisclaimer && (
-                <p className="a4-disclaimer">
+                <p className="a4-disclaimer" style={{ margin: 0 }}>
                   * 본 비교서는 상담일 기준 프로모션 / 제휴카드 할인 / 카드 할부금리를 반영한 예상 안내 자료이며, 결제 시점 정책 및 카드 실적에 따라 변동될 수 있습니다.
                 </p>
               )}
@@ -8486,7 +8654,7 @@ export default function BenefitCalculator({ onBack }) {
                   </div>
                 </footer>
               )}
-            </>
+            </div>
           );
 
           const renderPage2ExtraInfo = () => {
@@ -9384,6 +9552,9 @@ export default function BenefitCalculator({ onBack }) {
                 </div>
               </div>
 
+              {/* 유연한 상단 빈칸 영역 (내용이 적을 때 명함을 제일 하단에 고정하고 윗칸을 빈칸으로 채움) */}
+              <div className="a4-flex-spacer" style={{ flex: '1 1 auto', minHeight: 0 }} />
+
               {/* 1페이지 하단: 사진과 명함 제외 */}
               {renderA4Footer(false)}
             </div>
@@ -9535,6 +9706,9 @@ export default function BenefitCalculator({ onBack }) {
 
                 {/* 전국 유일 스마트 견적서 차별화 어필 배너 */}
                 {renderPage2AppealBanner()}
+
+                {/* 유연한 상단 빈칸 영역 (내용이 적을 때 명함을 제일 하단에 고정하고 윗칸을 빈칸으로 채움) */}
+                <div className="a4-flex-spacer" style={{ flex: '1 1 auto', minHeight: 0 }} />
 
                 {renderA4Footer()}
               </div>
@@ -9736,7 +9910,7 @@ export default function BenefitCalculator({ onBack }) {
                     )}
                   </div>
 
-                  {/* 모델별 기본구독료(취소선) 및 할인구독료 요약 */}
+                  {/* 모델별 기본구독료(취소선) 및 할인구독료 요약 + 케어 아이콘 표시 */}
                   {activePlans.some((p) => p.name?.trim() || (p.unitBaseMonthly || 0) > (p.unitMonthly || 0) || (p.prepay || 0) > 0) && (
                     <div style={{ marginTop: '0.35rem', paddingTop: '0.3rem', borderTop: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                       {activePlans.map((p, pIdx) => {
@@ -9746,18 +9920,167 @@ export default function BenefitCalculator({ onBack }) {
                         const dMonthly = p.unitMonthly || 0;
                         const hasDiff = bMonthly > dMonthly;
                         const pPrepay = Number(p.prepay) || 0;
+
+                        // 모델별 설정된 케어서비스 아이콘 판별 (무상36/48/60/72, 방문/소모품/셀프 주기 동적 연동)
+                        const pCareItems = Array.isArray(p.careItems) ? p.careItems : [];
+                        const hasFree = (Number(p.freeRepairFee) || 0) > 0;
+                        const pFreeMonths = Number(p.freeRepairMonths) || Number(p.months) || 60;
+
+                        const pVisitCycles = Array.from(new Set(
+                          pCareItems
+                            .filter((c) => (c.type === 'visit' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
+                            .map((c) => Number(c.cycle) || 36)
+                        ));
+                        if (pVisitCycles.length === 0 && (p.careType === 'visit' || p.careType === 'all') && (Number(p.careAmount) || 0) > 0) {
+                          pVisitCycles.push(Number(p.careCycle) || 36);
+                        }
+
+                        const pSelfCycles = Array.from(new Set(
+                          pCareItems
+                            .filter((c) => c.type === 'self' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
+                            .map((c) => Number(c.cycle) || 36)
+                        ));
+                        if (pSelfCycles.length === 0 && p.careType === 'self' && (Number(p.careAmount) || 0) > 0) {
+                          pSelfCycles.push(Number(p.careCycle) || 36);
+                        }
+
+                        const pConsumableCycles = Array.from(new Set(
+                          pCareItems
+                            .filter((c) => (c.type === 'consumable' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
+                            .map((c) => Number(c.cycle) || 36)
+                        ));
+                        if (pConsumableCycles.length === 0 && (p.careType === 'consumable' || p.careType === 'all') && (Number(p.careAmount) || 0) > 0) {
+                          pConsumableCycles.push(Number(p.careCycle) || 36);
+                        }
+
+                        const pCustomItems = pCareItems.filter((c) => c.type === 'custom' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+
                         return (
                           <div key={p.id || pIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.69rem', color: '#475569', gap: '6px' }}>
-                            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              <strong style={{ color: '#1e40af', marginRight: '3px' }}>{pIdx + 1}.</strong>
-                              {label}
-                              {p.quantity > 1 ? ` (${p.quantity}대)` : ''}
+                            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '3px', overflow: 'hidden' }}>
+                              <strong style={{ color: '#1e40af', flexShrink: 0 }}>{pIdx + 1}.</strong>
+                              <span style={{ fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '0 1 auto', minWidth: '35px' }} title={label}>
+                                {label}
+                              </span>
+                              {p.quantity > 1 && (
+                                <span style={{ flexShrink: 0, fontSize: '0.63rem', color: '#64748b' }}>
+                                  ({p.quantity}대)
+                                </span>
+                              )}
                               {pPrepay > 0 && (
-                                <span style={{ color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '3px', padding: '0 4px', fontSize: '0.60rem', fontWeight: 800, marginLeft: '4px' }}>
+                                <span style={{ flexShrink: 0, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '3px', padding: '0 3px', fontSize: '0.58rem', fontWeight: 800 }}>
                                   선납 {formatWon(pPrepay)}
                                 </span>
                               )}
-                            </span>
+
+                              {/* 모델 옆 케어 아이콘 배지들 (콤팩트 미니 사이즈, flexShrink: 0으로 항상 보장) */}
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', flexShrink: 0, marginLeft: '2px' }}>
+                                {hasFree && (
+                                  <span
+                                    title={`무상수리 연장 (${pFreeMonths}개월 보증)`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '1.5px',
+                                      fontSize: '0.48rem',
+                                      fontWeight: 800,
+                                      color: '#1d4ed8',
+                                      background: '#eff6ff',
+                                      border: '1px solid #bfdbfe',
+                                      borderRadius: '2.5px',
+                                      padding: '0px 2.5px',
+                                      lineHeight: 1.2
+                                    }}
+                                  >
+                                    <ShieldCheck size={7.5} strokeWidth={2.5} /> 무상{pFreeMonths}
+                                  </span>
+                                )}
+                                {pVisitCycles.map((cyc) => (
+                                  <span
+                                    key={`p-visit-${cyc}`}
+                                    title={`전문 엔지니어 방문케어 (${cyc}개월 주기)`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '1.5px',
+                                      fontSize: '0.48rem',
+                                      fontWeight: 800,
+                                      color: '#047857',
+                                      background: '#ecfdf5',
+                                      border: '1px solid #a7f3d0',
+                                      borderRadius: '2.5px',
+                                      padding: '0px 2.5px',
+                                      lineHeight: 1.2
+                                    }}
+                                  >
+                                    <Wrench size={7.5} strokeWidth={2.5} /> 방문{cyc}
+                                  </span>
+                                ))}
+                                {pSelfCycles.map((cyc) => (
+                                  <span
+                                    key={`p-self-${cyc}`}
+                                    title={`셀프 케어 (${cyc}개월 주기)`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '1.5px',
+                                      fontSize: '0.48rem',
+                                      fontWeight: 800,
+                                      color: '#6d28d9',
+                                      background: '#f5f3ff',
+                                      border: '1px solid #ddd6fe',
+                                      borderRadius: '2.5px',
+                                      padding: '0px 2.5px',
+                                      lineHeight: 1.2
+                                    }}
+                                  >
+                                    <Sparkles size={7.5} strokeWidth={2.5} /> 셀프{cyc}
+                                  </span>
+                                ))}
+                                {pConsumableCycles.map((cyc) => (
+                                  <span
+                                    key={`p-consumable-${cyc}`}
+                                    title={`정기 소모품 교체 (${cyc}개월 주기)`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '1.5px',
+                                      fontSize: '0.48rem',
+                                      fontWeight: 800,
+                                      color: '#b45309',
+                                      background: '#fffbeb',
+                                      border: '1px solid #fde68a',
+                                      borderRadius: '2.5px',
+                                      padding: '0px 2.5px',
+                                      lineHeight: 1.2
+                                    }}
+                                  >
+                                    <Package size={7.5} strokeWidth={2.5} /> 소모품{cyc}
+                                  </span>
+                                ))}
+                                {pCustomItems.map((c, i) => (
+                                  <span
+                                    key={`p-custom-${c.id || i}`}
+                                    title={`맞춤 케어: ${c.customName || '케어'}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '1.5px',
+                                      fontSize: '0.48rem',
+                                      fontWeight: 800,
+                                      color: '#0284c7',
+                                      background: '#f0f9ff',
+                                      border: '1px solid #bae6fd',
+                                      borderRadius: '2.5px',
+                                      padding: '0px 2.5px',
+                                      lineHeight: 1.2
+                                    }}
+                                  >
+                                    <Sparkles size={7.5} strokeWidth={2.5} /> {(c.customName || '케어').slice(0, 4)}{c.cycle ? c.cycle : ''}
+                                  </span>
+                                ))}
+                              </span>
+                            </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap', flexShrink: 0 }}>
                               {hasDiff && (
                                 <span style={{ fontSize: '0.65rem', color: '#64748b', textDecoration: 'line-through', display: 'inline-block' }}>
@@ -9778,8 +10101,7 @@ export default function BenefitCalculator({ onBack }) {
                 <div className="a4-plan-middle">
                   <div className="a4-divider-label">적용 혜택 및 서비스</div>
                   <div className="a4-benefit-list">
-                    {/* ===== [첫번째 혜택: 구독케어 및 구독 혜택] ===== */}
-                    {/* 1-1) 기본구독료 대비 즉시할인 (취소선 및 할인 표시) */}
+                    {/* ===== [첫번째 혜택: 구독료 즉시할인] ===== */}
                     {subFeeDiscountTotal > 0 && (
                       <div className="a4-benefit-row" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: '6px' }}>
@@ -9797,7 +10119,7 @@ export default function BenefitCalculator({ onBack }) {
                       </div>
                     )}
 
-                    {/* 1-2) 무상수리 연장 이용료 (가전 / 모바일) */}
+                    {/* ===== [두번째 혜택: 무상수리 연장 이용료 (갯수와 금액만 표시)] ===== */}
                     {isCombinedFreeService ? (
                       <>
                         <div className="a4-benefit-row" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -9835,31 +10157,31 @@ export default function BenefitCalculator({ onBack }) {
                         </div>
                       </>
                     ) : (
-                      <div className="a4-benefit-row" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                        <div style={{ flex: 1, minWidth: 0, paddingRight: '6px', lineHeight: 1.25 }}>
-                          <div style={{ fontSize: '0.78rem' }}>
-                            <span style={{ color: hasAnyFreeServiceMobile ? '#0284c7' : '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
-                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>
-                              구독케어: {hasAnyFreeServiceMobile ? '모바일 무상수리' : '무상수리 연장 이용료'}
-                            </strong>
+                      subFreeServiceAmount > 0 && (
+                        <div className="a4-benefit-row" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                          <div style={{ flex: 1, minWidth: 0, paddingRight: '6px', lineHeight: 1.25 }}>
+                            <div style={{ fontSize: '0.78rem' }}>
+                              <span style={{ color: hasAnyFreeServiceMobile ? '#0284c7' : '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
+                              <strong style={{ fontWeight: 900, color: '#0f172a' }}>
+                                구독케어: {hasAnyFreeServiceMobile ? '모바일 무상수리' : '무상수리 연장 이용료'}
+                              </strong>
+                            </div>
+                            <div style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
+                              ({hasAnyFreeServiceMobile
+                                ? `모바일 ${validFreeServiceCount}개 품목 / ${totalFreeServiceQuantity}대, 파손보험`
+                                : validFreeServiceCount > 0
+                                  ? `총 ${validFreeServiceCount}개 품목 / ${totalFreeServiceQuantity}대`
+                                  : '보증혜택'})
+                            </div>
                           </div>
-                          <div style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
-                            ({hasAnyFreeServiceMobile
-                              ? `모바일 ${validFreeServiceCount}개 품목 / ${totalFreeServiceQuantity}대, 파손보험`
-                              : validFreeServiceCount > 0
-                                ? `총 ${validFreeServiceCount}개 품목 / ${totalFreeServiceQuantity}대`
-                                : '보증혜택'})
-                          </div>
+                          <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem', flexShrink: 0, marginTop: '1px', whiteSpace: 'nowrap' }}>
+                            {formatWon(subFreeServiceAmount)} 상당
+                          </strong>
                         </div>
-                        <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem', flexShrink: 0, marginTop: '1px', whiteSpace: 'nowrap' }}>
-                          {subFreeServiceAmount > 0
-                            ? `${formatWon(subFreeServiceAmount)} 상당`
-                            : '무상 보증 포함'}
-                        </strong>
-                      </div>
+                      )
                     )}
 
-                    {/* 1-3) 전문 케어서비스 혜택 (방문케어/소모품) */}
+                    {/* ===== [세번째 혜택: 전문 케어서비스 (갯수와 금액만 표시)] ===== */}
                     {hasCareService && (
                       <div className="a4-benefit-row" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: '6px', lineHeight: 1.25 }}>
@@ -9867,12 +10189,8 @@ export default function BenefitCalculator({ onBack }) {
                             <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
                             <strong style={{ fontWeight: 900, color: '#0f172a' }}>구독케어: 전문 케어서비스</strong>
                           </div>
-                          <div style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            ({validCareServiceCount <= 2
-                              ? validCareServiceItems
-                                  .map((it) => `${it.name?.trim() || '케어서비스'} ${it.count || 1}${it.unit || (it.name?.includes('소모품') ? '개' : '회')}`)
-                                  .join(' / ')
-                              : `방문관리/소모품 총 ${validCareServiceCount}개 항목`})
+                          <div style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 500, marginTop: '2px', marginLeft: '9px', whiteSpace: 'nowrap' }}>
+                            ({careCountSummaryText})
                           </div>
                         </div>
                         <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem', flexShrink: 0, marginTop: '1px', whiteSpace: 'nowrap' }}>
@@ -9881,7 +10199,7 @@ export default function BenefitCalculator({ onBack }) {
                       </div>
                     )}
 
-                    {/* ===== [두번째 혜택: 제휴카드 할인] ===== */}
+                    {/* ===== [네번째 혜택: 제휴카드 할인] ===== */}
                     {subCardTotalDiscount > 0 && (
                       <div>
                         <div
@@ -9958,7 +10276,7 @@ export default function BenefitCalculator({ onBack }) {
                       </div>
                     )}
 
-                    {/* ===== [세번째 혜택: 캐시백] ===== */}
+                    {/* ===== [다섯번째 혜택: 캐시백] ===== */}
                     {!isMixedMode && (Number(subPurchaseBenefit) || 0) > 0 && (
                       <div className="a4-benefit-row" style={{ alignItems: 'center' }}>
                         <span style={{ fontSize: '0.78rem' }}>
@@ -10045,6 +10363,9 @@ export default function BenefitCalculator({ onBack }) {
 
             {/* 4. 제휴카드 실적인정 기준 안내 & 메모 */}
             {renderPage2ExtraInfo()}
+
+            {/* 유연한 상단 빈칸 영역 (내용이 적을 때 명함을 제일 하단에 고정하고 윗칸을 빈칸으로 채움) */}
+            <div className="a4-flex-spacer" style={{ flex: '1 1 auto', minHeight: 0 }} />
 
             {/* 5. 조준석 매니저 하단 명함 영역 */}
             {renderA4Footer()}
@@ -10625,7 +10946,7 @@ export default function BenefitCalculator({ onBack }) {
         </p>
       </div>
 
-      {/* 0) 견적 보관함 (저장 · 1클릭 불러오기 · 파일 백업/이동) */}
+      {/* 0) 견적 보관함 (매니저별 개인 저장 vs 팀 공용 저장 분리) */}
       <div
         className="glass-panel calc-no-hover"
         style={{
@@ -10648,21 +10969,30 @@ export default function BenefitCalculator({ onBack }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <FolderOpen size={19} style={{ color: '#34d399' }} />
             <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#a7f3d0', margin: 0 }}>
-              {isMixedMode ? '2번 견적 보관함 (구독 포함 전용)' : '1번 견적 보관함 (구독 비교 전용)'}
+              {isMixedMode ? '2번 견적 보관함' : '1번 견적 보관함'}
             </h3>
+
+            {/* 현재 로그인 매니저 배지 */}
             <span
               style={{
-                fontSize: '0.75rem',
+                fontSize: '0.74rem',
                 fontWeight: 700,
-                padding: '0.16rem 0.55rem',
+                padding: '0.18rem 0.6rem',
                 borderRadius: '999px',
-                background: 'rgba(16, 185, 129, 0.16)',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                color: '#6ee7b7'
+                background: 'rgba(99, 102, 241, 0.16)',
+                border: '1px solid rgba(99, 102, 241, 0.4)',
+                color: '#c7d2fe',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem'
               }}
+              title="로그인 매니저 계정별로 개인 보관함이 격리되어 보관됩니다."
             >
-              보관 {savedQuotes.length}건
+              <User size={12} />
+              {currentUser?.name || currentUser?.id || '매니저'}
+              {isAdminUser && <span style={{ color: '#fde047', fontSize: '0.7rem' }}> (관리자)</span>}
             </span>
+
             <span
               style={{
                 fontSize: '0.72rem',
@@ -10718,11 +11048,7 @@ export default function BenefitCalculator({ onBack }) {
             <button
               type="button"
               onClick={handleExportQuoteFile}
-              title={
-                isMixedMode
-                  ? "현재 입력된 2번 견적과 보관함 목록을 파일(.json)로 저장하여 다른 PC로 옮길 수 있습니다."
-                  : "현재 입력된 1번 견적과 보관함 목록을 파일(.json)로 저장하여 다른 PC로 옮길 수 있습니다."
-              }
+              title={`현재 선택된 [${quoteStorageTab === 'public' ? '공용' : '개인'}] 보관함 목록을 파일(.json)로 내보냅니다.`}
               style={{
                 height: '32px',
                 background: 'rgba(59, 130, 246, 0.12)',
@@ -10740,10 +11066,10 @@ export default function BenefitCalculator({ onBack }) {
                 boxSizing: 'border-box'
               }}
             >
-              <Download size={13} /> 내보내기 (.json)
+              <Download size={13} /> {quoteStorageTab === 'public' ? '공용' : '개인'} 내보내기 (.json)
             </button>
             <label
-              title={isMixedMode ? "저장해둔 2번 견적 파일(.json)을 불러옵니다." : "저장해둔 1번 견적 파일(.json)을 불러옵니다."}
+              title="저장해둔 견적 백업 파일(.json)을 불러옵니다."
               style={{
                 height: '32px',
                 background: 'rgba(255, 255, 255, 0.06)',
@@ -10773,16 +11099,204 @@ export default function BenefitCalculator({ onBack }) {
           </div>
         </div>
 
-        {/* 현재 견적 저장 입력줄 */}
+        {/* 보관함 구분 탭: [ 🔒 내 개인 보관함 (N) ] vs [ 🌐 팀 공용 보관함 (M) ] */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.6rem',
+            padding: '0.45rem 0.6rem',
+            borderRadius: '10px',
+            background: 'rgba(2, 6, 23, 0.55)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            marginBottom: '0.9rem'
+          }}
+        >
+          <div style={{ display: 'inline-flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setQuoteStorageTab('private')}
+              style={{
+                height: '34px',
+                padding: '0 1rem',
+                borderRadius: '8px',
+                fontSize: '0.84rem',
+                fontWeight: quoteStorageTab === 'private' ? 800 : 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.42rem',
+                border: quoteStorageTab === 'private' ? '1px solid #10b981' : '1px solid transparent',
+                background: quoteStorageTab === 'private' ? 'rgba(16, 185, 129, 0.22)' : 'transparent',
+                color: quoteStorageTab === 'private' ? '#6ee7b7' : '#94a3b8',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Lock size={14} />
+              <span>내 개인 보관함</span>
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '0.08rem 0.45rem',
+                  borderRadius: '999px',
+                  background: quoteStorageTab === 'private' ? '#10b981' : 'rgba(255,255,255,0.1)',
+                  color: quoteStorageTab === 'private' ? '#042f24' : '#cbd5e1',
+                  fontWeight: 800
+                }}
+              >
+                {currentManagerPrivateQuotes.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setQuoteStorageTab('public')}
+              style={{
+                height: '34px',
+                padding: '0 1rem',
+                borderRadius: '8px',
+                fontSize: '0.84rem',
+                fontWeight: quoteStorageTab === 'public' ? 800 : 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.42rem',
+                border: quoteStorageTab === 'public' ? '1px solid #3b82f6' : '1px solid transparent',
+                background: quoteStorageTab === 'public' ? 'rgba(59, 130, 246, 0.22)' : 'transparent',
+                color: quoteStorageTab === 'public' ? '#93c5fd' : '#94a3b8',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Globe size={14} />
+              <span>팀 공용 보관함</span>
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '0.08rem 0.45rem',
+                  borderRadius: '999px',
+                  background: quoteStorageTab === 'public' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                  color: quoteStorageTab === 'public' ? '#0f172a' : '#cbd5e1',
+                  fontWeight: 800
+                }}
+              >
+                {publicQuotes.length}
+              </span>
+            </button>
+          </div>
+
+          {/* 관리자(admin)일 때 개인 보관함 매니저별 필터 선택기 */}
+          {isAdminUser && quoteStorageTab === 'private' && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontSize: '0.76rem', color: '#cbd5e1', fontWeight: 600 }}>매니저 필터:</span>
+              <select
+                value={adminFilterManager}
+                onChange={(e) => setAdminFilterManager(e.target.value)}
+                style={{
+                  height: '30px',
+                  background: 'rgba(15, 23, 42, 0.9)',
+                  border: '1px solid rgba(255, 255, 255, 0.18)',
+                  color: '#f8fafc',
+                  borderRadius: '6px',
+                  padding: '0 0.5rem',
+                  fontSize: '0.76rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="all">전체 매니저 ({allPrivateQuotes.length}건)</option>
+                {Array.from(
+                  new Set(
+                    allPrivateQuotes
+                      .map((q) => q.creatorId || q.data?.creatorId)
+                      .filter(Boolean)
+                  )
+                ).map((mId) => {
+                  const matchQuote = allPrivateQuotes.find(
+                    (q) => (q.creatorId || q.data?.creatorId) === mId
+                  );
+                  const mName = matchQuote?.creatorName || matchQuote?.data?.creatorName || mId;
+                  const count = allPrivateQuotes.filter(
+                    (q) => (q.creatorId || q.data?.creatorId) === mId
+                  ).length;
+                  return (
+                    <option key={mId} value={mId}>
+                      {mName} ({count}건)
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* 현재 견적 저장 입력줄 및 저장 위치 토글 */}
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              padding: '2px',
+              borderRadius: '8px',
+              background: 'rgba(0, 0, 0, 0.4)',
+              border: '1px solid rgba(255, 255, 255, 0.1)'
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setQuoteSaveScope('private')}
+              title="현재 작성한 견적을 내 개인 보관함에 저장합니다."
+              style={{
+                height: '34px',
+                padding: '0 0.75rem',
+                borderRadius: '6px',
+                fontSize: '0.78rem',
+                fontWeight: quoteSaveScope === 'private' ? 800 : 600,
+                border: 'none',
+                background: quoteSaveScope === 'private' ? '#10b981' : 'transparent',
+                color: quoteSaveScope === 'private' ? '#042f24' : '#94a3b8',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem'
+              }}
+            >
+              <Lock size={12} /> 개인저장
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuoteSaveScope('public')}
+              title="지점 모든 매니저가 공유할 수 있는 팀 공용 보관함에 저장합니다."
+              style={{
+                height: '34px',
+                padding: '0 0.75rem',
+                borderRadius: '6px',
+                fontSize: '0.78rem',
+                fontWeight: quoteSaveScope === 'public' ? 800 : 600,
+                border: 'none',
+                background: quoteSaveScope === 'public' ? '#3b82f6' : 'transparent',
+                color: quoteSaveScope === 'public' ? '#0f172a' : '#94a3b8',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem'
+              }}
+            >
+              <Globe size={12} /> 공용저장
+            </button>
+          </div>
+
           <input
             type="text"
             value={quoteTitleInput}
             onChange={(e) => setQuoteTitleInput(e.target.value)}
-            placeholder="저장할 견적 이름 (비워두면 '고객성함 · 품목요약'으로 자동 저장됩니다)"
+            placeholder={
+              quoteSaveScope === 'private'
+                ? "내 개인 견적 이름 (비워두면 '고객성함 · 품목'으로 자동 생성)"
+                : "팀 공용 견적 이름 (예: 신혼 4대 패키지 / 입주 필수 세트)"
+            }
             style={{
               ...textInputStyle,
-              flex: '1 1 260px',
+              flex: '1 1 240px',
               height: '38px',
               padding: '0 0.85rem',
               fontSize: '0.86rem',
@@ -10792,10 +11306,13 @@ export default function BenefitCalculator({ onBack }) {
           />
           <button
             type="button"
-            onClick={handleSaveNewQuote}
+            onClick={() => handleSaveNewQuote(undefined, quoteSaveScope)}
             style={{
               height: '38px',
-              background: 'linear-gradient(135deg, #10b981, #059669)',
+              background:
+                quoteSaveScope === 'private'
+                  ? 'linear-gradient(135deg, #10b981, #059669)'
+                  : 'linear-gradient(135deg, #3b82f6, #2563eb)',
               border: 'none',
               color: 'white',
               borderRadius: '8px',
@@ -10810,7 +11327,8 @@ export default function BenefitCalculator({ onBack }) {
               boxSizing: 'border-box'
             }}
           >
-            <Save size={14} /> 현재 견적 새로 저장
+            <Save size={14} />
+            {quoteSaveScope === 'private' ? '🔒 내 개인 보관함에 저장' : '🌐 팀 공용 보관함에 저장'}
           </button>
           {activeQuoteId && (
             <button
@@ -10856,20 +11374,23 @@ export default function BenefitCalculator({ onBack }) {
         )}
 
         {/* 저장된 견적 목록 */}
-        {savedQuotes.length > 0 ? (
+        {displayedQuotes.length > 0 ? (
           <div
             style={{
               marginTop: '0.85rem',
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: '0.55rem',
-              maxHeight: '220px',
+              maxHeight: '260px',
               overflowY: 'auto',
               paddingRight: '0.2rem'
             }}
           >
-            {savedQuotes.map((q) => {
+            {displayedQuotes.map((q) => {
               const isSelected = q.id === activeQuoteId;
+              const isQuotePrivate = q.scope === 'private' || q.data?.scope === 'private';
+              const authorLabel = q.creatorName || q.creatorId || '매니저';
+
               return (
                 <div
                   key={q.id}
@@ -10877,85 +11398,171 @@ export default function BenefitCalculator({ onBack }) {
                   data-quote-title={q.title}
                   style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    padding: '0.6rem 0.75rem',
+                    flexDirection: 'column',
+                    gap: '0.45rem',
+                    padding: '0.7rem 0.85rem',
                     borderRadius: '10px',
                     background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.04)',
                     border: isSelected
                       ? '1px solid rgba(16, 185, 129, 0.6)'
-                      : '1px solid rgba(255, 255, 255, 0.09)'
+                      : '1px solid rgba(255, 255, 255, 0.09)',
+                    transition: 'all 0.15s ease'
                   }}
                 >
+                  {/* 상단: 배지 및 견적 제목 (전체 너비 사용) */}
                   <div
                     onClick={() => handleLoadQuote(q)}
-                    style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      cursor: 'pointer',
+                      minWidth: 0
+                    }}
                     title="클릭하여 이 견적 불러오기"
                   >
-                    <div
+                    <span
                       style={{
-                        fontSize: '0.85rem',
+                        fontSize: '0.68rem',
+                        fontWeight: 800,
+                        padding: '0.12rem 0.45rem',
+                        borderRadius: '4px',
+                        background: isQuotePrivate ? 'rgba(16, 185, 129, 0.22)' : 'rgba(59, 130, 246, 0.22)',
+                        border: isQuotePrivate ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(59, 130, 246, 0.5)',
+                        color: isQuotePrivate ? '#6ee7b7' : '#93c5fd',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.22rem',
+                        flexShrink: 0
+                      }}
+                    >
+                      {isQuotePrivate ? <Lock size={10} /> : <Globe size={10} />}
+                      {isQuotePrivate ? authorLabel : '팀공용'}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.88rem',
                         fontWeight: 800,
                         color: isSelected ? '#6ee7b7' : '#f8fafc',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis'
+                        textOverflow: 'ellipsis',
+                        flex: 1
                       }}
                     >
                       {isSelected ? '● ' : ''}
                       {q.title}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                      {q.savedAt} ·{' '}
-                      {isMixedMode
-                        ? `실체감가 ${formatWon(q.summary?.mixedGrandFinal || 0)}`
-                        : `구독 체감 ${formatWon(q.summary?.subFinalPrice || 0)}`}
-                    </div>
+                    </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      onClick={() => handleLoadQuote(q)}
-                      style={{
-                        background: isSelected ? '#10b981' : 'rgba(59, 130, 246, 0.2)',
-                        border: isSelected ? 'none' : '1px solid rgba(59, 130, 246, 0.45)',
-                        color: isSelected ? '#06281e' : '#93c5fd',
-                        borderRadius: '6px',
-                        padding: '0.32rem 0.58rem',
-                        fontSize: '0.75rem',
-                        fontWeight: 800,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {isSelected ? '적용중' : '불러오기'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteQuote(q.id, q.title)}
-                      title="삭제"
-                      style={{
-                        background: 'rgba(239, 68, 68, 0.12)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        color: '#fca5a5',
-                        borderRadius: '6px',
-                        padding: '0.32rem 0.45rem',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
+
+                  {/* 하단: 저장일시/금액 정보 (좌) + 조작 버튼 3종 (우) */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      paddingTop: '0.25rem',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.06)'
+                    }}
+                  >
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {q.savedAt} ·{' '}
+                      <span style={{ color: '#cbd5e1', fontWeight: 600 }}>
+                        {isMixedMode
+                          ? `실체감가 ${formatWon(q.summary?.mixedGrandFinal || 0)}`
+                          : `구독 체감 ${formatWon(q.summary?.subFinalPrice || 0)}`}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'inline-flex', gap: '0.3rem', flexShrink: 0, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleLoadQuote(q)}
+                        style={{
+                          background: isSelected ? '#10b981' : 'rgba(59, 130, 246, 0.2)',
+                          border: isSelected ? 'none' : '1px solid rgba(59, 130, 246, 0.45)',
+                          color: isSelected ? '#06281e' : '#93c5fd',
+                          borderRadius: '6px',
+                          padding: '0.28rem 0.55rem',
+                          fontSize: '0.74rem',
+                          fontWeight: 800,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {isSelected ? '적용중' : '불러오기'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleQuoteScope(q)}
+                        title={isQuotePrivate ? '팀 공용 보관함으로 전환하여 다른 매니저들과 공유합니다.' : '내 개인 보관함으로 전환합니다.'}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.07)',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          color: isQuotePrivate ? '#93c5fd' : '#6ee7b7',
+                          borderRadius: '6px',
+                          padding: '0.28rem 0.48rem',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.2rem'
+                        }}
+                      >
+                        {isQuotePrivate ? <Globe size={11} /> : <Lock size={11} />}
+                        {isQuotePrivate ? '공용전환' : '개인전환'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteQuote(q.id, q.title)}
+                        title="삭제"
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.12)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: '#fca5a5',
+                          borderRadius: '6px',
+                          padding: '0.28rem 0.42rem',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div style={{ marginTop: '0.6rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-            💡 자주 상담하는 패키지(예: 신혼 4대 가전, 입주 풀패키지)나 고객별 견적을 입력 후 <strong>[현재 견적 새로 저장]</strong>을 눌러두시면 언제든 1클릭으로 불러올 수 있습니다. 다른 PC로 옮길 때는 우측 상단 <strong>[견적 파일로 내보내기]</strong>를 사용하세요.
+          <div
+            style={{
+              marginTop: '0.85rem',
+              padding: '1.1rem 1rem',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px dashed rgba(255, 255, 255, 0.12)',
+              fontSize: '0.82rem',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.6
+            }}
+          >
+            {quoteStorageTab === 'private' ? (
+              <>
+                🔒 <strong>[{currentUser?.name || currentUser?.id || '매니저'}]</strong>님의 개인 보관함이 비어있습니다.
+                <br />
+                상단에서 <strong>[🔒 개인저장]</strong>을 선택하고 저장하시면, 다른 매니저에게 노출되지 않고 나만의 견적으로 안전하게 보관됩니다.
+              </>
+            ) : (
+              <>
+                🌐 <strong>팀 공용 보관함</strong>이 비어있습니다.
+                <br />
+                지점 매니저들과 함께 공유할 패키지(예: 신혼 4대 가전, 입주 풀패키지 등)는 <strong>[🌐 공용저장]</strong>을 선택하여 저장해보세요.
+              </>
+            )}
           </div>
         )}
       </div>
@@ -10977,7 +11584,7 @@ export default function BenefitCalculator({ onBack }) {
             </span>
           </div>
 
-          {/* 행사 유형 4버튼 */}
+          {/* 행사 유형 4버튼 (클릭 가능한 선택 버튼) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.6rem', marginBottom: '0.65rem' }}>
             {[
               { key: 'wedding', icon: '💍', label: '혼수 (웨딩)' },
@@ -10997,68 +11604,86 @@ export default function BenefitCalculator({ onBack }) {
                     else if (t.key === 'moving') setConsultType('이사·교체가전 맞춤설계');
                     else setConsultType('단품·패키지 비교견적');
                   }}
+                  className="calc-btn-interactive"
                   style={{
-                    padding: '0.7rem 0.6rem',
-                    borderRadius: '9px',
-                    border: active ? '2px solid var(--accent-gold)' : '1px solid var(--glass-border)',
-                    background: active ? 'linear-gradient(135deg, rgba(212, 175, 55, 0.28), rgba(15, 23, 42, 0.85))' : 'rgba(15, 23, 42, 0.6)',
-                    color: active ? '#ffffff' : 'var(--text-secondary)',
+                    height: '44px',
+                    padding: '0 0.6rem',
+                    borderRadius: '10px',
+                    border: active ? '2px solid var(--accent-gold)' : '1.5px solid rgba(255, 255, 255, 0.14)',
+                    background: active
+                      ? 'linear-gradient(135deg, rgba(212, 175, 55, 0.35), rgba(15, 23, 42, 0.9))'
+                      : 'rgba(15, 23, 42, 0.7)',
+                    color: active ? '#ffffff' : '#94a3b8',
                     fontWeight: active ? 800 : 600,
                     fontSize: '0.88rem',
-                    cursor: 'pointer',
+                    boxShadow: active ? '0 0 14px rgba(212, 175, 55, 0.3)' : 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '0.4rem',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s ease'
                   }}
                 >
-                  <span style={{ fontSize: '1.05rem' }}>{t.icon}</span> {t.label}
+                  <span style={{ fontSize: '1.05rem' }}>{t.icon}</span>
+                  <span>{t.label}</span>
+                  {active && <span style={{ fontSize: '0.75rem', color: '#fde68a' }}>✓</span>}
                 </button>
               );
             })}
           </div>
 
-          {/* 행사 안내 문구 */}
-          <div style={{ fontSize: '0.8rem', color: '#93c5fd', background: 'rgba(30, 58, 138, 0.35)', padding: '0.5rem 0.85rem', borderRadius: '7px', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-            <span style={{ fontSize: '1rem' }}>ℹ️</span>
-            <span>
-              <strong>{EVENT_TYPE_INFO[mixedEventType]?.title || '선택 유형'}</strong>: {EVENT_TYPE_INFO[mixedEventType]?.desc || ''}
-              {hasAnyProofPolicy && (
-                <span style={{ color: '#6ee7b7', fontWeight: 800, marginLeft: '6px' }}>
-                  (현재 증빙 필요 정책 포함됨)
-                </span>
-              )}
-            </span>
+          {/* 행사 안내 문구 (클릭 불가 정보 안내문) */}
+          <div className="calc-display-readonly" style={{ fontSize: '0.8rem', color: '#93c5fd', background: 'rgba(30, 58, 138, 0.35)', padding: '0.55rem 0.85rem', borderRadius: '8px', border: '1px dashed rgba(147, 197, 253, 0.35)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span className="calc-badge-auto">ℹ️ 행사안내</span>
+              <span>
+                <strong style={{ color: '#ffffff' }}>{EVENT_TYPE_INFO[mixedEventType]?.title || '선택 유형'}</strong>: {EVENT_TYPE_INFO[mixedEventType]?.desc || ''}
+                {hasAnyProofPolicy && (
+                  <span style={{ color: '#6ee7b7', fontWeight: 800, marginLeft: '6px' }}>
+                    (현재 증빙 필요 정책 포함됨)
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem' }}>
+        {/* 고객 및 매니저 정보 그리드 (PC 4열, 태블릿 2열, 모바일 1열 반응형) */}
+        <div className="calc-grid-form-4">
           <div>
-            <label style={labelStyle}>고객 성함</label>
+            <label className="calc-label-guide">
+              <span>고객 성함</span>
+              <span className="calc-tag-type input">✏️ 직접입력</span>
+            </label>
             <input
               type="text"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="예: 홍길동 (미입력 시 '소중한 고객님')"
-              style={textInputStyle}
+              className="calc-input-editable"
             />
           </div>
           <div>
-            <label style={labelStyle}>상담 일자</label>
+            <label className="calc-label-guide">
+              <span>상담 일자</span>
+              <span className="calc-tag-type select">📅 날짜선택</span>
+            </label>
             <input
               type="date"
               value={consultDate}
               onChange={(e) => setConsultDate(e.target.value)}
-              style={textInputStyle}
+              className="calc-input-editable"
             />
           </div>
           <div>
-            <label style={labelStyle}>상담 구분</label>
+            <label className="calc-label-guide">
+              <span>상담 구분</span>
+              <span className="calc-tag-type select">▼ 드롭다운</span>
+            </label>
             <select
               value={consultType}
               onChange={(e) => setConsultType(e.target.value)}
-              style={{ ...textInputStyle, background: '#0f172a' }}
+              className="calc-select-clickable"
             >
               <option value="입주가전 맞춤설계">입주가전 맞춤설계</option>
               <option value="신혼·혼수가전 맞춤설계">신혼·혼수가전 맞춤설계</option>
@@ -11068,25 +11693,31 @@ export default function BenefitCalculator({ onBack }) {
             </select>
           </div>
           <div>
-            <label style={labelStyle}>매니저 연락처 (출력 명함용·자동저장)</label>
+            <label className="calc-label-guide">
+              <span>매니저 연락처</span>
+              <span className="calc-tag-type input">✏️ 직접입력</span>
+            </label>
             <input
               type="tel"
               value={managerPhone}
               onChange={(e) => setManagerPhone(e.target.value)}
               placeholder="예: 010-0000-0000"
-              style={textInputStyle}
+              className="calc-input-editable"
             />
           </div>
         </div>
         {!isMixedMode && (
-          <div style={{ marginTop: '1rem' }}>
-            <label style={labelStyle}>상담 구성 품목 요약 (선택 입력 · 출력물 상단에 표시)</label>
+          <div style={{ marginTop: '0.85rem' }}>
+            <label className="calc-label-guide">
+              <span>상담 구성 품목 요약 (선택 입력 · 출력물 상단에 표시)</span>
+              <span className="calc-tag-type input">✏️ 직접입력</span>
+            </label>
             <input
               type="text"
               value={productSummary}
               onChange={(e) => setProductSummary(e.target.value)}
               placeholder="예: TV 85인치 + 비스포크 AI 냉장고 + 김치냉장고 + 비스포크 AI 콤보 + 무풍에어컨"
-              style={textInputStyle}
+              className="calc-input-editable"
             />
           </div>
         )}
@@ -11162,12 +11793,14 @@ export default function BenefitCalculator({ onBack }) {
                           </span>
                           <input
                             type="text"
-                            value={item.name}
-                            onChange={(e) => handleUpdateMixedLumpItem(item.id, 'name', e.target.value)}
-                            placeholder="모델명 입력 (예: 비스포크 4도어 냉장고 RF85DB90F1AP)"
-                            style={{ ...textInputStyle, padding: '0.45rem 0.65rem', fontSize: '0.86rem', flex: 1 }}
+                            maxLength={15}
+                            value={item.name || ''}
+                            onChange={(e) => handleUpdateMixedLumpItem(item.id, 'name', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 15))}
+                            placeholder="모델명 입력 (예: RF85DB90F1AP · 영문·숫자 15자)"
+                            className="calc-input-editable"
+                            style={{ height: '38px', padding: '0 0.75rem', fontSize: '0.86rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           />
-                          <div style={{ width: '75px', flexShrink: 0, position: 'relative' }}>
+                          <div style={{ width: '80px', flexShrink: 0, position: 'relative' }}>
                             <input
                               type="text"
                               inputMode="numeric"
@@ -11177,7 +11810,8 @@ export default function BenefitCalculator({ onBack }) {
                                 handleUpdateMixedLumpItem(item.id, 'quantity', raw === '' ? '' : parseInt(raw, 10));
                               }}
                               placeholder="1"
-                              style={{ ...textInputStyle, padding: '0.45rem 1.4rem 0.45rem 0.45rem', fontSize: '0.86rem', textAlign: 'right' }}
+                              className="calc-input-editable"
+                              style={{ height: '38px', padding: '0 1.5rem 0 0.5rem', fontSize: '0.86rem', textAlign: 'right' }}
                             />
                             <span style={{ position: 'absolute', right: '0.45rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.76rem', pointerEvents: 'none' }}>
                               대
@@ -11211,9 +11845,10 @@ export default function BenefitCalculator({ onBack }) {
                         {/* 2행: 기준금액 + 할인된 금액 */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.5rem', alignItems: 'end' }}>
                           <div>
-                            <label style={{ fontSize: '0.72rem', color: '#fde68a', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>
-                              기준금액 (1대 기준)
-                            </label>
+                            <div className="calc-label-guide" style={{ marginBottom: '0.2rem' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#fde68a', fontWeight: 700 }}>기준금액(1대)</span>
+                              <span className="calc-tag-type input">✏️ 직접입력</span>
+                            </div>
                             <MoneyInput
                               value={item.price}
                               onChange={(val) => handleUpdateMixedLumpItem(item.id, 'price', val)}
@@ -11224,9 +11859,10 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
 
                           <div>
-                            <label style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>
-                              할인된 금액 (1대 기준)
-                            </label>
+                            <div className="calc-label-guide" style={{ marginBottom: '0.2rem' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 700 }}>할인된 금액(1대)</span>
+                              <span className="calc-tag-type input">✏️ 직접입력</span>
+                            </div>
                             <MoneyInput
                               value={item.discountedPrice || 0}
                               onChange={(val) => handleUpdateMixedLumpItem(item.id, 'discountedPrice', val)}
@@ -11237,9 +11873,10 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
                         </div>
 
-                        {/* 3행: 개별 모델 실시간 산출 피드백 */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#cbd5e1', paddingTop: '0.2rem', borderTop: '1px dashed rgba(255,255,255,0.08)', flexWrap: 'wrap', gap: '0.3rem' }}>
-                          <span>
+                        {/* 3행: 개별 모델 실시간 산출 피드백 (클릭 불가 자동계산) */}
+                        <div className="calc-display-readonly" style={{ fontSize: '0.75rem', color: '#cbd5e1', paddingTop: '0.35rem', flexWrap: 'wrap', gap: '0.3rem' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span className="calc-badge-auto">🔒 자동계산</span>
                             기준총액: <strong style={{ color: '#fde68a' }}>{formatWon(gross)}</strong>
                             {qty > 1 && ` (대당 ${formatWon(unitPrice)} × ${qty}대)`}
                           </span>
@@ -11259,16 +11896,17 @@ export default function BenefitCalculator({ onBack }) {
                 <button
                   type="button"
                   onClick={handleAddMixedLumpItem}
+                  className="calc-btn-interactive"
                   style={{
                     marginTop: '0.55rem',
                     width: '100%',
-                    padding: '0.5rem 0.75rem',
+                    height: '42px',
                     borderRadius: '8px',
-                    border: '1px dashed rgba(212, 175, 55, 0.55)',
-                    background: 'rgba(212, 175, 55, 0.08)',
+                    border: '1.5px dashed rgba(212, 175, 55, 0.65)',
+                    background: 'rgba(212, 175, 55, 0.1)',
                     color: 'var(--accent-gold-light)',
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    fontWeight: 800,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -11374,30 +12012,32 @@ export default function BenefitCalculator({ onBack }) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '0.85rem 1.15rem',
+                      padding: '0.75rem 0.85rem',
                       background: 'rgba(212, 175, 55, 0.12)',
                       cursor: 'pointer',
                       borderBottom: deptCalcOpen ? '1px solid rgba(212, 175, 55, 0.25)' : 'none',
-                      userSelect: 'none'
+                      userSelect: 'none',
+                      flexWrap: 'wrap',
+                      gap: '0.5rem'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <Calculator size={18} color="#f59e0b" />
-                        <span style={{ fontSize: '0.96rem', fontWeight: 900, color: '#fde68a' }}>
-                          🏬 갤러리아 백화점 스마트 정산 & 결제 설계기
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                        <Calculator size={18} color="#f59e0b" style={{ flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#fde68a' }}>
+                          🏬 갤러리아 백화점 스마트 정산 &amp; 결제 설계기
                         </span>
-                        <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#b45309', color: '#fff', padding: '2px 7px', borderRadius: '4px' }}>
+                        <span style={{ fontSize: '0.68rem', fontWeight: 800, background: '#b45309', color: '#fff', padding: '2px 7px', borderRadius: '4px', flexShrink: 0 }}>
                           직원 전용
                         </span>
                       </div>
-                      <span style={{ fontSize: '0.76rem', color: '#cbd5e1' }}>
-                        마지노선 방어 · 사은행사(11%/10%) 극대화 · 1인 3분할 & 2인 카드 슬라이더
+                      <span style={{ fontSize: '0.74rem', color: '#cbd5e1' }}>
+                        마지노선 방어 · 사은행사(11%/10%) 극대화 · 1인 3분할 &amp; 2인 카드 슬라이더
                       </span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', padding: '3px 9px', borderRadius: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', padding: '3px 8px', borderRadius: '6px' }}>
                         {deptCalcOpen ? '▲ 접기' : '▼ 설계기 열기'}
                       </span>
                     </div>
@@ -11405,7 +12045,7 @@ export default function BenefitCalculator({ onBack }) {
 
                   {/* 펼쳐졌을 때의 계산기 바디 */}
                   {deptCalcOpen && (
-                    <div style={{ padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ padding: '0.75rem 0.85rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                       {/* 1. 기준 결제 대상 금액 설정 */}
                       <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -11523,8 +12163,8 @@ export default function BenefitCalculator({ onBack }) {
                             🎁 백화점 사은행사 우대율 (500만 이상)
                           </label>
                           {/* 직접 퍼센트 입력창 */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.45rem' }}>
-                            <div style={{ position: 'relative', flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.45rem', flexWrap: 'wrap' }}>
+                            <div style={{ position: 'relative', flex: '1 1 120px' }}>
                               <input
                                 type="number"
                                 step="0.1"
@@ -11545,33 +12185,35 @@ export default function BenefitCalculator({ onBack }) {
                                   fontSize: '0.98rem',
                                   fontWeight: 800,
                                   outline: 'none',
-                                  boxSizing: 'border-box'
+                                  boxSizing: 'border-box',
+                                  minHeight: '40px'
                                 }}
                               />
                               <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#f59e0b', fontWeight: 900, fontSize: '0.85rem' }}>
                                 %
                               </span>
                             </div>
-                            <span style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700 }}>
                               직접 입력 가능
                             </span>
                           </div>
                           {/* 빠른 원터치 프리셋 칩 */}
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.25rem' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(56px, 1fr))', gap: '0.3rem' }}>
                             {[9.5, 10.0, 10.5, 11.0, 11.5].map((rate) => (
                               <button
                                 key={rate}
                                 type="button"
                                 onClick={() => setDeptRewardRate(rate)}
                                 style={{
-                                  padding: '0.4rem 0.15rem',
+                                  padding: '0.42rem 0.2rem',
                                   borderRadius: '6px',
                                   border: Math.abs(deptRewardRate - rate) < 0.001 ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
                                   background: Math.abs(deptRewardRate - rate) < 0.001 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.03)',
                                   color: Math.abs(deptRewardRate - rate) < 0.001 ? '#fde68a' : '#cbd5e1',
                                   fontSize: '0.74rem',
                                   fontWeight: 800,
-                                  cursor: 'pointer'
+                                  cursor: 'pointer',
+                                  minHeight: '34px'
                                 }}
                               >
                                 {rate.toFixed(1)}%{rate === 11.0 ? ' 🔥' : ''}
@@ -11633,12 +12275,13 @@ export default function BenefitCalculator({ onBack }) {
                           <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 800, color: '#6ee7b7', marginBottom: '0.45rem' }}>
                             🎯 G캐시 혜택 수령 방식 (3대 시나리오 선택)
                           </label>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: '0.45rem' }}>
                             <button
                               type="button"
                               onClick={() => setDeptStrategy('reward')}
                               style={{
-                                padding: '0.45rem 0.35rem',
+                                padding: '0.5rem 0.4rem',
+                                minHeight: '44px',
                                 borderRadius: '6px',
                                 border: deptStrategy === 'reward' ? '2px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
                                 background: deptStrategy === 'reward' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255,255,255,0.03)',
@@ -11646,7 +12289,11 @@ export default function BenefitCalculator({ onBack }) {
                                 fontSize: '0.73rem',
                                 fontWeight: 800,
                                 cursor: 'pointer',
-                                textAlign: 'center'
+                                textAlign: 'center',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                lineHeight: 1.3
                               }}
                             >
                               💰 1. 전부 적립 (체감가 최저)
@@ -11655,7 +12302,8 @@ export default function BenefitCalculator({ onBack }) {
                               type="button"
                               onClick={() => setDeptStrategy('partial')}
                               style={{
-                                padding: '0.45rem 0.35rem',
+                                padding: '0.5rem 0.4rem',
+                                minHeight: '44px',
                                 borderRadius: '6px',
                                 border: (deptStrategy === 'partial' || deptStrategy === 'instant') ? '2px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
                                 background: (deptStrategy === 'partial' || deptStrategy === 'instant') ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.03)',
@@ -11663,7 +12311,11 @@ export default function BenefitCalculator({ onBack }) {
                                 fontSize: '0.73rem',
                                 fontWeight: 800,
                                 cursor: 'pointer',
-                                textAlign: 'center'
+                                textAlign: 'center',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                lineHeight: 1.3
                               }}
                             >
                               🛡️ 2. 부분 차감 (마지노선 방어)
@@ -11672,7 +12324,8 @@ export default function BenefitCalculator({ onBack }) {
                               type="button"
                               onClick={() => setDeptStrategy('full')}
                               style={{
-                                padding: '0.45rem 0.35rem',
+                                padding: '0.5rem 0.4rem',
+                                minHeight: '44px',
                                 borderRadius: '6px',
                                 border: deptStrategy === 'full' ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.1)',
                                 background: deptStrategy === 'full' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.03)',
@@ -11680,7 +12333,11 @@ export default function BenefitCalculator({ onBack }) {
                                 fontSize: '0.73rem',
                                 fontWeight: 800,
                                 cursor: 'pointer',
-                                textAlign: 'center'
+                                textAlign: 'center',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                lineHeight: 1.3
                               }}
                             >
                               ⚡ 3. 전부 차감 (G캐시 0원 올인)
@@ -11878,15 +12535,17 @@ export default function BenefitCalculator({ onBack }) {
                       <div
                         style={{
                           background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.85))',
-                          padding: '1rem 1.1rem',
+                          padding: '0.75rem 0.65rem',
                           borderRadius: '11px',
                           border: '1px solid rgba(212, 175, 55, 0.38)',
-                          boxShadow: '0 4px 16px rgba(0,0,0,0.25)'
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+                          width: '100%',
+                          boxSizing: 'border-box'
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.4rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                            <Scale size={18} color="#f59e0b" />
+                            <Scale size={18} color="#f59e0b" style={{ flexShrink: 0 }} />
                             <span style={{ fontSize: '0.92rem', fontWeight: 900, color: '#fde68a' }}>
                               ⚖️ [1.전부적립] vs [2.부분차감] vs [3.전부차감] 3대 시나리오 실시간 유불리 비교
                             </span>
@@ -11897,7 +12556,7 @@ export default function BenefitCalculator({ onBack }) {
                         </div>
 
                         {/* 3열 나란한 비교 카드 (전부적립 vs 부분차감 vs 전부차감) */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', gap: '0.75rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.65rem' }}>
                           {/* 1) 💰 1. 전부 적립 플랜 */}
                           <div
                             onClick={() => {
@@ -12627,13 +13286,19 @@ export default function BenefitCalculator({ onBack }) {
 
             {/* 1. 총 구매 기준금액 */}
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ ...labelStyle, fontSize: '0.93rem', color: 'white' }}>총 기준 구매금액</label>
+              <div className="calc-label-guide">
+                <span style={{ fontSize: '0.92rem', color: 'white', fontWeight: 800 }}>총 기준 구매금액</span>
+                <span className="calc-tag-type input">✏️ 직접입력</span>
+              </div>
               <MoneyInput value={lumpBasePrice} onChange={handleLumpBaseChange} placeholder="0" compact />
             </div>
 
             {/* 2. 총 할인·혜택 금액 (통합) */}
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ ...labelStyle, fontSize: '0.93rem', color: 'white' }}>일반구매 총 할인 · 혜택 금액 (통합)</label>
+              <div className="calc-label-guide">
+                <span style={{ fontSize: '0.92rem', color: 'white', fontWeight: 800 }}>일반구매 총 할인 · 혜택 금액 (통합)</span>
+                <span className="calc-tag-type input">✏️ 직접입력</span>
+              </div>
               <MoneyInput value={lumpTotalBenefit} onChange={handleLumpBenefitChange} placeholder="할인·캐시백·상품권 등 총합" compact />
             </div>
 
@@ -12642,15 +13307,18 @@ export default function BenefitCalculator({ onBack }) {
               style={{
                 padding: '0.85rem',
                 borderRadius: '12px',
-                background: 'rgba(212, 175, 55, 0.07)',
-                border: '1px dashed rgba(212, 175, 55, 0.35)',
+                background: 'rgba(212, 175, 55, 0.08)',
+                border: '1.5px solid rgba(212, 175, 55, 0.45)',
                 marginBottom: '1rem'
               }}
             >
-              <label style={{ ...labelStyle, fontSize: '0.85rem', color: 'var(--accent-gold-light)' }}>
-                일반구매 일시불 최종 체감가 (직접 입력 시 혜택금액 자동 역산)
-              </label>
-              <MoneyInput value={lumpFinalPrice} onChange={handleLumpFinalDirectChange} placeholder="0" compact />
+              <div className="calc-label-guide">
+                <span style={{ fontSize: '0.86rem', color: 'var(--accent-gold-light)', fontWeight: 800 }}>
+                  일반구매 일시불 최종 체감가 (직접 입력 시 혜택금액 자동 역산)
+                </span>
+                <span className="calc-tag-type input">✏️ 직접입력</span>
+              </div>
+              <MoneyInput value={lumpFinalPrice} onChange={handleLumpFinalDirectChange} placeholder="0" compact accentColor="var(--accent-gold)" />
             </div>
 
             {/* 4. 카드 최저금리 할부 참고 설정 */}
@@ -12725,7 +13393,7 @@ export default function BenefitCalculator({ onBack }) {
             </div>
           </div>
 
-          {/* 일반구매 실시간 요약 박스 (메인: 일시불 크게 / 하단: 장기할부 작게) */}
+          {/* 일반구매 실시간 요약 박스 (클릭 불가 자동산출 결과) */}
           <div
             style={{
               marginTop: '1.25rem',
@@ -12735,13 +13403,19 @@ export default function BenefitCalculator({ onBack }) {
               border: '1px solid rgba(212, 175, 55, 0.35)'
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.86rem', marginBottom: '0.45rem', color: '#cbd5e1' }}>
-              <span>총 할인 · 혜택 차감 합계</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.86rem', marginBottom: '0.45rem', color: '#cbd5e1' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span className="calc-badge-auto">🔒 자동계산</span>
+                <span>총 할인 · 혜택 차감 합계</span>
+              </span>
               <strong style={{ color: '#fca5a5' }}>- {formatWon(lumpTotalBenefit)}</strong>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingTop: '0.55rem', borderTop: '1px solid rgba(255,255,255,0.12)' }}>
-              <span style={{ fontWeight: 700, fontSize: '1rem' }}>일반구매 최종 체감가 (일시불)</span>
+              <span style={{ fontWeight: 700, fontSize: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span className="calc-badge-auto">∑ 결과</span>
+                <span>일반구매 최종 체감가 (일시불)</span>
+              </span>
               <strong style={{ fontSize: '1.55rem', fontWeight: 900, color: 'var(--accent-gold-light)' }}>
                 {formatWon(lumpFinalPrice)}
               </strong>
@@ -12919,12 +13593,14 @@ export default function BenefitCalculator({ onBack }) {
                           </span>
                           <input
                             type="text"
+                            maxLength={15}
                             value={item.name || ''}
-                            onChange={(e) => handleUpdateMixedSubItem(item.id, 'name', e.target.value)}
-                            placeholder="모델명 입력 (예: 비스포크 AI 콤보 세탁건조기 WD25DB8995BZ)"
-                            style={{ ...textInputStyle, padding: '0.45rem 0.65rem', fontSize: '0.86rem', flex: 1 }}
+                            onChange={(e) => handleUpdateMixedSubItem(item.id, 'name', e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 15))}
+                            placeholder="모델명 입력 (예: RF85DB90F1AP · 영문·숫자 15자)"
+                            className="calc-input-editable"
+                            style={{ height: '38px', padding: '0 0.75rem', fontSize: '0.86rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           />
-                          <div style={{ width: '75px', flexShrink: 0, position: 'relative' }}>
+                          <div style={{ width: '80px', flexShrink: 0, position: 'relative' }}>
                             <input
                               type="text"
                               inputMode="numeric"
@@ -12934,7 +13610,8 @@ export default function BenefitCalculator({ onBack }) {
                                 handleUpdateMixedSubItem(item.id, 'quantity', raw === '' ? '' : parseInt(raw, 10));
                               }}
                               placeholder="1"
-                              style={{ ...textInputStyle, padding: '0.45rem 1.4rem 0.45rem 0.45rem', fontSize: '0.86rem', textAlign: 'right' }}
+                              className="calc-input-editable"
+                              style={{ height: '38px', padding: '0 1.5rem 0 0.5rem', fontSize: '0.86rem', textAlign: 'right' }}
                             />
                             <span style={{ position: 'absolute', right: '0.45rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.76rem', pointerEvents: 'none' }}>
                               대
@@ -12965,28 +13642,21 @@ export default function BenefitCalculator({ onBack }) {
                           )}
                         </div>
 
-                        {/* 2행: 구독기간 (36~72) + 서비스주기 (6/12/36) + 기본구독료 + 할인구독료 + 선납금 */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '0.5rem', alignItems: 'end' }}>
+                        {/* 2행: 구독기간 + 서비스주기 + 기본구독료 + 할인구독료 + 선납금 (반응형 4~5열) */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem', alignItems: 'end' }}>
                           <div>
-                            <label style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>구독기간</label>
+                            <div className="calc-label-guide" style={{ marginBottom: '0.2rem' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 700 }}>구독기간</span>
+                              <span className="calc-tag-type select">▼ 선택</span>
+                            </div>
                             <select
                               value={item.months}
                               onChange={(e) => handleUpdateMixedSubItem(item.id, 'months', Number(e.target.value))}
-                              style={{
-                                width: '100%',
-                                height: '38px',
-                                borderRadius: '8px',
-                                background: 'rgba(15, 23, 42, 0.9)',
-                                border: '1px solid rgba(96, 165, 250, 0.55)',
-                                color: 'white',
-                                fontSize: '0.82rem',
-                                fontWeight: 700,
-                                padding: '0 0.4rem',
-                                cursor: 'pointer'
-                              }}
+                              className="calc-select-clickable"
+                              style={{ height: '38px', fontSize: '0.82rem' }}
                             >
                               {[72, 60, 48, 36].map((m) => (
-                                <option key={m} value={m} style={{ background: '#0f172a', color: 'white' }}>
+                                <option key={m} value={m}>
                                   {m}개월
                                 </option>
                               ))}
@@ -12994,28 +13664,25 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
 
                           <div>
-                            <label style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>서비스주기</label>
+                            <div className="calc-label-guide" style={{ marginBottom: '0.2rem' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#93c5fd', fontWeight: 700 }}>서비스주기</span>
+                              <span className="calc-tag-type select">▼ 선택</span>
+                            </div>
                             <select
                               value={item.serviceCycle === 0 || item.serviceCycle === null || item.serviceCycle === '' ? 0 : (item.serviceCycle || 12)}
                               onChange={(e) => handleUpdateMixedSubItem(item.id, 'serviceCycle', Number(e.target.value))}
+                              className="calc-select-clickable"
                               style={{
-                                width: '100%',
                                 height: '38px',
-                                borderRadius: '8px',
-                                background: 'rgba(15, 23, 42, 0.9)',
-                                border: '1px solid rgba(96, 165, 250, 0.55)',
-                                color: (item.serviceCycle === 0 || item.serviceCycle === null || item.serviceCycle === '') ? '#94a3b8' : 'white',
                                 fontSize: '0.82rem',
-                                fontWeight: 700,
-                                padding: '0 0.4rem',
-                                cursor: 'pointer'
+                                color: (item.serviceCycle === 0 || item.serviceCycle === null || item.serviceCycle === '') ? '#94a3b8' : 'white'
                               }}
                             >
                               <option value={0} style={{ background: '#0f172a', color: '#94a3b8' }}>
                                 없음 (케어 미적용)
                               </option>
                               {[4, 6, 12, 36].map((c) => (
-                                <option key={c} value={c} style={{ background: '#0f172a', color: 'white' }}>
+                                <option key={c} value={c}>
                                   {c}개월마다
                                 </option>
                               ))}
@@ -13023,7 +13690,10 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
 
                           <div>
-                            <label style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>기본구독료 (월)</label>
+                            <div className="calc-label-guide" style={{ marginBottom: '0.2rem' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700 }}>기본구독료 (월)</span>
+                              <span className="calc-tag-type input">✏️ 직접입력</span>
+                            </div>
                             <MoneyInput
                               value={item.baseMonthlyFee}
                               onChange={(val) => handleUpdateMixedSubItem(item.id, 'baseMonthlyFee', val)}
@@ -13034,7 +13704,10 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
 
                           <div>
-                            <label style={{ fontSize: '0.72rem', color: '#60a5fa', fontWeight: 800, display: 'block', marginBottom: '0.2rem' }}>할인구독료 (월)</label>
+                            <div className="calc-label-guide" style={{ marginBottom: '0.2rem' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#60a5fa', fontWeight: 800 }}>할인구독료 (월)</span>
+                              <span className="calc-tag-type input">✏️ 직접입력</span>
+                            </div>
                             <MoneyInput
                               value={item.discountMonthlyFee}
                               onChange={(val) => handleUpdateMixedSubItem(item.id, 'discountMonthlyFee', val)}
@@ -13045,7 +13718,10 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
 
                           <div>
-                            <label style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>선납금 (선택)</label>
+                            <div className="calc-label-guide" style={{ marginBottom: '0.2rem' }}>
+                              <span style={{ fontSize: '0.72rem', color: '#cbd5e1', fontWeight: 700 }}>선납금 (선택)</span>
+                              <span className="calc-tag-type input">✏️ 직접입력</span>
+                            </div>
                             <MoneyInput
                               value={item.prepay}
                               onChange={(val) => handleUpdateMixedSubItem(item.id, 'prepay', val)}
@@ -13233,12 +13909,13 @@ export default function BenefitCalculator({ onBack }) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {subPlans.map((plan, idx) => {
                       const planMonths = Number(plan.months) || 72;
+                      const freeRepairMonths = Number(plan.freeRepairMonths) || planMonths;
                       const planMonthly =
                         subInputMode === 'monthly'
                           ? Number(plan.monthlyFee) || 0
                           : Math.round((Number(plan.totalAmount) || 0) / planMonths);
                       const planGross = planMonthly * planMonths;
-                      const freeRepairTotal = (Number(plan.freeRepairFee) || 0) * planMonths;
+                      const freeRepairTotal = (Number(plan.freeRepairFee) || 0) * freeRepairMonths;
                       const planCareItems = Array.isArray(plan.careItems) ? plan.careItems : [];
                       const planCareTotal = planCareItems.reduce(
                         (sum, c) => sum + (Number(c.amount) || 0) * (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1),
@@ -13331,32 +14008,117 @@ export default function BenefitCalculator({ onBack }) {
                             </div>
                           </div>
 
-                          {/* 1) 품목명 입력 (전체 너비로 확장하여 긴 모델명도 깔끔하게 수용) */}
+                          {/* 1) 품목명 입력 (영문·숫자 15자 제한 및 설정된 케어 아이콘 표시) */}
                           <div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginBottom: '0.3rem' }}>
-                              <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>품목명</span>
-                              <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>(미입력 시 생략)</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.3rem', flexWrap: 'wrap', gap: '0.3rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>품목 모델명</span>
+                                <span style={{ fontSize: '0.66rem', color: '#94a3b8', fontWeight: 500 }}>(영문·숫자 15자)</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                                {(() => {
+                                  const freeM = Number(plan.freeRepairMonths) || Number(plan.months) || 60;
+                                  const items = Array.isArray(plan.careItems) ? plan.careItems : [];
+
+                                  const visitCycles = Array.from(new Set(
+                                    items
+                                      .filter((c) => (c.type === 'visit' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
+                                      .map((c) => Number(c.cycle) || 36)
+                                  ));
+
+                                  const selfCycles = Array.from(new Set(
+                                    items
+                                      .filter((c) => c.type === 'self' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
+                                      .map((c) => Number(c.cycle) || 36)
+                                  ));
+
+                                  const consumableCycles = Array.from(new Set(
+                                    items
+                                      .filter((c) => (c.type === 'consumable' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
+                                      .map((c) => Number(c.cycle) || 36)
+                                  ));
+
+                                  const customItems = items.filter((c) => c.type === 'custom' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+
+                                  return (
+                                    <>
+                                      {(Number(plan.freeRepairFee) || 0) > 0 && (
+                                        <span
+                                          title={`무상수리 연장 (${freeM}개월 보증)`}
+                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#60a5fa', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                        >
+                                          <ShieldCheck size={8} /> 무상{freeM}
+                                        </span>
+                                      )}
+                                      {visitCycles.map((cyc) => (
+                                        <span
+                                          key={`visit-${cyc}`}
+                                          title={`방문케어 (${cyc}개월 주기)`}
+                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#34d399', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                        >
+                                          <Wrench size={8} /> 방문{cyc}
+                                        </span>
+                                      ))}
+                                      {selfCycles.map((cyc) => (
+                                        <span
+                                          key={`self-${cyc}`}
+                                          title={`셀프케어 (${cyc}개월 주기)`}
+                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#c084fc', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                        >
+                                          <Sparkles size={8} /> 셀프{cyc}
+                                        </span>
+                                      ))}
+                                      {consumableCycles.map((cyc) => (
+                                        <span
+                                          key={`consumable-${cyc}`}
+                                          title={`소모품 교체 (${cyc}개월 주기)`}
+                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                        >
+                                          <Package size={8} /> 소모품{cyc}
+                                        </span>
+                                      ))}
+                                      {customItems.map((c, i) => (
+                                        <span
+                                          key={`custom-${c.id || i}`}
+                                          title={`맞춤 케어: ${c.customName || '케어'}`}
+                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                        >
+                                          <Sparkles size={8} /> {(c.customName || '케어').slice(0, 4)}{c.cycle ? c.cycle : ''}
+                                        </span>
+                                      ))}
+                                    </>
+                                  );
+                                })()}
+                                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: (plan.name || '').length >= 15 ? '#ef4444' : '#64748b', marginLeft: '2px' }}>
+                                  {(plan.name || '').length}/15
+                                </span>
+                              </div>
                             </div>
                             <input
                               type="text"
+                              maxLength={15}
                               value={plan.name || ''}
-                              onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value })}
-                              placeholder="예: 비스포크 AI 콤보 세탁건조기, 갤럭시 S25"
+                              onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 15) })}
+                              placeholder="모델명 입력 (예: RF85DB90F1AP · 영문·숫자 15자)"
+                              className="calc-input-editable"
                               style={{
-                                ...textInputStyle,
-                                padding: '0.45rem 0.65rem',
-                                fontSize: '0.84rem'
+                                height: '40px',
+                                padding: '0 0.75rem',
+                                fontSize: '0.88rem',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
                               }}
                             />
                           </div>
 
-                          {/* 2) 기본 구독료 + 할인 구독료 + 선납금 + 약정기간 */}
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: '0.45rem', alignItems: 'flex-start' }}>
+                          {/* 2) 기본 구독료 + 할인 구독료 + 선납금 + 약정기간 (PC 4열, 모바일 2x2 반응형 그리드) */}
+                          <div className="calc-responsive-grid-4col" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.55rem', alignItems: 'flex-start' }}>
                             {/* 기본 구독료 (기준 정가) */}
                             <div>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginBottom: '0.3rem' }}>
-                                <span style={{ fontSize: '0.78rem', color: '#93c5fd', fontWeight: 800 }}>기본 구독료 (월)</span>
-                                <span style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: 500 }}>(기준가)</span>
+                              <div className="calc-label-guide" style={{ marginBottom: '0.25rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: '#93c5fd', fontWeight: 800 }}>기본 구독료(월)</span>
+                                <span className="calc-tag-type input">✏️ 직접입력</span>
                               </div>
                               <MoneyInput
                                 value={plan.baseMonthlyFee !== undefined && plan.baseMonthlyFee !== 0 ? plan.baseMonthlyFee : (plan.monthlyFee || 0)}
@@ -13371,9 +14133,9 @@ export default function BenefitCalculator({ onBack }) {
 
                             {/* 할인 구독료 (실제 납부액) */}
                             <div>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginBottom: '0.3rem' }}>
-                                <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 800 }}>할인 구독료 (월)</span>
-                                <span style={{ fontSize: '0.66rem', color: '#6ee7b7', fontWeight: 500 }}>(실납부액)</span>
+                              <div className="calc-label-guide" style={{ marginBottom: '0.25rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 800 }}>할인 구독료(월)</span>
+                                <span className="calc-tag-type input">✏️ 직접입력</span>
                               </div>
                               <MoneyInput
                                 value={plan.discountMonthlyFee !== undefined && plan.discountMonthlyFee !== 0 ? plan.discountMonthlyFee : (plan.monthlyFee || 0)}
@@ -13388,9 +14150,9 @@ export default function BenefitCalculator({ onBack }) {
 
                             {/* 선납금 (개별 입력) */}
                             <div>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', marginBottom: '0.3rem' }}>
-                                <span style={{ fontSize: '0.78rem', color: '#fcd34d', fontWeight: 800 }}>선납금 (일시불)</span>
-                                <span style={{ fontSize: '0.66rem', color: '#fde68a', fontWeight: 500 }}>(대당)</span>
+                              <div className="calc-label-guide" style={{ marginBottom: '0.25rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: '#fcd34d', fontWeight: 800 }}>선납금(일시불)</span>
+                                <span className="calc-tag-type input">✏️ 직접입력</span>
                               </div>
                               <MoneyInput
                                 value={plan.prepay || 0}
@@ -13404,33 +14166,22 @@ export default function BenefitCalculator({ onBack }) {
                             </div>
 
                             {/* 약정기간 */}
-                            <div style={{ minWidth: '92px' }}>
-                              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.3rem' }}>
-                                <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>
-                                  약정기간
-                                </span>
+                            <div>
+                              <div className="calc-label-guide" style={{ marginBottom: '0.25rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>약정기간</span>
+                                <span className="calc-tag-type select">▼ 선택</span>
                               </div>
                               <select
                                 value={plan.months}
                                 onChange={(e) => handleUpdateSubPlan(plan.id, { months: Number(e.target.value) })}
+                                className="calc-select-clickable"
                                 style={{
-                                  width: '100%',
                                   height: '38px',
-                                  boxSizing: 'border-box',
-                                  borderRadius: '8px',
-                                  background: 'rgba(15, 23, 42, 0.9)',
-                                  border: '1px solid rgba(96, 165, 250, 0.55)',
-                                  color: 'white',
-                                  fontSize: '0.86rem',
-                                  fontWeight: 800,
-                                  padding: '0 0.35rem',
-                                  cursor: 'pointer',
-                                  outline: 'none',
-                                  textAlign: 'center'
+                                  fontSize: '0.84rem'
                                 }}
                               >
                                 {[72, 60, 48, 36].map((m) => (
-                                  <option key={m} value={m} style={{ background: '#0f172a', color: 'white' }}>
+                                  <option key={m} value={m}>
                                     {m}개월
                                   </option>
                                 ))}
@@ -13438,7 +14189,7 @@ export default function BenefitCalculator({ onBack }) {
                             </div>
                           </div>
 
-                          {/* 기본구독료 > 할인구독료 즉시할인 및 선납금 요약 배너 */}
+                          {/* 기본구독료 > 할인구독료 즉시할인 및 선납금 요약 배너 (클릭 불가 자동산출) */}
                           {(() => {
                             const b = Number(plan.baseMonthlyFee) || Number(plan.monthlyFee) || 0;
                             const d = Number(plan.discountMonthlyFee) || Number(plan.monthlyFee) || 0;
@@ -13447,12 +14198,15 @@ export default function BenefitCalculator({ onBack }) {
                             const m = Number(plan.months) || 72;
                             if (diff <= 0 && prepayAmt <= 0) return null;
                             return (
-                              <div style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(52, 211, 153, 0.35)', borderRadius: '6px', padding: '0.3rem 0.65rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem', flexWrap: 'wrap', gap: '0.3rem' }}>
-                                {diff > 0 && (
-                                  <span style={{ color: '#34d399', fontWeight: 800 }}>
-                                    구독료 즉시할인: 월 -{formatWon(diff)} (약정총액 -{formatWon(diff * m)})
-                                  </span>
-                                )}
+                              <div className="calc-display-readonly" style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px dashed rgba(52, 211, 153, 0.45)', borderRadius: '8px', padding: '0.45rem 0.75rem', fontSize: '0.76rem', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <span className="calc-badge-auto">🔒 자동계산</span>
+                                  {diff > 0 && (
+                                    <span style={{ color: '#34d399', fontWeight: 800 }}>
+                                      구독료 즉시할인: 월 -{formatWon(diff)} (약정총액 -{formatWon(diff * m)})
+                                    </span>
+                                  )}
+                                </div>
                                 {prepayAmt > 0 && (
                                   <span style={{ color: '#fcd34d', fontWeight: 800, marginLeft: diff > 0 ? 'auto' : '0' }}>
                                     선납금: {formatWon(prepayAmt)}
@@ -13474,16 +14228,43 @@ export default function BenefitCalculator({ onBack }) {
                               gap: '0.65rem'
                             }}
                           >
-                            {/* 상단 라벨 & 모바일 체크박스 */}
+                            {/* 상단 라벨 & 보증기간(36,48,60,72) 선택 칩 & 모바일 체크박스 */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
                                 <ShieldCheck size={14} style={{ color: plan.isMobile ? '#38bdf8' : '#34d399' }} />
                                 <span style={{ fontSize: '0.8rem', fontWeight: 800, color: plan.isMobile ? '#7dd3fc' : '#a7f3d0' }}>
                                   {plan.isMobile ? '모바일 파손보험 + 무상수리' : '무상수리 연장 이용료'}
                                 </span>
-                                <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>
-                                  (약정 {plan.months}개월 자동 연동)
-                                </span>
+                                {/* 보증기간 36, 48, 60, 72 선택 버튼들 */}
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: 'rgba(0, 0, 0, 0.35)', padding: '2px 4px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                  <span style={{ fontSize: '0.62rem', color: '#94a3b8', marginRight: '2px', fontWeight: 600 }}>보증:</span>
+                                  {[36, 48, 60, 72].map((mVal) => {
+                                    const curM = Number(plan.freeRepairMonths) || Number(plan.months) || 60;
+                                    const isSelected = curM === mVal;
+                                    return (
+                                      <button
+                                        key={mVal}
+                                        type="button"
+                                        onClick={() => handleUpdateSubPlan(plan.id, { freeRepairMonths: mVal })}
+                                        title={`무상수리 보증기간을 ${mVal}개월로 설정합니다.`}
+                                        style={{
+                                          padding: '1px 5px',
+                                          fontSize: '0.64rem',
+                                          fontWeight: isSelected ? 800 : 600,
+                                          borderRadius: '4px',
+                                          border: isSelected ? '1px solid #3b82f6' : '1px solid transparent',
+                                          background: isSelected ? 'rgba(59, 130, 246, 0.35)' : 'transparent',
+                                          color: isSelected ? '#93c5fd' : '#94a3b8',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        {mVal}
+                                      </button>
+                                    );
+                                  })}
+                                  <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>개월</span>
+                                </div>
                               </div>
 
                               {/* 모바일 체크박스 */}
@@ -13532,12 +14313,12 @@ export default function BenefitCalculator({ onBack }) {
                                       = {formatWon(freeRepairTotal)} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#a7f3d0' }}>상당</span>
                                     </div>
                                     <div style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 500 }}>
-                                      월 {formatWon(plan.freeRepairFee || 0)} × {plan.months}개월
+                                      월 {formatWon(plan.freeRepairFee || 0)} × {freeRepairMonths}개월
                                     </div>
                                   </div>
                                 ) : (
                                   <span style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                                    약정 {plan.months}개월 일치 연동
+                                    보증 {freeRepairMonths}개월 연동
                                   </span>
                                 )}
                               </div>
@@ -13545,15 +14326,32 @@ export default function BenefitCalculator({ onBack }) {
 
                             {/* 케어서비스 행추가 섹션: 한 세트당 2줄 배치 최적화 & 타이포그래피 계층화 */}
                             <div style={{ marginTop: '0.2rem', paddingTop: '0.55rem', borderTop: '1px dashed rgba(52, 211, 153, 0.25)' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'wrap', gap: '0.3rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
                                   <Wrench size={13} style={{ color: '#34d399' }} />
                                   <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#a7f3d0' }}>
                                     케어서비스 혜택
                                   </span>
-                                  <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>
-                                    (주기·횟수·비용 맞춤 설정)
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApplyFullCarePackage(plan.id)}
+                                    title="무상60 + 방문36 + 소모품36 풀패키지 케어 혜택을 원클릭으로 일괄 자동 설정합니다."
+                                    style={{
+                                      padding: '0.15rem 0.45rem',
+                                      borderRadius: '5px',
+                                      border: '1px solid #34d399',
+                                      background: 'rgba(16, 185, 129, 0.2)',
+                                      color: '#6ee7b7',
+                                      fontSize: '0.68rem',
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px'
+                                    }}
+                                  >
+                                    ✨ 무상60·방문36·소모품36 원클릭 적용
+                                  </button>
                                 </div>
                                 {planCareTotal > 0 && (
                                   <span style={{ fontSize: '0.82rem', color: '#6ee7b7', fontWeight: 800 }}>
@@ -13652,7 +14450,14 @@ export default function BenefitCalculator({ onBack }) {
                                           >
                                             <option value={6}>6개월</option>
                                             <option value={12}>12개월</option>
+                                            <option value={24}>24개월</option>
                                             <option value={36}>36개월</option>
+                                            <option value={48}>48개월</option>
+                                            <option value={60}>60개월</option>
+                                            <option value={72}>72개월</option>
+                                            {![6, 12, 24, 36, 48, 60, 72].includes(Number(care.cycle)) && Boolean(care.cycle) && (
+                                              <option value={care.cycle}>{care.cycle}개월</option>
+                                            )}
                                           </select>
                                         </div>
 
@@ -14220,9 +15025,13 @@ export default function BenefitCalculator({ onBack }) {
 
                       {/* 1번째: 카드 이름 직접 입력 및 프리셋 */}
                       <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.28rem', flexWrap: 'wrap', gap: '0.3rem' }}>
-                          <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>1. 카드 이름</span>
-                          <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.35rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#dbeafe' }}>1. 카드 이름</span>
+                            <span className="calc-tag-type input">✏️ 직접입력</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 600 }}>빠른선택:</span>
                             {[
                               { label: '삼성카드', fullName: '삼성전자 AI구독 삼성카드' },
                               { label: 'KB카드', fullName: '삼성전자 AI구독 KB카드' },
@@ -14234,15 +15043,12 @@ export default function BenefitCalculator({ onBack }) {
                                 key={card.label}
                                 type="button"
                                 onClick={() => handleSelectCardPresetForCard(cardItem.id, card.fullName)}
+                                className={`calc-btn-interactive ${cardItem.cardName === card.fullName ? 'active' : ''}`}
                                 style={{
-                                  padding: '0.16rem 0.42rem',
-                                  borderRadius: '5px',
-                                  border: cardItem.cardName === card.fullName ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.12)',
-                                  background: cardItem.cardName === card.fullName ? 'rgba(59, 130, 246, 0.35)' : 'rgba(255,255,255,0.04)',
-                                  color: '#e2e8f0',
-                                  fontSize: '0.68rem',
-                                  fontWeight: 600,
-                                  cursor: 'pointer'
+                                  padding: '0.22rem 0.5rem',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  minHeight: '28px'
                                 }}
                               >
                                 {card.label}
@@ -14255,11 +15061,12 @@ export default function BenefitCalculator({ onBack }) {
                           value={cardItem.cardName}
                           onChange={(e) => handleUpdateCard(cardItem.id, { cardName: e.target.value })}
                           placeholder="카드 이름 직접 입력 (예: 삼성전자 AI구독 삼성카드 / 구독엔로카 AMEX)"
+                          className="calc-input-editable"
                           style={{
-                            ...textInputStyle,
-                            padding: '0.54rem 0.75rem',
-                            fontSize: '0.88rem',
-                            background: 'rgba(15, 23, 42, 0.75)'
+                            width: '100%',
+                            minHeight: '42px',
+                            padding: '0.54rem 0.85rem',
+                            fontSize: '0.88rem'
                           }}
                         />
 
@@ -14426,8 +15233,9 @@ export default function BenefitCalculator({ onBack }) {
 
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.65rem' }}>
                                   <div>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#dbeafe', marginBottom: '0.2rem' }}>
-                                      2. 필요 실적 (전월 실적)
+                                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#dbeafe', marginBottom: '0.28rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                      <span>2. 필요 실적 (전월 실적)</span>
+                                      <span className="calc-tag-type input">✏️ 직접입력</span>
                                     </div>
                                     <input
                                       type="text"
@@ -14449,14 +15257,15 @@ export default function BenefitCalculator({ onBack }) {
                                         }
                                       }}
                                       placeholder={idx === 0 ? '예: 70만 / 50만' : '예: 30만 / 50만'}
+                                      className="calc-input-editable"
                                       style={{
-                                        ...textInputStyle,
+                                        width: '100%',
+                                        minHeight: '40px',
                                         padding: '0.45rem 0.65rem',
                                         fontSize: '0.85rem',
-                                        background: 'rgba(15, 23, 42, 0.85)',
                                         border: isSamsung && seg.baseMonthly < 70000 && isSpend70kOrMore(segSpendVal)
                                           ? '1px solid #ef4444'
-                                          : textInputStyle.border
+                                          : undefined
                                       }}
                                     />
                                     {isSamsung && seg.baseMonthly < 70000 && (
@@ -14472,8 +15281,9 @@ export default function BenefitCalculator({ onBack }) {
                                   </div>
 
                                   <div>
-                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#dbeafe', marginBottom: '0.2rem' }}>
-                                      3. 월 청구할인 금액
+                                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#dbeafe', marginBottom: '0.28rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                      <span>3. 월 청구할인 금액</span>
+                                      <span className="calc-tag-type input">✏️ 직접입력</span>
                                     </div>
                                     <input
                                       type="text"
@@ -14497,14 +15307,15 @@ export default function BenefitCalculator({ onBack }) {
                                         }
                                       }}
                                       placeholder="예: 26,000 / 16,000"
+                                      className="calc-input-editable"
                                       style={{
-                                        ...textInputStyle,
+                                        width: '100%',
+                                        minHeight: '40px',
                                         padding: '0.45rem 0.65rem',
                                         fontSize: '0.85rem',
-                                        background: 'rgba(15, 23, 42, 0.85)',
                                         border: isSamsung && seg.baseMonthly < 70000 && segCardVal > 16000
                                           ? '1px solid #ef4444'
-                                          : textInputStyle.border
+                                          : undefined
                                       }}
                                     />
                                   </div>
@@ -14533,8 +15344,9 @@ export default function BenefitCalculator({ onBack }) {
                           return (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem' }}>
                               <div>
-                                <div style={{ marginBottom: '0.28rem' }}>
+                                <div style={{ marginBottom: '0.28rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                   <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>2. 필요 실적 (전월 실적)</span>
+                                  <span className="calc-tag-type input">✏️ 직접입력</span>
                                 </div>
                                 <input
                                   type="text"
@@ -14566,14 +15378,15 @@ export default function BenefitCalculator({ onBack }) {
                                     }
                                   }}
                                   placeholder="필요 실적 직접 입력 (예: 50만 / 30만원)"
+                                  className="calc-input-editable"
                                   style={{
-                                    ...textInputStyle,
+                                    width: '100%',
+                                    minHeight: '42px',
                                     padding: '0.54rem 0.75rem',
                                     fontSize: '0.88rem',
-                                    background: 'rgba(15, 23, 42, 0.75)',
                                     border: isSamsungFeeUnder70k && isSpend70kOrMore(cardItem.minSpend)
                                       ? '1px solid #ef4444'
-                                      : textInputStyle.border
+                                      : undefined
                                   }}
                                 />
                                 {isSamsungFeeUnder70k && (
@@ -14589,8 +15402,9 @@ export default function BenefitCalculator({ onBack }) {
                               </div>
 
                               <div>
-                                <div style={{ marginBottom: '0.28rem' }}>
+                                <div style={{ marginBottom: '0.28rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                   <span style={{ fontSize: '0.79rem', fontWeight: 700, color: '#dbeafe' }}>3. 월 청구할인 금액</span>
+                                  <span className="calc-tag-type input">✏️ 직접입력</span>
                                 </div>
                                 <input
                                   type="text"
@@ -14625,14 +15439,15 @@ export default function BenefitCalculator({ onBack }) {
                                     }
                                   }}
                                   placeholder="월 청구할인 금액 직접 입력 (예: 26,000 / 16,000)"
+                                  className="calc-input-editable"
                                   style={{
-                                    ...textInputStyle,
+                                    width: '100%',
+                                    minHeight: '42px',
                                     padding: '0.54rem 0.75rem',
                                     fontSize: '0.88rem',
-                                    background: 'rgba(15, 23, 42, 0.75)',
                                     border: isSamsungFeeUnder70k && (Number(cardItem.monthly) || 0) > 16000
                                       ? '1px solid #ef4444'
-                                      : textInputStyle.border
+                                      : undefined
                                   }}
                                 />
                               </div>
@@ -15061,7 +15876,8 @@ export default function BenefitCalculator({ onBack }) {
                               value={cb.name}
                               onChange={(e) => handleUpdateMixedCashbackItem(cb.id, 'name', e.target.value)}
                               placeholder={`이벤트/사유 (예: ${idx === 0 ? defaultName : '카드 추가 캐시백'})`}
-                              style={{ ...textInputStyle, padding: '0.45rem 0.7rem', fontSize: '0.85rem' }}
+                              className="calc-input-editable"
+                              style={{ width: '100%', minHeight: '38px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
                             />
                           </div>
                           <div style={{ flex: '1 1 130px' }}>
@@ -15199,7 +16015,8 @@ export default function BenefitCalculator({ onBack }) {
                               value={vc.name}
                               onChange={(e) => handleUpdateMixedVoucherItem(vc.id, 'name', e.target.value)}
                               placeholder={`상품권 종류/사유 (예: ${idx === 0 ? defaultName : '신세계/롯데 모바일상품권'})`}
-                              style={{ ...textInputStyle, padding: '0.45rem 0.7rem', fontSize: '0.85rem' }}
+                              className="calc-input-editable"
+                              style={{ width: '100%', minHeight: '38px', padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
                             />
                           </div>
                           <div style={{ flex: '1 1 130px' }}>
@@ -15362,27 +16179,41 @@ export default function BenefitCalculator({ onBack }) {
           {/* 상담 메모 & 매장 주소 */}
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.85rem' }}>
             <div>
-              <label style={{ ...labelStyle, fontSize: '0.95rem', color: 'white' }}>고객 맞춤 상담 메모 (출력물 하단 표시)</label>
+              <div className="calc-label-guide" style={{ marginBottom: '0.35rem' }}>
+                <span style={{ fontSize: '0.92rem', fontWeight: 800, color: 'white' }}>고객 맞춤 상담 메모 (출력물 하단 표시)</span>
+                <span className="calc-tag-type input">✏️ 직접입력</span>
+              </div>
               <textarea
                 value={memo}
                 onChange={(e) => setMemo(e.target.value)}
                 placeholder="예: 삼성 제휴카드 월 30만원 이용 기준 할인 적용 / 입주 예정일에 맞춰 희망 배송일 지정 가능"
+                className="calc-input-editable"
                 style={{
-                  ...textInputStyle,
+                  width: '100%',
                   minHeight: '118px',
                   resize: 'vertical',
-                  lineHeight: 1.6
+                  lineHeight: 1.6,
+                  padding: '0.65rem 0.85rem'
                 }}
               />
             </div>
 
             <div>
-              <label style={labelStyle}>하단 명함 매장 위치 문구 (자동저장)</label>
+              <div className="calc-label-guide" style={{ marginBottom: '0.35rem' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>하단 명함 매장 위치 문구 (자동저장)</span>
+                <span className="calc-tag-type input">✏️ 직접입력</span>
+              </div>
               <input
                 type="text"
                 value={storeInfo}
                 onChange={(e) => setStoreInfo(e.target.value)}
-                style={textInputStyle}
+                className="calc-input-editable"
+                style={{
+                  width: '100%',
+                  minHeight: '42px',
+                  padding: '0.5rem 0.85rem',
+                  fontSize: '0.88rem'
+                }}
               />
             </div>
           </div>
@@ -15406,8 +16237,11 @@ export default function BenefitCalculator({ onBack }) {
         <div>
           {isMixedMode ? (
             <>
-              <div style={{ fontSize: '0.82rem', color: 'var(--accent-gold-light)', fontWeight: 700, marginBottom: '0.25rem' }}>
-                실시간 복합 견적 요약 (일반구매 + 삼성AI구독)
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.35rem' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--accent-gold-light)', fontWeight: 800 }}>
+                  실시간 복합 견적 요약 (일반구매 + 삼성AI구독)
+                </span>
+                <span className="calc-tag-type auto">🔒 자동 실시간 합산</span>
               </div>
               <div style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', flexWrap: 'wrap', gap: '0.8rem', alignItems: 'center' }}>
                 <span>
@@ -15448,8 +16282,11 @@ export default function BenefitCalculator({ onBack }) {
             </>
           ) : (
           <>
-          <div style={{ fontSize: '0.82rem', color: 'var(--accent-gold-light)', fontWeight: 700, marginBottom: '0.25rem' }}>
-            실시간 최종 체감가 비교 요약 (일반구매 일시불 조건 대비)
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.35rem' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--accent-gold-light)', fontWeight: 800 }}>
+              실시간 최종 체감가 비교 요약 (일반구매 일시불 조건 대비)
+            </span>
+            <span className="calc-tag-type auto">🔒 자동 실시간 비교</span>
           </div>
           <div style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', flexWrap: 'wrap', gap: '0.8rem', alignItems: 'center' }}>
             <span>
@@ -15691,20 +16528,41 @@ export default function BenefitCalculator({ onBack }) {
 }
 
 const labelStyle = {
-  display: 'block',
-  fontSize: '0.83rem',
-  fontWeight: 600,
-  color: 'var(--text-secondary)',
-  marginBottom: '0.4rem'
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  fontSize: '0.82rem',
+  fontWeight: 700,
+  color: '#e2e8f0',
+  marginBottom: '0.35rem'
 };
 
 const textInputStyle = {
   width: '100%',
-  padding: '0.68rem 0.85rem',
+  height: '42px',
+  padding: '0 0.85rem',
   borderRadius: '10px',
-  background: 'rgba(15, 23, 42, 0.75)',
-  border: '1px solid var(--glass-border)',
-  color: 'white',
+  background: '#0b1329',
+  border: '1.5px solid rgba(148, 163, 184, 0.45)',
+  color: '#ffffff',
   fontSize: '0.92rem',
-  outline: 'none'
+  fontWeight: 600,
+  outline: 'none',
+  boxSizing: 'border-box',
+  cursor: 'text'
+};
+
+const selectStyle = {
+  width: '100%',
+  height: '42px',
+  padding: '0 2.2rem 0 0.85rem',
+  borderRadius: '10px',
+  backgroundColor: '#1e293b',
+  border: '1.5px solid rgba(56, 189, 248, 0.45)',
+  color: '#f8fafc',
+  fontSize: '0.88rem',
+  fontWeight: 700,
+  outline: 'none',
+  cursor: 'pointer',
+  boxSizing: 'border-box'
 };
