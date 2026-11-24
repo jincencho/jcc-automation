@@ -142,7 +142,7 @@ function BarcodeSvg({ value = '1041315089', width = 230, height = 44 }) {
   );
 }
 
-// 금액 입력 컴포넌트 (콤마 자동 포맷 + 원화 단위 보조 텍스트 + 직접입력 시각 가이드)
+// 금액 입력 컴포넌트 (콤마 자동 포맷 + 원화 단위 보조 텍스트 + 클릭 시 전체 자동 선택)
 function MoneyInput({ value, onChange, placeholder = '0', accentColor = 'var(--accent-gold)', compact = false }) {
   const numericValue = Number(value) || 0;
   const displayValue = numericValue === 0 ? '' : numericValue.toLocaleString('ko-KR');
@@ -152,11 +152,37 @@ function MoneyInput({ value, onChange, placeholder = '0', accentColor = 'var(--a
     onChange(raw ? parseInt(raw, 10) : 0);
   };
 
+  const handleAutoSelect = (e) => {
+    const target = e.target;
+    setTimeout(() => {
+      try {
+        if (typeof target.select === 'function') {
+          target.select();
+        }
+      } catch {}
+    }, 10);
+  };
+
+  const handleWrapperClick = (e) => {
+    const input = e.currentTarget.querySelector('input');
+    if (input) {
+      input.focus();
+      setTimeout(() => {
+        try {
+          if (typeof input.select === 'function') {
+            input.select();
+          }
+        } catch {}
+      }, 10);
+    }
+  };
+
   return (
     <div style={{ width: '100%' }}>
       <div
         className={`calc-money-wrapper ${compact ? 'compact' : ''}`}
         style={accentColor ? { '--accent-input-color': accentColor } : undefined}
+        onClick={handleWrapperClick}
       >
         <span style={{ color: '#64748b', fontSize: '0.74rem', marginRight: '0.2rem', pointerEvents: 'none' }} title="직접 입력 칸">
           ✏️
@@ -166,6 +192,8 @@ function MoneyInput({ value, onChange, placeholder = '0', accentColor = 'var(--a
           inputMode="numeric"
           value={displayValue}
           onChange={handleTextChange}
+          onFocus={handleAutoSelect}
+          onClick={handleAutoSelect}
           placeholder={placeholder}
           className="calc-money-input-field"
         />
@@ -1965,6 +1993,38 @@ export default function BenefitCalculator({ onBack }) {
       clearInterval(intervalId);
     };
   }, [isAuthenticated, isScreenLocked, handleScreenLock]);
+
+  // 직접입력하는 모든 곳(모델명, 금액, 수량, 메모 등) 클릭/터치/포커스 시 자동으로 전체선택(Select All) 적용
+  useEffect(() => {
+    const handleAutoSelectOnInput = (e) => {
+      const target = e.target;
+      if (!target) return;
+      const tag = target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        const type = (target.type || 'text').toLowerCase();
+        // 체크박스, 라디오, 파일, 버튼 등 비텍스트 요소 제외
+        if (['checkbox', 'radio', 'file', 'button', 'submit', 'reset', 'range', 'color'].includes(type)) {
+          return;
+        }
+        // 사용자가 직접 입력하는 모든 칸 클릭/포커스 시 기존 내용 전체 자동 선택
+        setTimeout(() => {
+          try {
+            if (document.activeElement === target && typeof target.select === 'function') {
+              target.select();
+            }
+          } catch {}
+        }, 15);
+      }
+    };
+
+    document.addEventListener('focusin', handleAutoSelectOnInput);
+    document.addEventListener('click', handleAutoSelectOnInput);
+
+    return () => {
+      document.removeEventListener('focusin', handleAutoSelectOnInput);
+      document.removeEventListener('click', handleAutoSelectOnInput);
+    };
+  }, []);
 
   // 관리자 전용: 새 계정 생성
   const handleAdminAddAccount = async (e) => {
