@@ -1097,6 +1097,7 @@ export default function BenefitCalculator({ onBack }) {
       freeRepairFee: 0,
       selfCareFee: 0,
       visitCareFee: 0,
+      reinstallFee: 0,
       hasReinstall: false
     }
   ];
@@ -1201,6 +1202,7 @@ export default function BenefitCalculator({ onBack }) {
           freeRepairFee: 0,
           selfCareFee: 0,
           visitCareFee: 0,
+          reinstallFee: 0,
           hasReinstall: false
         }
       ];
@@ -1294,6 +1296,7 @@ export default function BenefitCalculator({ onBack }) {
       policyNote: '',
       policyDiscount: 0,
       isMobile: false,
+      hasReinstall: false,
       freeRepairFee: 0,
       careItems: []
     }
@@ -1542,6 +1545,7 @@ export default function BenefitCalculator({ onBack }) {
           policyNote: '',
           policyDiscount: 0,
           isMobile: false,
+          hasReinstall: false,
           freeRepairFee: 0,
           careItems: []
         }
@@ -1560,10 +1564,14 @@ export default function BenefitCalculator({ onBack }) {
           ? 'visit'
           : !currentItems.some((it) => it.type === 'self')
             ? 'self'
-            : 'consumable';
+            : !currentItems.some((it) => it.type === 'consumable')
+              ? 'consumable'
+              : !currentItems.some((it) => it.type === 'reinstall')
+                ? 'reinstall'
+                : 'visit';
         return {
           ...p,
-          careItems: [...currentItems, { id: nextId, type: defaultType, cycle: 12, count: 1, amount: 0, customName: '' }]
+          careItems: [...currentItems, { id: nextId, type: defaultType, cycle: defaultType === 'reinstall' ? 0 : 12, count: 1, amount: 0, customName: '' }]
         };
       })
     );
@@ -2384,7 +2392,9 @@ export default function BenefitCalculator({ onBack }) {
     const freeRepair = (Number(it.freeRepairFee) || 0) * months * qty;
     const selfCare = (Number(it.selfCareFee) || 0) * qty;
     const visitCare = (Number(it.visitCareFee) || 0) * qty;
-    const careTotal = selfCare + visitCare;
+    const reinstallCare = (Number(it.reinstallFee) || 0) * qty;
+    const hasReinstall = Boolean(it.hasReinstall) || reinstallCare > 0;
+    const careTotal = selfCare + visitCare + reinstallCare;
     const serviceTotal = freeRepair + careTotal;
 
     const serviceParts = [];
@@ -2397,6 +2407,9 @@ export default function BenefitCalculator({ onBack }) {
       serviceParts.push('방문케어');
     } else if (selfCare > 0) {
       serviceParts.push('소모품케어');
+    }
+    if (hasReinstall) {
+      serviceParts.push('재설치서비스');
     }
     const serviceLabel = serviceParts.length > 0 ? serviceParts.join(' + ') : '무상수리연장 + 방문케어';
 
@@ -2413,6 +2426,8 @@ export default function BenefitCalculator({ onBack }) {
       freeRepair,
       selfCare,
       visitCare,
+      reinstallCare,
+      hasReinstall,
       careTotal,
       serviceTotal,
       serviceLabel
@@ -3003,6 +3018,9 @@ export default function BenefitCalculator({ onBack }) {
             } else if (c.type === 'consumable') {
               typeLabel = '소모품';
               unit = '개';
+            } else if (c.type === 'reinstall') {
+              typeLabel = '재설치';
+              unit = '회';
             } else if (c.type === 'all') {
               typeLabel = '방문케어+소모품';
               unit = '회';
@@ -3012,7 +3030,7 @@ export default function BenefitCalculator({ onBack }) {
             }
 
             const countNum = c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1;
-            const cycleText = c.cycle ? `${c.cycle}개월 주기` : '';
+            const cycleText = c.cycle && Number(c.cycle) > 0 ? `${c.cycle}개월 주기` : '';
             const countText = countNum > 1 ? `${countNum}${unit}` : '';
             const details = [cycleText, countText].filter(Boolean).join(' / ');
             const planTitle = cleanPrintText(p.name);
@@ -3047,7 +3065,7 @@ export default function BenefitCalculator({ onBack }) {
     : activeSubCareItems;
   const validCareServiceCount = validCareServiceItems.length;
 
-  // 전문 케어서비스 종류별 갯수 요약 (예: 방문케어 1회 / 소모품 1개 - 모델명 제외하고 갯수만 간결 표시)
+  // 전문 케어서비스 종류별 갯수 요약 (예: 방문케어 1회 / 소모품 1개 / 재설치 1회 - 모델명 제외하고 갯수만 간결 표시)
   const careCountsByType = validCareServiceItems.reduce((acc, it) => {
     const rawType = (it.serviceType || '케어').trim();
     const typeLabel = rawType.includes('방문')
@@ -3056,7 +3074,9 @@ export default function BenefitCalculator({ onBack }) {
         ? '소모품'
         : rawType.includes('셀프')
           ? '셀프케어'
-          : rawType;
+          : rawType.includes('재설치')
+            ? '재설치'
+            : rawType;
     const cnt = Number(it.count) || 1;
     const unit = it.unit || (typeLabel.includes('소모품') ? '개' : '회');
     if (!acc[typeLabel]) {
@@ -3066,11 +3086,34 @@ export default function BenefitCalculator({ onBack }) {
     return acc;
   }, {});
 
+  // 품목별 재설치 체크박스 또는 금액 미입력 재설치 항목도 케어서비스 요약에 반영
+  const extraReinstallCount = !isMixedMode
+    ? subPlans.reduce((sum, p) => {
+        const items = Array.isArray(p.careItems) ? p.careItems : [];
+        const hasPaidReinstall = items.some((c) => c.type === 'reinstall' && (Number(c.amount) || 0) > 0);
+        if (hasPaidReinstall) return sum;
+        const unpaidReinstallItems = items.filter((c) => c.type === 'reinstall' && (Number(c.amount) || 0) === 0);
+        if (unpaidReinstallItems.length > 0) {
+          return sum + unpaidReinstallItems.reduce((s, c) => s + (Number(c.count) || 1), 0);
+        }
+        return p.hasReinstall ? sum + 1 : sum;
+      }, 0)
+    : 0;
+  if (extraReinstallCount > 0) {
+    if (!careCountsByType['재설치']) {
+      careCountsByType['재설치'] = { count: 0, unit: '회' };
+    }
+    careCountsByType['재설치'].count += extraReinstallCount;
+  }
+
   const careCountSummaryText = Object.entries(careCountsByType)
     .map(([t, data]) => `${t} ${data.count}${data.unit}`)
     .join(' / ') || (validCareServiceCount > 0 ? `총 ${validCareServiceCount}개 항목` : '케어서비스');
 
-  const hasCareService = subCareServiceAmount > 0;
+  const hasAnyPlanReinstall = !isMixedMode && subPlans.some(
+    (p) => Boolean(p.hasReinstall) || (Array.isArray(p.careItems) && p.careItems.some((c) => c.type === 'reinstall'))
+  );
+  const hasCareService = subCareServiceAmount > 0 || hasAnyPlanReinstall;
   const subServiceTotal = (Number(subFreeServiceAmount) || 0) + (Number(subCareServiceAmount) || 0);
   const subCashBenefitTotal = (subFeeDiscountTotal || 0) + subCardTotalDiscount + (Number(subPurchaseBenefit) || 0);
   // 총 혜택 합계: 구독료 즉시할인 + 제휴카드 청구할인 + 캐시백
@@ -4097,10 +4140,13 @@ export default function BenefitCalculator({ onBack }) {
       0
     );
 
-  // 케어서비스(소모품 + 방문케어) 혜택 총액
+  // 케어서비스(소모품 + 방문케어 + 재설치) 혜택 총액
   const mixedSubCareTotal = mixedSubItems.reduce(
-    (sum, it) => sum + ((Number(it.selfCareFee) || 0) + (Number(it.visitCareFee) || 0)) * getSubQty(it.quantity),
+    (sum, it) => sum + ((Number(it.selfCareFee) || 0) + (Number(it.visitCareFee) || 0) + (Number(it.reinstallFee) || 0)) * getSubQty(it.quantity),
     0
+  );
+  const hasAnyMixedReinstall = mixedSubItems.some(
+    (it) => Boolean(it.hasReinstall) || (Number(it.reinstallFee) || 0) > 0
   );
 
   // 구독 전용 서비스 총 혜택 (무상수리 + 케어)
@@ -4221,6 +4267,7 @@ export default function BenefitCalculator({ onBack }) {
         policyNote: '',
         policyDiscount: 0,
         isMobile: false,
+        hasReinstall: false,
         freeRepairFee: 0,
         careItems: []
       }
@@ -4576,6 +4623,7 @@ export default function BenefitCalculator({ onBack }) {
               baseMonthlyFee: Number(p.baseMonthlyFee) || Number(p.monthlyFee) || 0,
               discountMonthlyFee: Number(p.discountMonthlyFee) || Number(p.monthlyFee) || 0,
               isMobile: Boolean(p.isMobile),
+              hasReinstall: Boolean(p.hasReinstall),
               freeRepairFee: Number(p.freeRepairFee) || 0,
               careItems
             };
@@ -4594,6 +4642,7 @@ export default function BenefitCalculator({ onBack }) {
               policyNote: '',
               policyDiscount: 0,
               isMobile: false,
+              hasReinstall: false,
               freeRepairFee: 0,
               careItems: []
             }
@@ -9448,6 +9497,7 @@ export default function BenefitCalculator({ onBack }) {
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
+                                      gap: '2px',
                                       fontSize: '0.63rem',
                                       fontWeight: 800,
                                       color: '#065f46',
@@ -9460,19 +9510,20 @@ export default function BenefitCalculator({ onBack }) {
                                       whiteSpace: 'nowrap'
                                     }}
                                   >
-                                    {careTypeBadgeLabel} {itemCycle}개월주기
+                                    <Wrench size={8.5} strokeWidth={2.5} /> {careTypeBadgeLabel} {itemCycle}개월주기
                                   </span>
                                 )}
-                                {p.hasReinstall && (
+                                {(p.hasReinstall || (Number(p.reinstallFee) || 0) > 0) && (
                                   <span
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
+                                      gap: '2px',
                                       fontSize: '0.63rem',
                                       fontWeight: 800,
-                                      color: '#047857',
-                                      background: '#d1fae5',
-                                      border: '1px solid #10b981',
+                                      color: '#0f766e',
+                                      background: '#ccfbf1',
+                                      border: '1px solid #14b8a6',
                                       borderRadius: '4px',
                                       padding: '1px 4.5px',
                                       lineHeight: 1.25,
@@ -9480,7 +9531,7 @@ export default function BenefitCalculator({ onBack }) {
                                       whiteSpace: 'nowrap'
                                     }}
                                   >
-                                    재설치서비스
+                                    <RefreshCw size={8.5} strokeWidth={2.5} /> 재설치서비스
                                   </span>
                                 )}
                               </span>
@@ -9918,15 +9969,15 @@ export default function BenefitCalculator({ onBack }) {
                         ))}
 
                         {/* 구독케어 혜택 (하단으로 이동) */}
-                        {mixedSubServiceBenefit > 0 && (
+                        {(mixedSubServiceBenefit > 0 || hasAnyMixedReinstall) && (
                           <div className="a4-benefit-row" style={{ fontSize: '0.77rem', alignItems: 'center' }}>
                             <span>
                               <span style={{ color: '#0284c7', marginRight: '4px', fontWeight: 800 }}>•</span>
                               <span style={{ color: '#0369a1', fontWeight: 700 }}>구독케어혜택</span>
-                              <span style={{ fontSize: '0.70rem', color: '#0284c7', fontWeight: 600, marginLeft: '6px' }}>({hasAnyMixedMobile ? '파손보험, 무상수리, 방문케어, 소모품' : '무상수리연장, 방문케어, 소모품'})</span>
+                              <span style={{ fontSize: '0.70rem', color: '#0284c7', fontWeight: 600, marginLeft: '6px' }}>({hasAnyMixedMobile ? '파손보험, 무상수리, 방문케어, 소모품, 재설치' : '무상수리연장, 방문케어, 소모품, 재설치'})</span>
                             </span>
                             <span className="a4-minus-blue" style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0284c7' }}>
-                              - {formatWon(mixedSubServiceBenefit)} 상당
+                              {mixedSubServiceBenefit > 0 ? `- ${formatWon(mixedSubServiceBenefit)} 상당` : '무상 재설치 포함'}
                             </span>
                           </div>
                         )}
@@ -10208,6 +10259,11 @@ export default function BenefitCalculator({ onBack }) {
                         }
 
                         const pCustomItems = pCareItems.filter((c) => c.type === 'custom' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                        const pReinstallItems = pCareItems.filter((c) => c.type === 'reinstall');
+                        const pHasReinstall = Boolean(p.hasReinstall) || pReinstallItems.length > 0;
+                        const pReinstallCount = pReinstallItems.length > 0
+                          ? pReinstallItems.reduce((s, c) => s + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                          : (p.hasReinstall ? 1 : 0);
 
                         return (
                           <div key={p.id || pIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.69rem', color: '#475569', gap: '6px' }}>
@@ -10345,6 +10401,26 @@ export default function BenefitCalculator({ onBack }) {
                                     <Package size={7.5} strokeWidth={2.5} /> 소모품{cyc}
                                   </span>
                                 ))}
+                                {pHasReinstall && (
+                                  <span
+                                    title="무상 재설치 서비스 혜택"
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '1.5px',
+                                      fontSize: '0.48rem',
+                                      fontWeight: 800,
+                                      color: '#0f766e',
+                                      background: '#ccfbf1',
+                                      border: '1px solid #5eead4',
+                                      borderRadius: '2.5px',
+                                      padding: '0px 2.5px',
+                                      lineHeight: 1.2
+                                    }}
+                                  >
+                                    <RefreshCw size={7.5} strokeWidth={2.5} /> 재설치{pReinstallCount > 1 ? `${pReinstallCount}회` : ''}
+                                  </span>
+                                )}
                                 {pCustomItems.map((c, i) => (
                                   <span
                                     key={`p-custom-${c.id || i}`}
@@ -10481,7 +10557,7 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
                         </div>
                         <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '0.80rem', flexShrink: 0, marginTop: '1px', whiteSpace: 'nowrap' }}>
-                          {formatWon(subCareServiceAmount)} 상당
+                          {subCareServiceAmount > 0 ? `${formatWon(subCareServiceAmount)} 상당` : '무상 재설치 포함'}
                         </strong>
                       </div>
                     )}
@@ -13911,6 +13987,25 @@ export default function BenefitCalculator({ onBack }) {
                               <Smartphone size={11} /> 파손보험
                             </span>
                           )}
+                          {(item.hasReinstall || (Number(item.reinstallFee) || 0) > 0) && (
+                            <span
+                              style={{
+                                background: 'rgba(20, 184, 166, 0.22)',
+                                border: '1px solid rgba(45, 212, 191, 0.5)',
+                                color: '#2dd4bf',
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                padding: '0.2rem 0.45rem',
+                                borderRadius: '5px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                flexShrink: 0
+                              }}
+                            >
+                              <RefreshCw size={11} /> 재설치
+                            </span>
+                          )}
                           <input
                             type="text"
                             maxLength={15}
@@ -14052,8 +14147,8 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
                         </div>
 
-                        {/* 3행: 전용 서비스 3종 (무상수리 이용금액, 소모품비용, 방문케어비용) */}
-                        <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(52, 211, 153, 0.3)', borderRadius: '9px', padding: '0.55rem 0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', alignItems: 'end' }}>
+                        {/* 3행: 전용 케어서비스 4종 (무상수리 이용금액, 소모품비용, 방문케어비용, 재설치 혜택 비용) */}
+                        <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(52, 211, 153, 0.3)', borderRadius: '9px', padding: '0.55rem 0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: '0.5rem', alignItems: 'end' }}>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.2rem', gap: '0.25rem' }}>
                               <label style={{ fontSize: '0.71rem', color: '#6ee7b7', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem', margin: 0 }}>
@@ -14079,8 +14174,8 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
 
                           <div>
-                            <label style={{ fontSize: '0.71rem', color: '#6ee7b7', fontWeight: 800, display: 'block', marginBottom: '0.2rem' }}>
-                              소모품 비용
+                            <label style={{ fontSize: '0.71rem', color: '#6ee7b7', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.2rem' }}>
+                              <Package size={11} /> 소모품 비용
                             </label>
                             <MoneyInput
                               value={item.selfCareFee}
@@ -14092,28 +14187,49 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
 
                           <div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.2rem', gap: '0.25rem' }}>
-                              <label style={{ fontSize: '0.71rem', color: '#6ee7b7', fontWeight: 800, display: 'block', margin: 0 }}>
-                                방문케어 비용(전문가)
-                              </label>
-                              {!item.isMobile && (
-                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', cursor: 'pointer', fontSize: '0.68rem', color: item.hasReinstall ? '#a7f3d0' : '#94a3b8', userSelect: 'none' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={Boolean(item.hasReinstall)}
-                                    onChange={(e) => handleUpdateMixedSubItem(item.id, 'hasReinstall', e.target.checked)}
-                                    style={{ accentColor: '#10b981', cursor: 'pointer', width: '12px', height: '12px' }}
-                                  />
-                                  재설치서비스
-                                </label>
-                              )}
-                            </div>
+                            <label style={{ fontSize: '0.71rem', color: '#6ee7b7', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.2rem' }}>
+                              <Wrench size={11} /> 방문케어 비용(전문가)
+                            </label>
                             <MoneyInput
                               value={item.visitCareFee}
                               onChange={(val) => handleUpdateMixedSubItem(item.id, 'visitCareFee', val)}
                               placeholder="방문케어 총액"
                               compact
                               accentColor="#34d399"
+                            />
+                          </div>
+
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.2rem', gap: '0.25rem' }}>
+                              <label style={{ fontSize: '0.71rem', color: '#5eead4', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.25rem', margin: 0 }}>
+                                <RefreshCw size={11} /> 재설치 혜택(케어)
+                              </label>
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', cursor: 'pointer', fontSize: '0.68rem', color: (item.hasReinstall || (Number(item.reinstallFee) || 0) > 0) ? '#5eead4' : '#94a3b8', userSelect: 'none' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(item.hasReinstall) || (Number(item.reinstallFee) || 0) > 0}
+                                  onChange={(e) => {
+                                    handleUpdateMixedSubItem(item.id, 'hasReinstall', e.target.checked);
+                                    if (!e.target.checked && (Number(item.reinstallFee) || 0) > 0) {
+                                      handleUpdateMixedSubItem(item.id, 'reinstallFee', 0);
+                                    }
+                                  }}
+                                  style={{ accentColor: '#14b8a6', cursor: 'pointer', width: '12px', height: '12px' }}
+                                />
+                                재설치마크
+                              </label>
+                            </div>
+                            <MoneyInput
+                              value={item.reinstallFee || 0}
+                              onChange={(val) => {
+                                handleUpdateMixedSubItem(item.id, 'reinstallFee', val);
+                                if (Number(val) > 0 && !item.hasReinstall) {
+                                  handleUpdateMixedSubItem(item.id, 'hasReinstall', true);
+                                }
+                              }}
+                              placeholder="재설치 혜택 총액"
+                              compact
+                              accentColor="#2dd4bf"
                             />
                           </div>
                         </div>
@@ -14289,6 +14405,24 @@ export default function BenefitCalculator({ onBack }) {
                                   📱 모바일
                                 </span>
                               )}
+                              {(plan.hasReinstall || planCareItems.some((c) => c.type === 'reinstall')) && (
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 800,
+                                    color: '#2dd4bf',
+                                    background: 'rgba(20, 184, 166, 0.18)',
+                                    border: '1px solid rgba(45, 212, 191, 0.45)',
+                                    padding: '0.15rem 0.45rem',
+                                    borderRadius: '5px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px'
+                                  }}
+                                >
+                                  <RefreshCw size={11} /> 재설치
+                                </span>
+                              )}
                             </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -14359,6 +14493,11 @@ export default function BenefitCalculator({ onBack }) {
                                   ));
 
                                   const customItems = items.filter((c) => c.type === 'custom' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                                  const reinstallItems = items.filter((c) => c.type === 'reinstall');
+                                  const hasPlanReinstall = Boolean(plan.hasReinstall) || reinstallItems.length > 0;
+                                  const reinstallCount = reinstallItems.length > 0
+                                    ? reinstallItems.reduce((s, c) => s + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                                    : (plan.hasReinstall ? 1 : 0);
 
                                   return (
                                     <>
@@ -14417,6 +14556,14 @@ export default function BenefitCalculator({ onBack }) {
                                           <Package size={8} /> 소모품{cyc}
                                         </span>
                                       ))}
+                                      {hasPlanReinstall && (
+                                        <span
+                                          title="무상 재설치 서비스 혜택"
+                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#2dd4bf', background: 'rgba(20, 184, 166, 0.18)', border: '1px solid rgba(45, 212, 191, 0.45)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                        >
+                                          <RefreshCw size={8} /> 재설치{reinstallCount > 1 ? `${reinstallCount}회` : ''}
+                                        </span>
+                                      )}
                                       {customItems.map((c, i) => (
                                         <span
                                           key={`custom-${c.id || i}`}
@@ -14692,6 +14839,48 @@ export default function BenefitCalculator({ onBack }) {
                                   >
                                     ✨ 무상60·방문36·소모품36 원클릭 적용
                                   </button>
+                                  <label
+                                    title="이사·위치변경 시 무상 재설치 서비스 혜택 배지 및 케어서비스 항목을 적용합니다."
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                      fontSize: '0.70rem',
+                                      fontWeight: 800,
+                                      color: (plan.hasReinstall || planCareItems.some((c) => c.type === 'reinstall')) ? '#2dd4bf' : '#94a3b8',
+                                      background: (plan.hasReinstall || planCareItems.some((c) => c.type === 'reinstall')) ? 'rgba(20, 184, 166, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                                      border: `1px solid ${(plan.hasReinstall || planCareItems.some((c) => c.type === 'reinstall')) ? '#2dd4bf' : 'rgba(255, 255, 255, 0.15)'}`,
+                                      borderRadius: '5px',
+                                      padding: '0.15rem 0.45rem',
+                                      cursor: 'pointer',
+                                      userSelect: 'none'
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(plan.hasReinstall) || planCareItems.some((c) => c.type === 'reinstall')}
+                                      onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        if (checked) {
+                                          const hasRow = planCareItems.some((c) => c.type === 'reinstall');
+                                          const nextId = planCareItems.reduce((m, it) => Math.max(m, it.id || 0), 0) + 1;
+                                          handleUpdateSubPlan(plan.id, {
+                                            hasReinstall: true,
+                                            careItems: hasRow
+                                              ? planCareItems
+                                              : [...planCareItems, { id: nextId, type: 'reinstall', cycle: 0, count: 1, amount: 0, customName: '' }]
+                                          });
+                                        } else {
+                                          handleUpdateSubPlan(plan.id, {
+                                            hasReinstall: false,
+                                            careItems: planCareItems.filter((c) => c.type !== 'reinstall')
+                                          });
+                                        }
+                                      }}
+                                      style={{ accentColor: '#14b8a6', cursor: 'pointer', width: '12px', height: '12px' }}
+                                    />
+                                    <RefreshCw size={11} /> 재설치 혜택
+                                  </label>
                                 </div>
                                 {planCareTotal > 0 && (
                                   <span style={{ fontSize: '0.82rem', color: '#6ee7b7', fontWeight: 800 }}>
@@ -14762,6 +14951,7 @@ export default function BenefitCalculator({ onBack }) {
                                             <option value="visit">방문케어</option>
                                             <option value="self">셀프케어</option>
                                             <option value="consumable">소모품</option>
+                                            <option value="reinstall">재설치 혜택</option>
                                             <option value="custom">직접입력</option>
                                           </select>
                                         </div>
@@ -14772,7 +14962,7 @@ export default function BenefitCalculator({ onBack }) {
                                             점검주기
                                           </label>
                                           <select
-                                            value={care.cycle || 12}
+                                            value={care.cycle === 0 ? 0 : (care.cycle || (care.type === 'reinstall' ? 0 : 12))}
                                             onChange={(e) => handleUpdatePlanCareItem(plan.id, care.id, { cycle: Number(e.target.value) })}
                                             style={{
                                               width: '100%',
@@ -14788,6 +14978,7 @@ export default function BenefitCalculator({ onBack }) {
                                               textAlign: 'center'
                                             }}
                                           >
+                                            <option value={0}>약정내 무상</option>
                                             <option value={6}>6개월</option>
                                             <option value={12}>12개월</option>
                                             <option value={24}>24개월</option>
@@ -14795,7 +14986,7 @@ export default function BenefitCalculator({ onBack }) {
                                             <option value={48}>48개월</option>
                                             <option value={60}>60개월</option>
                                             <option value={72}>72개월</option>
-                                            {![6, 12, 24, 36, 48, 60, 72].includes(Number(care.cycle)) && Boolean(care.cycle) && (
+                                            {![0, 6, 12, 24, 36, 48, 60, 72].includes(Number(care.cycle)) && Boolean(care.cycle) && (
                                               <option value={care.cycle}>{care.cycle}개월</option>
                                             )}
                                           </select>

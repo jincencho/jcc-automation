@@ -1,4 +1,4 @@
-window.__JCC_LATEST_OTA_META__ = {"version":"2026.11.24-191057","builtAt":"2026-11-24 19:10:57","chunkCount":4,"jsLength":1905502,"cssLength":39844};
+window.__JCC_LATEST_OTA_META__ = {"version":"2026.11.24-231800","builtAt":"2026-11-24 23:18:00","chunkCount":4,"jsLength":1911345,"cssLength":39844};
 if (typeof window.__JCC_HANDLE_REMOTE_META__ === 'function') {
   window.__JCC_HANDLE_REMOTE_META__(window.__JCC_LATEST_OTA_META__);
 }
