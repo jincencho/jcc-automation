@@ -9211,6 +9211,7 @@ export default function BenefitCalculator({ onBack }) {
         {(() => null)()}
         {/* ==================== A4 출력 시트 ==================== */}
         {(() => {
+          const isJojunseok = !currentUser || (currentUser?.name || '').includes('조준석') || currentUser?.id === 'admin' || currentUser?.id === 'saeootang';
           const sheetStyle = {
             backgroundColor: '#ffffff',
             color: '#0f172a',
@@ -9231,11 +9232,13 @@ export default function BenefitCalculator({ onBack }) {
             <header className="a4-header">
               <div className="a4-header-left">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.25rem' }}>
-                  <img
-                    src={BRAND_LOGO_B64}
-                    alt="JCC"
-                    style={{ height: '30px', width: 'auto', objectFit: 'contain' }}
-                  />
+                  {isJojunseok && (
+                    <img
+                      src={BRAND_LOGO_B64}
+                      alt="JCC"
+                      style={{ height: '30px', width: 'auto', objectFit: 'contain' }}
+                    />
+                  )}
                   {/* 공식 삼성스토어 로고 (세상에 없던 AI 라이프.) */}
                   <div
                     style={{
@@ -9450,20 +9453,6 @@ export default function BenefitCalculator({ onBack }) {
                         <span>삼성스토어 진주 백화점·로드샵 통합매장</span>
                       </div>
                     </div>
-
-                    <div className="a4-manager-qr">
-                      <a
-                        href="https://jcc-band.vercel.app"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="JCC 진센조 공식 홈페이지 바로가기"
-                      >
-                        <CardEventQrSvg url="https://jcc-band.vercel.app" size={38} label="JCC 진센조 공식 홈페이지 QR코드" />
-                        <span className="a4-manager-qr-label">
-                          홈페이지 QR
-                        </span>
-                      </a>
-                    </div>
                   </footer>
                 );
               })()}
@@ -9676,7 +9665,7 @@ export default function BenefitCalculator({ onBack }) {
                       전국 유일
                     </span>
                     <strong style={{ fontSize: '0.82rem', color: '#1e3a8a', fontWeight: 900, letterSpacing: '-0.02em' }}>
-                      JCC 진센조만의 독보적인 삼성 AI가전 스마트 복합 견적서
+                      {isJojunseok ? 'JCC 진센조만의 독보적인 삼성 AI가전 스마트 복합 견적서' : '삼성스토어 통합진주만의 독보적인 삼성 AI가전 스마트 복합 견적서'}
                     </strong>
                   </div>
                   <span
@@ -9717,7 +9706,9 @@ export default function BenefitCalculator({ onBack }) {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.12rem', borderLeft: '1px solid #f1f5f9', paddingLeft: '0.45rem' }}>
-                    <div style={{ fontSize: '0.71rem', fontWeight: 800, color: '#b45309' }}>19년 경력 CS명장 책임관리</div>
+                    <div style={{ fontSize: '0.71rem', fontWeight: 800, color: '#b45309' }}>
+                      {isJojunseok ? '19년 경력 CS명장 책임관리' : '삼성 공식스토어 매니저 책임관리'}
+                    </div>
                     <div style={{ fontSize: '0.64rem', color: '#475569', lineHeight: 1.35, wordBreak: 'keep-all' }}>단순 가격 비교를 넘어 배송 / 설치 / 사후 혜택 입금 및 점검까지 끝까지 1:1 전담 케어해 드립니다.</div>
                   </div>
                 </div>
