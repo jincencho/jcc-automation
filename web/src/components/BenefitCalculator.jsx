@@ -1793,8 +1793,11 @@ export default function BenefitCalculator({ onBack }) {
         if (p.id !== id) return p;
         const nextP = { ...p, ...patch };
         // 약정기간 변경 시 무상수리 보증기간도 별도 지정하지 않았거나 기존 약정과 동일했던 경우 동기화
-        if (patch.months && (!p.freeRepairMonths || p.freeRepairMonths === p.months)) {
-          nextP.freeRepairMonths = patch.months;
+        // 특히 모바일 제품이거나 약정기간 변경 시 보증기간도 해당 약정기간(예: 48개월)으로 자동 연동!
+        if (patch.months) {
+          if (p.isMobile || patch.isMobile || !p.freeRepairMonths || p.freeRepairMonths === p.months || p.freeRepairMonths === 36 || p.freeRepairMonths === 60) {
+            nextP.freeRepairMonths = patch.months;
+          }
         }
         return nextP;
       });
@@ -1828,10 +1831,16 @@ export default function BenefitCalculator({ onBack }) {
     setSubPlans((prev) =>
       prev.map((p) => {
         if (p.id !== planId) return p;
+        // 모바일/IT 제품인 경우 플랜 약정기간(p.months)을 우선 보증기간으로 동기화 (예: 약정 48개월이면 보증 48개월)
+        const isMobileItem = Boolean(item.isMobile || p.isMobile);
+        const targetMonths = isMobileItem
+          ? (p.months || item.months || 48)
+          : (item.months || 60);
+
         const patch = {
           serviceModelCode: item.code,
           freeRepairFee: item.fee,
-          freeRepairMonths: item.months || 60,
+          freeRepairMonths: targetMonths,
           freeRepairQty: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? p.freeRepairQty : (p.quantity || 1)
         };
         if (item.isMobile !== undefined) {
@@ -15047,7 +15056,13 @@ export default function BenefitCalculator({ onBack }) {
                                 <input
                                   type="checkbox"
                                   checked={Boolean(plan.isMobile)}
-                                  onChange={(e) => handleUpdateSubPlan(plan.id, { isMobile: e.target.checked })}
+                                  onChange={(e) => {
+                                    const isChecked = e.target.checked;
+                                    handleUpdateSubPlan(plan.id, {
+                                      isMobile: isChecked,
+                                      freeRepairMonths: isChecked ? (plan.months || 48) : (plan.freeRepairMonths || plan.months || 60)
+                                    });
+                                  }}
                                   style={{ accentColor: '#38bdf8', cursor: 'pointer', width: '12px', height: '12px' }}
                                 />
                                 모바일
