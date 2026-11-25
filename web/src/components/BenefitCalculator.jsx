@@ -9557,7 +9557,7 @@ export default function BenefitCalculator({ onBack }) {
                                       whiteSpace: 'nowrap'
                                     }}
                                   >
-                                    <Wrench size={8.5} strokeWidth={2.5} /> {careTypeBadgeLabel} {itemCycle}개월주기
+                                    <Wrench size={8.5} strokeWidth={2.5} /> {careTypeBadgeLabel}
                                   </span>
                                 )}
                                 {(p.hasReinstall || (Number(p.reinstallFee) || 0) > 0) && (
@@ -10278,33 +10278,19 @@ export default function BenefitCalculator({ onBack }) {
                         const hasFree = (Number(p.freeRepairFee) || 0) > 0;
                         const pFreeMonths = Number(p.freeRepairMonths) || Number(p.months) || 60;
 
-                        const pVisitCycles = Array.from(new Set(
-                          pCareItems
-                            .filter((c) => (c.type === 'visit' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
-                            .map((c) => Number(c.cycle) || 36)
-                        ));
-                        if (pVisitCycles.length === 0 && (p.careType === 'visit' || p.careType === 'all') && (Number(p.careAmount) || 0) > 0) {
-                          pVisitCycles.push(Number(p.careCycle) || 36);
-                        }
+                        const pVisitItems = pCareItems.filter((c) => (c.type === 'visit' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                        const pVisitCount = pVisitItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                          || ((p.careType === 'visit' || p.careType === 'all') && (Number(p.careAmount) || 0) > 0 ? (Number(p.careCount) || 1) : 0);
 
-                        const pSelfCycles = Array.from(new Set(
-                          pCareItems
-                            .filter((c) => c.type === 'self' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
-                            .map((c) => Number(c.cycle) || 36)
-                        ));
-                        if (pSelfCycles.length === 0 && p.careType === 'self' && (Number(p.careAmount) || 0) > 0) {
-                          pSelfCycles.push(Number(p.careCycle) || 36);
-                        }
+                        const pSelfItems = pCareItems.filter((c) => c.type === 'self' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                        const pSelfCount = pSelfItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                          || (p.careType === 'self' && (Number(p.careAmount) || 0) > 0 ? (Number(p.careCount) || 1) : 0);
 
-                        const pConsumableCycles = Array.from(new Set(
-                          pCareItems
-                            .filter((c) => (c.type === 'consumable' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
-                            .map((c) => Number(c.cycle) || 36)
-                        ));
-                        if (pConsumableCycles.length === 0 && (p.careType === 'consumable' || p.careType === 'all') && (Number(p.careAmount) || 0) > 0) {
-                          pConsumableCycles.push(Number(p.careCycle) || 36);
-                        }
+                        const pConsumableItems = pCareItems.filter((c) => (c.type === 'consumable' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                        const pConsumableCount = pConsumableItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                          || ((p.careType === 'consumable' || p.careType === 'all') && (Number(p.careAmount) || 0) > 0 ? (Number(p.careCount) || 1) : 0);
 
+                        const pDamageMonths = Number(p.damageMonths) || Number(p.freeRepairMonths) || Number(p.months) || 36;
                         const pCustomItems = pCareItems.filter((c) => c.type === 'custom' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
                         const pReinstallItems = pCareItems.filter((c) => c.type === 'reinstall');
                         const pHasReinstall = Boolean(p.hasReinstall) || pReinstallItems.length > 0;
@@ -10347,7 +10333,7 @@ export default function BenefitCalculator({ onBack }) {
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', flexShrink: 0, marginLeft: '2px' }}>
                                 {p.isMobile && (
                                   <span
-                                    title="모바일 파손보험"
+                                    title={`모바일 파손보험 (${pDamageMonths}개월)`}
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -10362,7 +10348,7 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <Smartphone size={7.5} strokeWidth={2.5} /> 파손
+                                    <Smartphone size={7.5} strokeWidth={2.5} /> 파손{pDamageMonths}
                                   </span>
                                 )}
                                 {hasFree && (
@@ -10385,10 +10371,10 @@ export default function BenefitCalculator({ onBack }) {
                                     <ShieldCheck size={7.5} strokeWidth={2.5} /> 무상{pFreeMonths}
                                   </span>
                                 )}
-                                {pVisitCycles.length > 0 && (
+                                {pVisitCount > 0 && (
                                   <span
                                     key="p-visit"
-                                    title="전문 엔지니어 방문케어"
+                                    title={`전문 엔지니어 방문케어 (${pVisitCount}회)`}
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -10403,13 +10389,13 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <Wrench size={7.5} strokeWidth={2.5} /> 방문
+                                    <Wrench size={7.5} strokeWidth={2.5} /> 방문{pVisitCount}회
                                   </span>
                                 )}
-                                {pSelfCycles.length > 0 && (
+                                {pSelfCount > 0 && (
                                   <span
                                     key="p-self"
-                                    title="셀프 케어"
+                                    title={`셀프 케어 (${pSelfCount}회)`}
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -10424,13 +10410,13 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <Sparkles size={7.5} strokeWidth={2.5} /> 셀프
+                                    <Sparkles size={7.5} strokeWidth={2.5} /> 셀프{pSelfCount > 1 ? `${pSelfCount}회` : ''}
                                   </span>
                                 )}
-                                {pConsumableCycles.length > 0 && (
+                                {pConsumableCount > 0 && (
                                   <span
                                     key="p-consumable"
-                                    title="정기 소모품 교체"
+                                    title={`정기 소모품 교체 (${pConsumableCount}회)`}
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -10445,7 +10431,7 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <Package size={7.5} strokeWidth={2.5} /> 소모품
+                                    <Package size={7.5} strokeWidth={2.5} /> 소모품{pConsumableCount}회
                                   </span>
                                 )}
                                 {pHasReinstall && (
@@ -10465,7 +10451,7 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <RefreshCw size={7.5} strokeWidth={2.5} /> 재설치
+                                    <RefreshCw size={7.5} strokeWidth={2.5} /> 재설치{pReinstallCount > 1 ? `${pReinstallCount}회` : ''}
                                   </span>
                                 )}
                                 {pCustomItems.map((c, i) => (
@@ -14570,25 +14556,20 @@ export default function BenefitCalculator({ onBack }) {
                               <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
                                 {(() => {
                                   const freeM = Number(plan.freeRepairMonths) || Number(plan.months) || 60;
+                                  const damageM = Number(plan.damageMonths) || Number(plan.freeRepairMonths) || Number(plan.months) || 36;
                                   const items = Array.isArray(plan.careItems) ? plan.careItems : [];
 
-                                  const visitCycles = Array.from(new Set(
-                                    items
-                                      .filter((c) => (c.type === 'visit' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
-                                      .map((c) => Number(c.cycle) || 36)
-                                  ));
+                                  const visitItems = items.filter((c) => (c.type === 'visit' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                                  const visitCount = visitItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                                    || ((plan.careType === 'visit' || plan.careType === 'all') && (Number(plan.careAmount) || 0) > 0 ? (Number(plan.careCount) || 1) : 0);
 
-                                  const selfCycles = Array.from(new Set(
-                                    items
-                                      .filter((c) => c.type === 'self' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
-                                      .map((c) => Number(c.cycle) || 36)
-                                  ));
+                                  const selfItems = items.filter((c) => c.type === 'self' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                                  const selfCount = selfItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                                    || (plan.careType === 'self' && (Number(plan.careAmount) || 0) > 0 ? (Number(plan.careCount) || 1) : 0);
 
-                                  const consumableCycles = Array.from(new Set(
-                                    items
-                                      .filter((c) => (c.type === 'consumable' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0))
-                                      .map((c) => Number(c.cycle) || 36)
-                                  ));
+                                  const consumableItems = items.filter((c) => (c.type === 'consumable' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                                  const consumableCount = consumableItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                                    || ((plan.careType === 'consumable' || plan.careType === 'all') && (Number(plan.careAmount) || 0) > 0 ? (Number(plan.careCount) || 1) : 0);
 
                                   const customItems = items.filter((c) => c.type === 'custom' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
                                   const reinstallItems = items.filter((c) => c.type === 'reinstall');
@@ -14601,7 +14582,7 @@ export default function BenefitCalculator({ onBack }) {
                                     <>
                                       {plan.isMobile && (
                                         <span
-                                          title="모바일 파손보험"
+                                          title={`모바일 파손보험 (${damageM}개월)`}
                                           style={{
                                             fontSize: '0.50rem',
                                             fontWeight: 800,
@@ -14616,7 +14597,7 @@ export default function BenefitCalculator({ onBack }) {
                                             lineHeight: 1.2
                                           }}
                                         >
-                                          <Smartphone size={8} /> 파손
+                                          <Smartphone size={8} /> 파손{damageM}
                                         </span>
                                       )}
                                       {(Number(plan.freeRepairFee) || 0) > 0 && (
@@ -14627,31 +14608,31 @@ export default function BenefitCalculator({ onBack }) {
                                           <ShieldCheck size={8} /> 무상{freeM}
                                         </span>
                                       )}
-                                      {visitCycles.length > 0 && (
+                                      {visitCount > 0 && (
                                         <span
                                           key="visit"
-                                          title="전문 엔지니어 방문케어"
+                                          title={`전문 엔지니어 방문케어 (${visitCount}회)`}
                                           style={{ fontSize: '0.50rem', fontWeight: 800, color: '#34d399', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
                                         >
-                                          <Wrench size={8} /> 방문
+                                          <Wrench size={8} /> 방문{visitCount}회
                                         </span>
                                       )}
-                                      {selfCycles.length > 0 && (
+                                      {selfCount > 0 && (
                                         <span
                                           key="self"
-                                          title="셀프케어"
+                                          title={`셀프케어 (${selfCount}회)`}
                                           style={{ fontSize: '0.50rem', fontWeight: 800, color: '#c084fc', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
                                         >
-                                          <Sparkles size={8} /> 셀프
+                                          <Sparkles size={8} /> 셀프{selfCount > 1 ? `${selfCount}회` : ''}
                                         </span>
                                       )}
-                                      {consumableCycles.length > 0 && (
+                                      {consumableCount > 0 && (
                                         <span
                                           key="consumable"
-                                          title="정기 소모품 교체"
+                                          title={`정기 소모품 교체 (${consumableCount}회)`}
                                           style={{ fontSize: '0.50rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
                                         >
-                                          <Package size={8} /> 소모품
+                                          <Package size={8} /> 소모품{consumableCount}회
                                         </span>
                                       )}
                                       {hasPlanReinstall && (
@@ -14659,7 +14640,7 @@ export default function BenefitCalculator({ onBack }) {
                                           title="무상 재설치 서비스 혜택"
                                           style={{ fontSize: '0.50rem', fontWeight: 800, color: '#2dd4bf', background: 'rgba(20, 184, 166, 0.18)', border: '1px solid rgba(45, 212, 191, 0.45)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
                                         >
-                                          <RefreshCw size={8} /> 재설치
+                                          <RefreshCw size={8} /> 재설치{reinstallCount > 1 ? `${reinstallCount}회` : ''}
                                         </span>
                                       )}
                                       {customItems.map((c, i) => (
