@@ -359,6 +359,110 @@ const FREE_REPAIR_SERVICE_LIST = [
   { product: '태블릿', months: 36, priceRange: '전체', code: 'P-TAB-5600', name: '태블릿 (무상수리+파손보험)', fee: 5600, isMobile: true }
 ];
 
+// 간소화된 품목 리스트 (총 24개 품목군)
+const SIMPLIFIED_PRODUCT_LIST = [
+  { id: 'TV', name: 'TV' },
+  { id: '냉장고', name: '냉장고' },
+  { id: '김치냉장고', name: '김치냉장고' },
+  { id: '세탁기', name: '세탁기' },
+  { id: '건조기', name: '건조기' },
+  { id: '에어컨 스탠드', name: '에어컨 스탠드' },
+  { id: '에어컨 벽걸이', name: '에어컨 벽걸이' },
+  { id: '에어컨 천장형', name: '에어컨 천장형' },
+  { id: '식기세척기', name: '식기세척기' },
+  { id: '에어드레서', name: '에어드레서' },
+  { id: '슈드레서', name: '슈드레서' },
+  { id: '공기청정기', name: '공기청정기' },
+  { id: '청소기', name: '청소기' },
+  { id: '정수기', name: '정수기' },
+  { id: '전기레인지', name: '전기레인지' },
+  { id: '전자레인지', name: '전자레인지' },
+  { id: '오븐', name: '오븐' },
+  { id: '후드', name: '후드' },
+  { id: '제습기', name: '제습기' },
+  { id: '사운드바', name: '사운드바' },
+  { id: '모니터', name: '모니터' },
+  { id: '노트북 (프로급)', name: '노트북 (프로급)' },
+  { id: '노트북 (엔트리급)', name: '노트북 (엔트리급)' },
+  { id: '태블릿', name: '태블릿' }
+];
+
+// 서비스 코드로부터 품목 카테고리 역추적 헬퍼
+const getCategoryFromCode = (code) => {
+  if (!code) return '';
+  const item = FREE_REPAIR_SERVICE_LIST.find((it) => it.code === code);
+  if (!item) return '';
+  if (item.product === '노트북') {
+    return item.priceRange === '프로급' ? '노트북 (프로급)' : '노트북 (엔트리급)';
+  }
+  return item.product;
+};
+
+// 품목 및 총금액(출고가) 기반 무상수리 서비스 구간 자동인식 엔진
+const getFreeRepairItemByProductAndPrice = (productCategory, rawPrice) => {
+  if (!productCategory) return null;
+
+  // 특수 IT/모바일 제품군
+  if (productCategory === '노트북 (프로급)') {
+    return FREE_REPAIR_SERVICE_LIST.find((it) => it.code === 'P-NT-PRO-8400') || null;
+  }
+  if (productCategory === '노트북 (엔트리급)') {
+    return FREE_REPAIR_SERVICE_LIST.find((it) => it.code === 'P-NT-ENTRY-7200') || null;
+  }
+  if (productCategory === '태블릿') {
+    return FREE_REPAIR_SERVICE_LIST.find((it) => it.code === 'P-TAB-5600') || null;
+  }
+
+  const items = FREE_REPAIR_SERVICE_LIST.filter((it) => it.product === productCategory);
+  if (!items || items.length === 0) return null;
+  if (items.length === 1) return items[0];
+
+  const price = Number(rawPrice) || 0;
+
+  // 금액구간 파싱
+  const parsedItems = items.map((it) => {
+    const str = it.priceRange || '';
+    let min = 0;
+    let max = Infinity;
+
+    if (str.includes('이상')) {
+      const num = parseInt(str.replace(/[^0-9]/g, ''), 10) * 10000;
+      min = num;
+      max = Infinity;
+    } else if (str.includes('이하')) {
+      const num = parseInt(str.replace(/[^0-9]/g, ''), 10) * 10000;
+      min = 0;
+      max = num;
+    } else if (str.includes('~')) {
+      const parts = str.split('~');
+      const minNum = parseInt(parts[0].replace(/[^0-9]/g, ''), 10) * 10000;
+      const maxNum = parseInt(parts[1].replace(/[^0-9]/g, ''), 10) * 10000;
+      min = minNum;
+      max = maxNum;
+    }
+    return { ...it, min, max };
+  });
+
+  // 금액이 미입력이거나 0 이하일 때는 기본구간(첫 번째 티어)
+  if (price <= 0) {
+    return parsedItems[0];
+  }
+
+  // 1. 직접 범위 매칭: min < price <= max (min이 0인 경우 price <= max)
+  const exactMatch = parsedItems.find((it) => {
+    if (it.min === 0) return price <= it.max;
+    return price > it.min && price <= it.max;
+  });
+  if (exactMatch) return exactMatch;
+
+  // 2. 구간 사이 갭에 들어간 경우 상한선(max) 기준 첫 매칭 티어
+  const nextTier = parsedItems.find((it) => price <= it.max);
+  if (nextTier) return nextTier;
+
+  // 3. 최상위 구간 초과 시 가장 높은 티어 적용
+  return parsedItems[parsedItems.length - 1];
+};
+
 const CARD_EVENT_QR_ITEMS = [
   {
     id: 'kb',
@@ -1818,6 +1922,137 @@ export default function BenefitCalculator({ onBack }) {
       }
       return updated;
     });
+  };
+
+  const handleSelectProductCategory = (planId, category) => {
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        if (!category) {
+          return {
+            ...p,
+            productCategory: '',
+            serviceModelCode: ''
+          };
+        }
+        const effectivePrice =
+          (Number(p.totalAmount) || 0) > 0
+            ? Number(p.totalAmount)
+            : (Number(p.baseMonthlyFee) || 0) > 0
+              ? (Number(p.baseMonthlyFee) * (Number(p.months) || 60)) + (Number(p.prepay) || 0)
+              : 0;
+
+        const item = getFreeRepairItemByProductAndPrice(category, effectivePrice);
+        if (!item) {
+          return { ...p, productCategory: category };
+        }
+
+        const isMobileItem = Boolean(item.isMobile || p.isMobile || category.includes('노트북') || category.includes('태블릿'));
+        const targetMonths = isMobileItem
+          ? (p.months || item.months || 48)
+          : (item.months || 60);
+
+        const patch = {
+          productCategory: category,
+          serviceModelCode: item.code,
+          freeRepairFee: item.fee,
+          freeRepairMonths: targetMonths,
+          freeRepairQty: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? p.freeRepairQty : (p.quantity || 1),
+          isMobile: isMobileItem
+        };
+
+        if (!p.name || p.name.trim() === '' || SIMPLIFIED_PRODUCT_LIST.some((sp) => sp.name === p.name.trim())) {
+          patch.name = category.slice(0, 15);
+        }
+
+        return { ...p, ...patch };
+      })
+    );
+  };
+
+  const handleUpdatePlanTotal = (planId, totalVal) => {
+    const numTotal = Math.max(0, Number(totalVal) || 0);
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const m = Number(p.months) || 60;
+        const prepay = Number(p.prepay) || 0;
+        const patch = {
+          totalAmount: numTotal
+        };
+        // 기본구독료가 0인 경우 총구독료를 바탕으로 기본구독료 자동 보조산출
+        if ((!p.baseMonthlyFee || p.baseMonthlyFee === 0) && numTotal > 0 && m > 0) {
+          patch.baseMonthlyFee = Math.round(Math.max(0, numTotal - prepay) / m);
+        }
+        // 선택된 품목이 있으면 총구독료 기준 금액구간 자동 인식 및 무상수리비용 즉시 반영
+        const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
+        if (cat) {
+          const item = getFreeRepairItemByProductAndPrice(cat, numTotal);
+          if (item) {
+            patch.serviceModelCode = item.code;
+            patch.freeRepairFee = item.fee;
+            patch.freeRepairMonths = (item.isMobile || p.isMobile) ? (p.months || item.months || 48) : (item.months || 60);
+            if (item.isMobile !== undefined) patch.isMobile = item.isMobile;
+          }
+        }
+        return { ...p, ...patch };
+      })
+    );
+  };
+
+  const handleUpdatePlanBaseMonthly = (planId, baseVal) => {
+    const numBase = Math.max(0, Number(baseVal) || 0);
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const m = Number(p.months) || 60;
+        const prepay = Number(p.prepay) || 0;
+        const patch = {
+          baseMonthlyFee: numBase
+        };
+        const computedTotal = (numBase * m) + prepay;
+        if (!p.totalAmount || p.totalAmount === 0) {
+          patch.totalAmount = computedTotal;
+        }
+        const effectivePrice = (p.totalAmount && p.totalAmount > 0) ? p.totalAmount : computedTotal;
+        const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
+        if (cat && effectivePrice > 0) {
+          const item = getFreeRepairItemByProductAndPrice(cat, effectivePrice);
+          if (item) {
+            patch.serviceModelCode = item.code;
+            patch.freeRepairFee = item.fee;
+            patch.freeRepairMonths = (item.isMobile || p.isMobile) ? (p.months || item.months || 48) : (item.months || 60);
+            if (item.isMobile !== undefined) patch.isMobile = item.isMobile;
+          }
+        }
+        return { ...p, ...patch };
+      })
+    );
+  };
+
+  const handleUpdatePlanMonths = (planId, newMonths) => {
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const patch = { months: newMonths };
+        const isMobile = Boolean(p.isMobile || (p.productCategory && (p.productCategory.includes('노트북') || p.productCategory.includes('태블릿'))));
+        if (isMobile) {
+          patch.freeRepairMonths = newMonths;
+        }
+        const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
+        const effectivePrice = (p.totalAmount && p.totalAmount > 0)
+          ? p.totalAmount
+          : ((p.baseMonthlyFee || 0) * newMonths) + (p.prepay || 0);
+        if (cat && effectivePrice > 0) {
+          const item = getFreeRepairItemByProductAndPrice(cat, effectivePrice);
+          if (item) {
+            patch.serviceModelCode = item.code;
+            patch.freeRepairFee = item.fee;
+          }
+        }
+        return { ...p, ...patch };
+      })
+    );
   };
 
   const handleSelectFreeRepairItem = (planId, selectedCode) => {
@@ -14824,8 +15059,8 @@ export default function BenefitCalculator({ onBack }) {
                             </div>
                             <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center', width: '100%' }}>
                               <select
-                                value={plan.serviceModelCode || ''}
-                                onChange={(e) => handleSelectFreeRepairItem(plan.id, e.target.value)}
+                                value={plan.productCategory || getCategoryFromCode(plan.serviceModelCode) || ''}
+                                onChange={(e) => handleSelectProductCategory(plan.id, e.target.value)}
                                 title="무상수리 서비스 품목 선택 (출고가 및 월 이용료 자동반영)"
                                 style={{
                                   width: '185px',
@@ -14834,9 +15069,9 @@ export default function BenefitCalculator({ onBack }) {
                                   height: '40px',
                                   borderRadius: '8px',
                                   background: '#0f172a',
-                                  border: plan.serviceModelCode ? '1px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.18)',
-                                  color: plan.serviceModelCode ? '#93c5fd' : '#94a3b8',
-                                  fontSize: '0.76rem',
+                                  border: (plan.productCategory || plan.serviceModelCode) ? '1px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.18)',
+                                  color: (plan.productCategory || plan.serviceModelCode) ? '#93c5fd' : '#94a3b8',
+                                  fontSize: '0.78rem',
                                   fontWeight: 700,
                                   padding: '0 0.45rem',
                                   cursor: 'pointer',
@@ -14844,15 +15079,11 @@ export default function BenefitCalculator({ onBack }) {
                                   transition: 'all 0.15s ease'
                                 }}
                               >
-                                <option value="">품목 선택 (무상수리 자동반영)</option>
-                                {Array.from(new Set(FREE_REPAIR_SERVICE_LIST.map((it) => it.product))).map((prod) => (
-                                  <optgroup key={prod} label={`[${prod}]`}>
-                                    {FREE_REPAIR_SERVICE_LIST.filter((it) => it.product === prod).map((it) => (
-                                      <option key={it.code} value={it.code}>
-                                        {it.product} {it.priceRange !== '전체' ? it.priceRange : ''} ({formatWon(it.fee)}/월)
-                                      </option>
-                                    ))}
-                                  </optgroup>
+                                <option value="">품목 선택 (TV, 냉장고 등)</option>
+                                {SIMPLIFIED_PRODUCT_LIST.map((prod) => (
+                                  <option key={prod.id} value={prod.id}>
+                                    {prod.name}
+                                  </option>
                                 ))}
                               </select>
 
@@ -14875,10 +15106,38 @@ export default function BenefitCalculator({ onBack }) {
                                 }}
                               />
                             </div>
+                            {(() => {
+                              const matchedServiceItem = FREE_REPAIR_SERVICE_LIST.find((it) => it.code === plan.serviceModelCode);
+                              if (!matchedServiceItem) return null;
+                              return (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.35rem', fontSize: '0.73rem', color: '#93c5fd', flexWrap: 'wrap' }}>
+                                  <span style={{ background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.35)', borderRadius: '4px', padding: '1.5px 6px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    🏷️ 인식구간: <strong style={{ color: '#60a5fa' }}>{matchedServiceItem.product} ({matchedServiceItem.priceRange !== '전체' ? matchedServiceItem.priceRange : '표준'})</strong>
+                                    <span style={{ color: '#64748b' }}>|</span>
+                                    무상수리 <strong style={{ color: '#38bdf8' }}>월 {formatWon(matchedServiceItem.fee)}</strong> 자동반영
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
 
-                          {/* 2) 기본 구독료 + 할인 구독료 + 선납금 + 약정기간 (PC 4열, 모바일 2x2 반응형 그리드) */}
-                          <div className="calc-responsive-grid-4col" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.55rem', alignItems: 'flex-start' }}>
+                          {/* 2) 총구독료(출고가) + 기본 구독료 + 할인 구독료 + 선납금 + 약정기간 (PC 5열 반응형 그리드) */}
+                          <div className="calc-responsive-grid-5col" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: '0.55rem', alignItems: 'flex-start' }}>
+                            {/* 총구독료(출고가) */}
+                            <div>
+                              <div className="calc-label-guide" style={{ marginBottom: '0.25rem' }}>
+                                <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 800 }}>총구독료(출고가)</span>
+                                <span className="calc-tag-type input">✏️ 직접입력</span>
+                              </div>
+                              <MoneyInput
+                                value={plan.totalAmount || 0}
+                                onChange={(val) => handleUpdatePlanTotal(plan.id, val)}
+                                placeholder={idx === 0 ? '예: 5,500,000' : '0'}
+                                accentColor="#38bdf8"
+                                compact
+                              />
+                            </div>
+
                             {/* 기본 구독료 (기준 정가) */}
                             <div>
                               <div className="calc-label-guide" style={{ marginBottom: '0.25rem' }}>
@@ -14887,9 +15146,7 @@ export default function BenefitCalculator({ onBack }) {
                               </div>
                               <MoneyInput
                                 value={plan.baseMonthlyFee !== undefined && plan.baseMonthlyFee !== 0 ? plan.baseMonthlyFee : (plan.monthlyFee || 0)}
-                                onChange={(val) =>
-                                  handleUpdateSubPlan(plan.id, { baseMonthlyFee: val })
-                                }
+                                onChange={(val) => handleUpdatePlanBaseMonthly(plan.id, val)}
                                 placeholder={idx === 0 ? '예: 102,900' : '0'}
                                 accentColor="#60a5fa"
                                 compact
@@ -14921,9 +15178,7 @@ export default function BenefitCalculator({ onBack }) {
                               </div>
                               <MoneyInput
                                 value={plan.prepay || 0}
-                                onChange={(val) =>
-                                  handleUpdateSubPlan(plan.id, { prepay: val })
-                                }
+                                onChange={(val) => handleUpdatePlanPrepay(plan.id, val)}
                                 placeholder="0"
                                 accentColor="#f59e0b"
                                 compact
@@ -14938,7 +15193,7 @@ export default function BenefitCalculator({ onBack }) {
                               </div>
                               <select
                                 value={plan.months}
-                                onChange={(e) => handleUpdateSubPlan(plan.id, { months: Number(e.target.value) })}
+                                onChange={(e) => handleUpdatePlanMonths(plan.id, Number(e.target.value))}
                                 className="calc-select-clickable"
                                 style={{
                                   height: '38px',
