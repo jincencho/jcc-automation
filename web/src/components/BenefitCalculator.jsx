@@ -246,6 +246,112 @@ const DEFAULT_CHECKPOINTS = [
   { id: 'cp4', text: '진주 백화점·로드샵 통합매장 최대 혜택 적용', checked: true }
 ];
 
+// 2/1일~ 기준 가전 무상수리 서비스 품목별 출고가 및 월납입액(V+) 가이드 테이블 (총 61종)
+const FREE_REPAIR_SERVICE_LIST = [
+  // TV (60개월)
+  { product: 'TV', months: 60, priceRange: '~300만원 이하', code: 'P-TV-4SMX029H', name: 'TV (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: 'TV', months: 60, priceRange: '300~400만원', code: 'P-TV-4SMX039H', name: 'TV (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+  { product: 'TV', months: 60, priceRange: '400~500만원', code: 'P-TV-4SMX049H', name: 'TV (출고가:400~500만원) 5년형 무상수리 서비스', fee: 4900 },
+  { product: 'TV', months: 60, priceRange: '500~600만원', code: 'P-TV-4SMX059H', name: 'TV (출고가:500~600만원) 5년형 무상수리 서비스', fee: 5900 },
+  { product: 'TV', months: 60, priceRange: '600~700만원', code: 'P-TV-4SMX069H', name: 'TV (출고가:600~700만원) 5년형 무상수리 서비스', fee: 6900 },
+  { product: 'TV', months: 60, priceRange: '700~800만원', code: 'P-TV-4SMX079H', name: 'TV (출고가:700~800만원) 5년형 무상수리 서비스', fee: 7900 },
+  { product: 'TV', months: 60, priceRange: '800~900만원', code: 'P-TV-4SMX089H', name: 'TV (출고가:800~900만원) 5년형 무상수리 서비스', fee: 8900 },
+  { product: 'TV', months: 60, priceRange: '900~1,000만원', code: 'P-TV-4SMX099H', name: 'TV (출고가:900~1,000만원) 5년형 무상수리 서비스', fee: 9900 },
+  { product: 'TV', months: 60, priceRange: '1,000~1,100만원', code: 'P-TV-4SMX109H', name: 'TV (출고가:1,000~1,100만원) 5년형 무상수리 서비스', fee: 10900 },
+  { product: 'TV', months: 60, priceRange: '1,200~1,300만원', code: 'P-TV-4SMX129H', name: 'TV (출고가:1,200~1,300만원) 5년형 무상수리 서비스', fee: 12900 },
+  { product: 'TV', months: 60, priceRange: '1,300~1,400만원', code: 'P-TV-4SMX139H', name: 'TV (출고가:1,300~1,400만원) 5년형 무상수리 서비스', fee: 13900 },
+  { product: 'TV', months: 60, priceRange: '1,400~1,500만원', code: 'P-TV-4SMX149H', name: 'TV (출고가:1,400~1,500만원) 5년형 무상수리 서비스', fee: 14900 },
+  { product: 'TV', months: 60, priceRange: '1,500~1,600만원', code: 'P-TV-4SMX159H', name: 'TV (출고가:1,500~1,600만원) 5년형 무상수리 서비스', fee: 15900 },
+  { product: 'TV', months: 60, priceRange: '2,000~2,100만원', code: 'P-TV-4SMX209H', name: 'TV (출고가:2,000~2,100만원) 5년형 무상수리 서비스', fee: 20900 },
+  { product: 'TV', months: 60, priceRange: '2,900~3,000만원', code: 'P-TV-4SMX299H', name: 'TV (출고가:2,900~3,000만원) 5년형 무상수리 서비스', fee: 29900 },
+  { product: 'TV', months: 60, priceRange: '4,400~4,500만원', code: 'P-TV-4SMX449H', name: 'TV (출고가:4,400~4,500만원) 5년형 무상수리 서비스', fee: 44900 },
+  { product: 'TV', months: 60, priceRange: '4,900~5,000만원', code: 'P-TV-4SMX499H', name: 'TV (출고가:4,900~5,000만원) 5년형 무상수리 서비스', fee: 49900 },
+  { product: 'TV', months: 60, priceRange: '5,000만~ 이상', code: 'P-TV-4SMX509H', name: 'TV (출고가:5,000만~ 이상) 5년형 무상수리 서비스', fee: 50900 },
+
+  // 모니터 (36개월)
+  { product: '모니터', months: 36, priceRange: '~300만원 이하', code: 'P-LD-2MXX029H', name: '모니터 (출고가:~300만원 이하) 3년형 무상수리 서비스', fee: 2900 },
+  { product: '모니터', months: 36, priceRange: '300~400만원', code: 'P-LD-2MXX039H', name: '모니터 (출고가:300~400만원) 3년형 무상수리 서비스', fee: 3900 },
+
+  // 사운드바 (60개월)
+  { product: '사운드바', months: 60, priceRange: '~300만원 이하', code: 'P-SD-4SMX029H', name: '사운드바 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+
+  // 건조기 (60개월)
+  { product: '건조기', months: 60, priceRange: '~300만원 이하', code: 'P-WM-4NSXW02H', name: '건조기 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+
+  // 공기청정기 (60개월)
+  { product: '공기청정기', months: 60, priceRange: '~300만원 이하', code: 'P-AX-4NSX000H', name: '공기청정기 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+
+  // 김치냉장고 (60개월)
+  { product: '김치냉장고', months: 60, priceRange: '~300만원 이하', code: 'P-RE-4NSXR06H', name: '김치냉장고 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '김치냉장고', months: 60, priceRange: '300~400만원', code: 'P-RE-4NSXR07H', name: '김치냉장고 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+  { product: '김치냉장고', months: 60, priceRange: '400~500만원', code: 'P-RE-4NSXR08H', name: '김치냉장고 (출고가:400~500만원) 5년형 무상수리 서비스', fee: 4900 },
+  { product: '김치냉장고', months: 60, priceRange: '500~600만원', code: 'P-RE-4NSXR09H', name: '김치냉장고 (출고가:500~600만원) 5년형 무상수리 서비스', fee: 5900 },
+
+  // 냉장고 (60개월)
+  { product: '냉장고', months: 60, priceRange: '~300만원 이하', code: 'P-RE-4NSXR00H', name: '냉장고 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '냉장고', months: 60, priceRange: '300~400만원', code: 'P-RE-4NSXR01H', name: '냉장고 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+  { product: '냉장고', months: 60, priceRange: '400~500만원', code: 'P-RE-4NSXR02H', name: '냉장고 (출고가:400~500만원) 5년형 무상수리 서비스', fee: 4900 },
+  { product: '냉장고', months: 60, priceRange: '500~600만원', code: 'P-RE-4NSXR03H', name: '냉장고 (출고가:500~600만원) 5년형 무상수리 서비스', fee: 5900 },
+  { product: '냉장고', months: 60, priceRange: '600~700만원', code: 'P-RE-4NSXR04H', name: '냉장고 (출고가:600~700만원) 5년형 무상수리 서비스', fee: 6900 },
+  { product: '냉장고', months: 60, priceRange: '700~800만원', code: 'P-RE-4NSXR05H', name: '냉장고 (출고가:700~800만원) 5년형 무상수리 서비스', fee: 7900 },
+  { product: '냉장고', months: 60, priceRange: '800~900만원', code: 'P-RE-4NSXS06H', name: '냉장고 (출고가:800~900만원) 5년형 무상수리 서비스', fee: 8900 },
+  { product: '냉장고', months: 60, priceRange: '900~1,000만원', code: 'P-RE-4NSXS07H', name: '냉장고 (출고가:900~1,000만원) 5년형 무상수리 서비스', fee: 9900 },
+  { product: '냉장고', months: 60, priceRange: '1,000~1,100만원', code: 'P-RE-4NSXS08H', name: '냉장고 (출고가:1,000~1,100만원) 5년형 무상수리 서비스', fee: 10900 },
+  { product: '냉장고', months: 60, priceRange: '1,100~1,200만원', code: 'P-RE-4NSXS09H', name: '냉장고 (출고가:1,100~1,200만원) 5년형 무상수리 서비스', fee: 11900 },
+  { product: '냉장고', months: 60, priceRange: '1,600~1,700만원', code: 'P-RE-4NSXR10H', name: '냉장고 (출고가:1,600~1,700만원) 5년형 무상수리 서비스', fee: 16900 },
+
+  // 세탁기 (60개월)
+  { product: '세탁기', months: 60, priceRange: '~300만원 이하', code: 'P-WM-4NSXW01H', name: '세탁기 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '세탁기', months: 60, priceRange: '400~500만원', code: 'P-WM-4NSXW03H', name: '세탁기 (출고가:400~500만원) 5년형 무상수리 서비스', fee: 4900 },
+  { product: '세탁기', months: 60, priceRange: '600~700만원', code: 'P-WM-4NSXW05H', name: '세탁기 (출고가:600~700만원) 5년형 무상수리 서비스', fee: 6900 },
+
+  // 슈드레서 (60개월)
+  { product: '슈드레서', months: 60, priceRange: '~300만원 이하', code: 'P-SDR-4NSX00H', name: '슈드레서 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+
+  // 식기세척기 (60개월)
+  { product: '식기세척기', months: 60, priceRange: '~300만원 이하', code: 'P-DW-4NSX000H', name: '식기세척기 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '식기세척기', months: 60, priceRange: '300~400만원', code: 'P-DW-4NSX001H', name: '식기세척기 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+
+  // 에어드레서 (60개월)
+  { product: '에어드레서', months: 60, priceRange: '~300만원 이하', code: 'P-ADR-4NSX00H', name: '에어드레서 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+
+  // 에어컨 스탠드 (60개월)
+  { product: '에어컨 스탠드', months: 60, priceRange: '~300만원 이하', code: 'P-RAC-4NSXS29H', name: '에어컨 스탠드 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '에어컨 스탠드', months: 60, priceRange: '300~400만원', code: 'P-RAC-4NSXS39H', name: '에어컨 스탠드 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+  { product: '에어컨 스탠드', months: 60, priceRange: '400~500만원', code: 'P-RAC-4NSXS49H', name: '에어컨 스탠드 (출고가:400~500만원) 5년형 무상수리 서비스', fee: 4900 },
+
+  // 에어컨 벽걸이 (60개월)
+  { product: '에어컨 벽걸이', months: 60, priceRange: '~300만원 이하', code: 'P-RAC-4NHXS29H', name: '에어컨 벽걸이 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+
+  // 에어컨 천장형 (60개월)
+  { product: '에어컨 천장형', months: 60, priceRange: '~300만원 이하', code: 'P-SAC-4NSXS29H', name: '에어컨 천장형 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '에어컨 천장형', months: 60, priceRange: '300~400만원', code: 'P-SAC-4NSXS39H', name: '에어컨 천장형 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+
+  // 오븐 (60개월)
+  { product: '오븐', months: 60, priceRange: '~300만원 이하', code: 'P-EOV-4NSX29H', name: '오븐 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '오븐', months: 60, priceRange: '300~400만원', code: 'P-EOV-4NSX39H', name: '오븐 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+
+  // 전기레인지 (60개월)
+  { product: '전기레인지', months: 60, priceRange: '~300만원 이하', code: 'P-ECT-4NSX29H', name: '전기레인지 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '전기레인지', months: 60, priceRange: '400~500만원', code: 'P-ECT-4NSX49H', name: '전기레인지 (출고가:400~500만원) 5년형 무상수리 서비스', fee: 4900 },
+
+  // 전자레인지 (60개월)
+  { product: '전자레인지', months: 60, priceRange: '~300만원 이하', code: 'P-MW-4NSX29H', name: '전자레인지 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+
+  // 정수기 (60개월)
+  { product: '정수기', months: 60, priceRange: '300~400만원', code: 'P-RE-5NSLR17H', name: '정수기 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+
+  // 제습기 (60개월)
+  { product: '제습기', months: 60, priceRange: '~300만원 이하', code: 'P-DH-4NSX00H', name: '제습기 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+
+  // 청소기 (60개월)
+  { product: '청소기', months: 60, priceRange: '~300만원 이하', code: 'P-VC-4NSXV01H', name: '청소기 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+
+  // 후드 (60개월)
+  { product: '후드', months: 60, priceRange: '~300만원 이하', code: 'P-HOD-4NSX29H', name: '후드 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '후드', months: 60, priceRange: '300~400만원', code: 'P-HOD-4NSX39H', name: '후드 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 }
+];
+
 const CARD_EVENT_QR_ITEMS = [
   {
     id: 'kb',
@@ -1340,6 +1446,8 @@ export default function BenefitCalculator({ onBack }) {
       isMobile: false,
       hasReinstall: false,
       freeRepairFee: 0,
+      freeRepairQty: 1,
+      serviceModelCode: '',
       careItems: []
     }
   ]);
@@ -1589,6 +1697,8 @@ export default function BenefitCalculator({ onBack }) {
           isMobile: false,
           hasReinstall: false,
           freeRepairFee: 0,
+          freeRepairQty: 1,
+          serviceModelCode: '',
           careItems: []
         }
       ];
@@ -1698,6 +1808,32 @@ export default function BenefitCalculator({ onBack }) {
       }
       return updated;
     });
+  };
+
+  const handleSelectFreeRepairItem = (planId, selectedCode) => {
+    if (!selectedCode) {
+      handleUpdateSubPlan(planId, { serviceModelCode: '' });
+      return;
+    }
+    const item = FREE_REPAIR_SERVICE_LIST.find((it) => it.code === selectedCode);
+    if (!item) return;
+
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const patch = {
+          serviceModelCode: item.code,
+          freeRepairFee: item.fee,
+          freeRepairMonths: item.months || 60,
+          freeRepairQty: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? p.freeRepairQty : (p.quantity || 1)
+        };
+        // 모델명이 비어있을 경우 해당 품목 대표명으로 자동 입력
+        if (!p.name || p.name.trim() === '') {
+          patch.name = item.product.slice(0, 15);
+        }
+        return { ...p, ...patch };
+      })
+    );
   };
 
   const handleRemoveSubPlan = (id) => {
@@ -2984,7 +3120,7 @@ export default function BenefitCalculator({ onBack }) {
         .map((p) => ({
           id: p.id,
           monthlyFee: Number(p.freeRepairFee) || 0,
-          quantity: 1,
+          quantity: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? Number(p.freeRepairQty) || 1 : (Number(p.quantity) || 1),
           months: Number(p.freeRepairMonths) || Number(p.months) || 72,
           isMobile: Boolean(p.isMobile),
           name: p.name
@@ -4313,6 +4449,8 @@ export default function BenefitCalculator({ onBack }) {
         isMobile: false,
         hasReinstall: false,
         freeRepairFee: 0,
+        freeRepairQty: 1,
+        serviceModelCode: '',
         careItems: []
       }
     ]);
@@ -4672,6 +4810,8 @@ export default function BenefitCalculator({ onBack }) {
               isMobile: Boolean(p.isMobile),
               hasReinstall: Boolean(p.hasReinstall),
               freeRepairFee: Number(p.freeRepairFee) || 0,
+              freeRepairQty: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? Number(p.freeRepairQty) || 1 : (Number(p.quantity) || 1),
+              serviceModelCode: p.serviceModelCode || '',
               careItems
             };
           })
@@ -4691,6 +4831,8 @@ export default function BenefitCalculator({ onBack }) {
               isMobile: false,
               hasReinstall: false,
               freeRepairFee: 0,
+              freeRepairQty: 1,
+              serviceModelCode: '',
               careItems: []
             }
           ]
@@ -14435,7 +14577,8 @@ export default function BenefitCalculator({ onBack }) {
                           ? Number(plan.monthlyFee) || 0
                           : Math.round((Number(plan.totalAmount) || 0) / planMonths);
                       const planGross = planMonthly * planMonths;
-                      const freeRepairTotal = (Number(plan.freeRepairFee) || 0) * freeRepairMonths;
+                      const freeRepairQty = plan.freeRepairQty !== undefined && plan.freeRepairQty !== '' ? Number(plan.freeRepairQty) || 1 : (Number(plan.quantity) || 1);
+                      const freeRepairTotal = (Number(plan.freeRepairFee) || 0) * freeRepairMonths * freeRepairQty;
                       const planCareItems = Array.isArray(plan.careItems) ? plan.careItems : [];
                       const planCareTotal = planCareItems.reduce(
                         (sum, c) => sum + (Number(c.amount) || 0) * (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1),
@@ -14660,22 +14803,59 @@ export default function BenefitCalculator({ onBack }) {
                                 </span>
                               </div>
                             </div>
-                            <input
-                              type="text"
-                              maxLength={15}
-                              value={plan.name || ''}
-                              onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value.slice(0, 15) })}
-                              placeholder="모델명 입력 (예: RF85DB90F1AP · 최대 15자)"
-                              className="calc-input-editable"
-                              style={{
-                                height: '40px',
-                                padding: '0 0.75rem',
-                                fontSize: '0.88rem',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                            />
+                            <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center', width: '100%' }}>
+                              <select
+                                value={plan.serviceModelCode || ''}
+                                onChange={(e) => handleSelectFreeRepairItem(plan.id, e.target.value)}
+                                title="무상수리 서비스 품목 선택 (출고가 및 월 이용료 자동반영)"
+                                style={{
+                                  width: '185px',
+                                  maxWidth: '46%',
+                                  flexShrink: 0,
+                                  height: '40px',
+                                  borderRadius: '8px',
+                                  background: '#0f172a',
+                                  border: plan.serviceModelCode ? '1px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.18)',
+                                  color: plan.serviceModelCode ? '#93c5fd' : '#94a3b8',
+                                  fontSize: '0.76rem',
+                                  fontWeight: 700,
+                                  padding: '0 0.45rem',
+                                  cursor: 'pointer',
+                                  outline: 'none',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                <option value="">품목 선택 (무상수리 자동반영)</option>
+                                {Array.from(new Set(FREE_REPAIR_SERVICE_LIST.map((it) => it.product))).map((prod) => (
+                                  <optgroup key={prod} label={`[${prod}]`}>
+                                    {FREE_REPAIR_SERVICE_LIST.filter((it) => it.product === prod).map((it) => (
+                                      <option key={it.code} value={it.code}>
+                                        {it.product} {it.priceRange} ({formatWon(it.fee)}/월)
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                ))}
+                              </select>
+
+                              <input
+                                type="text"
+                                maxLength={15}
+                                value={plan.name || ''}
+                                onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value.slice(0, 15) })}
+                                placeholder="모델명 직접입력 (예: RF85DB90F1AP · 최대 15자)"
+                                className="calc-input-editable"
+                                style={{
+                                  flex: 1,
+                                  minWidth: 0,
+                                  height: '40px',
+                                  padding: '0 0.75rem',
+                                  fontSize: '0.88rem',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              />
+                            </div>
                           </div>
 
                           {/* 2) 기본 구독료 + 할인 구독료 + 선납금 + 약정기간 (PC 4열, 모바일 2x2 반응형 그리드) */}
@@ -14864,9 +15044,9 @@ export default function BenefitCalculator({ onBack }) {
                               </label>
                             </div>
 
-                            {/* 무상수리 월 금액 입력 (약정기간 자동 일치 계산) */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                              <div style={{ flex: '1 1 180px', minWidth: '130px' }}>
+                            {/* 무상수리 월 금액 및 대수 입력 (약정기간 자동 일치 계산) */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                              <div style={{ flex: '1 1 150px', minWidth: '120px' }}>
                                 <MoneyInput
                                   value={plan.freeRepairFee}
                                   onChange={(val) => handleUpdateSubPlan(plan.id, { freeRepairFee: val })}
@@ -14875,14 +15055,56 @@ export default function BenefitCalculator({ onBack }) {
                                   accentColor={plan.isMobile ? '#38bdf8' : '#34d399'}
                                 />
                               </div>
-                              <div style={{ flexShrink: 0, textAlign: 'right' }}>
+
+                              {/* 무상수리 대수 입력 */}
+                              <div
+                                title="무상수리 보증 적용 대수 (미입력 시 품목 대수 연동)"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  flexShrink: 0,
+                                  background: 'rgba(255, 255, 255, 0.05)',
+                                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                                  borderRadius: '6px',
+                                  padding: '0 0.45rem',
+                                  height: '32px'
+                                }}
+                              >
+                                <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 600 }}>대수:</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={plan.freeRepairQty !== undefined && plan.freeRepairQty !== '' ? plan.freeRepairQty : (plan.quantity || 1)}
+                                  onChange={(e) => {
+                                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                                    handleUpdateSubPlan(plan.id, { freeRepairQty: raw === '' ? '' : parseInt(raw, 10) });
+                                  }}
+                                  placeholder="1"
+                                  style={{
+                                    width: '36px',
+                                    height: '24px',
+                                    textAlign: 'center',
+                                    background: '#0f172a',
+                                    border: '1px solid #3b82f6',
+                                    borderRadius: '4px',
+                                    color: '#60a5fa',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 800,
+                                    outline: 'none'
+                                  }}
+                                />
+                                <span style={{ fontSize: '0.68rem', color: '#cbd5e1' }}>대</span>
+                              </div>
+
+                              <div style={{ flexShrink: 0, textAlign: 'right', marginLeft: 'auto' }}>
                                 {freeRepairTotal > 0 ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                     <div style={{ fontSize: '0.88rem', fontWeight: 800, color: plan.isMobile ? '#38bdf8' : '#6ee7b7' }}>
                                       = {formatWon(freeRepairTotal)} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#a7f3d0' }}>상당</span>
                                     </div>
                                     <div style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 500 }}>
-                                      월 {formatWon(plan.freeRepairFee || 0)} × {freeRepairMonths}개월
+                                      월 {formatWon(plan.freeRepairFee || 0)} × {freeRepairMonths}개월{freeRepairQty > 1 ? ` × ${freeRepairQty}대` : ''}
                                     </div>
                                   </div>
                                 ) : (
