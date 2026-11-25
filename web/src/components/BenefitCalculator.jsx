@@ -9531,7 +9531,7 @@ export default function BenefitCalculator({ onBack }) {
                                 >
                                   {p.isMobile ? (
                                     <>
-                                      <Smartphone size={8.5} strokeWidth={2.5} /> {itemMonths}개월 무상수리 + 파손보험
+                                      <Smartphone size={8.5} strokeWidth={2.5} /> {itemMonths}개월 무상수리 + 파손
                                     </>
                                   ) : (
                                     <>
@@ -10204,57 +10204,57 @@ export default function BenefitCalculator({ onBack }) {
                     <strong>{formatWon(subGrossTotal)}</strong>
                   </div>
 
-                  <div className="a4-row" style={isMultiPeriod || effectiveSubPrepay > 0 ? { alignItems: 'flex-start' } : undefined}>
-                    <span style={{ fontWeight: 800, color: '#1e293b' }}>
+                  <div className="a4-row" style={{ alignItems: isMultiPeriod || effectiveSubPrepay > 0 ? 'flex-start' : 'center', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontWeight: 800, color: '#1e293b', fontSize: isMultiPeriod ? '0.74rem' : '0.80rem', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {subFeeDiscountTotal > 0 ? '월 구독료 (할인반영)' : '월 기본 구독료'}
                     </span>
                     {isMultiPeriod ? (
-                      <div style={{ textAlign: 'right', lineHeight: 1.42 }}>
+                      <div style={{ textAlign: 'right', lineHeight: 1.35, whiteSpace: 'nowrap', flexShrink: 0 }}>
                         {subSegments.map((seg, idx) => (
-                          <div key={seg.endMonth} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 500 }}>
+                          <div key={seg.endMonth} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '0.62rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
                               {idx === 0 ? `${seg.duration}개월간` : `잔여 ${seg.duration}개월`}
                             </span>
                             {seg.baseMonthlyGross && seg.baseMonthlyGross > seg.baseMonthly ? (
                               <>
-                                <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, textDecoration: 'line-through' }}>
+                                <span style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: 600, textDecoration: 'line-through', whiteSpace: 'nowrap' }}>
                                   월 {formatWon(seg.baseMonthlyGross)}
                                 </span>
-                                <strong style={{ fontSize: '0.86rem', fontWeight: 900, color: '#1d4ed8' }}>
+                                <strong style={{ fontSize: '0.80rem', fontWeight: 900, color: '#1d4ed8', whiteSpace: 'nowrap' }}>
                                   월 {formatWon(seg.baseMonthly)}
                                 </strong>
                               </>
                             ) : (
-                              <strong style={{ fontSize: '0.86rem', fontWeight: 900, color: '#0f172a' }}>
+                              <strong style={{ fontSize: '0.80rem', fontWeight: 900, color: '#0f172a', whiteSpace: 'nowrap' }}>
                                 월 {formatWon(seg.baseMonthly)}
                               </strong>
                             )}
                           </div>
                         ))}
                         {effectiveSubPrepay > 0 && (
-                          <div style={{ fontSize: '0.67rem', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>
+                          <div style={{ fontSize: '0.64rem', color: '#64748b', fontWeight: 600, marginTop: '1px', whiteSpace: 'nowrap' }}>
                             선납금 {formatWon(effectiveSubPrepay)}
                           </div>
                         )}
                       </div>
                     ) : (
-                      <div style={{ textAlign: 'right', lineHeight: 1.36 }}>
+                      <div style={{ textAlign: 'right', lineHeight: 1.35, whiteSpace: 'nowrap', flexShrink: 0 }}>
                         {subFeeDiscountTotal > 0 && (subSegments[0]?.baseMonthlyGross || 0) > (subSegments[0]?.baseMonthly || 0) ? (
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                            <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, textDecoration: 'line-through' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '0.70rem', color: '#64748b', fontWeight: 600, textDecoration: 'line-through', whiteSpace: 'nowrap' }}>
                               월 {formatWon(subSegments[0]?.baseMonthlyGross || 0)}
                             </span>
-                            <strong style={{ fontSize: '0.90rem', fontWeight: 900, color: '#1d4ed8' }}>
+                            <strong style={{ fontSize: '0.84rem', fontWeight: 900, color: '#1d4ed8', whiteSpace: 'nowrap' }}>
                               월 {formatWon(subSegments[0]?.baseMonthly || 0)}
                             </strong>
                           </div>
                         ) : (
-                          <strong style={{ display: 'block', fontSize: '0.88rem', fontWeight: 900, color: '#0f172a' }}>
+                          <strong style={{ display: 'block', fontSize: '0.84rem', fontWeight: 900, color: '#0f172a', whiteSpace: 'nowrap' }}>
                             월 {formatWon(effectiveMonthlyBase)}
                           </strong>
                         )}
                         {effectiveSubPrepay > 0 && (
-                          <span style={{ display: 'block', fontSize: '0.67rem', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>
+                          <span style={{ display: 'block', fontSize: '0.64rem', color: '#64748b', fontWeight: 600, marginTop: '1px', whiteSpace: 'nowrap' }}>
                             선납금 {formatWon(effectiveSubPrepay)}
                           </span>
                         )}
@@ -10362,12 +10362,12 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <Smartphone size={7.5} strokeWidth={2.5} /> 파손보험
+                                    <Smartphone size={7.5} strokeWidth={2.5} /> 파손
                                   </span>
                                 )}
                                 {hasFree && (
                                   <span
-                                    title={p.isMobile ? `모바일 파손보험 + 무상수리 (${pFreeMonths}개월 보증)` : `무상수리 연장 (${pFreeMonths}개월 보증)`}
+                                    title={p.isMobile ? `모바일 파손 + 무상수리 (${pFreeMonths}개월 보증)` : `무상수리 연장 (${pFreeMonths}개월 보증)`}
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -10385,10 +10385,10 @@ export default function BenefitCalculator({ onBack }) {
                                     <ShieldCheck size={7.5} strokeWidth={2.5} /> 무상{pFreeMonths}
                                   </span>
                                 )}
-                                {pVisitCycles.map((cyc) => (
+                                {pVisitCycles.length > 0 && (
                                   <span
-                                    key={`p-visit-${cyc}`}
-                                    title={`전문 엔지니어 방문케어 (${cyc}개월 주기)`}
+                                    key="p-visit"
+                                    title="전문 엔지니어 방문케어"
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -10403,13 +10403,13 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <Wrench size={7.5} strokeWidth={2.5} /> 방문{cyc}
+                                    <Wrench size={7.5} strokeWidth={2.5} /> 방문
                                   </span>
-                                ))}
-                                {pSelfCycles.map((cyc) => (
+                                )}
+                                {pSelfCycles.length > 0 && (
                                   <span
-                                    key={`p-self-${cyc}`}
-                                    title={`셀프 케어 (${cyc}개월 주기)`}
+                                    key="p-self"
+                                    title="셀프 케어"
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -10424,13 +10424,13 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <Sparkles size={7.5} strokeWidth={2.5} /> 셀프{cyc}
+                                    <Sparkles size={7.5} strokeWidth={2.5} /> 셀프
                                   </span>
-                                ))}
-                                {pConsumableCycles.map((cyc) => (
+                                )}
+                                {pConsumableCycles.length > 0 && (
                                   <span
-                                    key={`p-consumable-${cyc}`}
-                                    title={`정기 소모품 교체 (${cyc}개월 주기)`}
+                                    key="p-consumable"
+                                    title="정기 소모품 교체"
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -10445,9 +10445,9 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <Package size={7.5} strokeWidth={2.5} /> 소모품{cyc}
+                                    <Package size={7.5} strokeWidth={2.5} /> 소모품
                                   </span>
-                                ))}
+                                )}
                                 {pHasReinstall && (
                                   <span
                                     title="무상 재설치 서비스 혜택"
@@ -10465,7 +10465,7 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <RefreshCw size={7.5} strokeWidth={2.5} /> 재설치{pReinstallCount > 1 ? `${pReinstallCount}회` : ''}
+                                    <RefreshCw size={7.5} strokeWidth={2.5} /> 재설치
                                   </span>
                                 )}
                                 {pCustomItems.map((c, i) => (
@@ -10486,7 +10486,7 @@ export default function BenefitCalculator({ onBack }) {
                                       lineHeight: 1.2
                                     }}
                                   >
-                                    <Sparkles size={7.5} strokeWidth={2.5} /> {(c.customName || '케어').slice(0, 4)}{c.cycle ? c.cycle : ''}
+                                    <Sparkles size={7.5} strokeWidth={2.5} /> {(c.customName || '케어').slice(0, 4)}
                                   </span>
                                 ))}
                               </span>
@@ -14082,7 +14082,7 @@ export default function BenefitCalculator({ onBack }) {
                                 flexShrink: 0
                               }}
                             >
-                              <Smartphone size={11} /> 파손보험
+                              <Smartphone size={11} /> 파손
                             </span>
                           )}
                           {(item.hasReinstall || (Number(item.reinstallFee) || 0) > 0) && (
@@ -14616,7 +14616,7 @@ export default function BenefitCalculator({ onBack }) {
                                             lineHeight: 1.2
                                           }}
                                         >
-                                          <Smartphone size={8} /> 파손보험
+                                          <Smartphone size={8} /> 파손
                                         </span>
                                       )}
                                       {(Number(plan.freeRepairFee) || 0) > 0 && (
@@ -14627,39 +14627,39 @@ export default function BenefitCalculator({ onBack }) {
                                           <ShieldCheck size={8} /> 무상{freeM}
                                         </span>
                                       )}
-                                      {visitCycles.map((cyc) => (
+                                      {visitCycles.length > 0 && (
                                         <span
-                                          key={`visit-${cyc}`}
-                                          title={`방문케어 (${cyc}개월 주기)`}
+                                          key="visit"
+                                          title="전문 엔지니어 방문케어"
                                           style={{ fontSize: '0.50rem', fontWeight: 800, color: '#34d399', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
                                         >
-                                          <Wrench size={8} /> 방문{cyc}
+                                          <Wrench size={8} /> 방문
                                         </span>
-                                      ))}
-                                      {selfCycles.map((cyc) => (
+                                      )}
+                                      {selfCycles.length > 0 && (
                                         <span
-                                          key={`self-${cyc}`}
-                                          title={`셀프케어 (${cyc}개월 주기)`}
+                                          key="self"
+                                          title="셀프케어"
                                           style={{ fontSize: '0.50rem', fontWeight: 800, color: '#c084fc', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
                                         >
-                                          <Sparkles size={8} /> 셀프{cyc}
+                                          <Sparkles size={8} /> 셀프
                                         </span>
-                                      ))}
-                                      {consumableCycles.map((cyc) => (
+                                      )}
+                                      {consumableCycles.length > 0 && (
                                         <span
-                                          key={`consumable-${cyc}`}
-                                          title={`소모품 교체 (${cyc}개월 주기)`}
+                                          key="consumable"
+                                          title="정기 소모품 교체"
                                           style={{ fontSize: '0.50rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
                                         >
-                                          <Package size={8} /> 소모품{cyc}
+                                          <Package size={8} /> 소모품
                                         </span>
-                                      ))}
+                                      )}
                                       {hasPlanReinstall && (
                                         <span
                                           title="무상 재설치 서비스 혜택"
                                           style={{ fontSize: '0.50rem', fontWeight: 800, color: '#2dd4bf', background: 'rgba(20, 184, 166, 0.18)', border: '1px solid rgba(45, 212, 191, 0.45)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
                                         >
-                                          <RefreshCw size={8} /> 재설치{reinstallCount > 1 ? `${reinstallCount}회` : ''}
+                                          <RefreshCw size={8} /> 재설치
                                         </span>
                                       )}
                                       {customItems.map((c, i) => (
@@ -14668,7 +14668,7 @@ export default function BenefitCalculator({ onBack }) {
                                           title={`맞춤 케어: ${c.customName || '케어'}`}
                                           style={{ fontSize: '0.50rem', fontWeight: 800, color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
                                         >
-                                          <Sparkles size={8} /> {(c.customName || '케어').slice(0, 4)}{c.cycle ? c.cycle : ''}
+                                          <Sparkles size={8} /> {(c.customName || '케어').slice(0, 4)}
                                         </span>
                                       ))}
                                     </>
