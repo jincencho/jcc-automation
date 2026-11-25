@@ -349,7 +349,14 @@ const FREE_REPAIR_SERVICE_LIST = [
 
   // 후드 (60개월)
   { product: '후드', months: 60, priceRange: '~300만원 이하', code: 'P-HOD-4NSX29H', name: '후드 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
-  { product: '후드', months: 60, priceRange: '300~400만원', code: 'P-HOD-4NSX39H', name: '후드 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 }
+  { product: '후드', months: 60, priceRange: '300~400만원', code: 'P-HOD-4NSX39H', name: '후드 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+
+  // 노트북 (무상수리 + 파손보험)
+  { product: '노트북', months: 36, priceRange: '프로급', code: 'P-NT-PRO-8400', name: '노트북 프로급 (무상수리+파손보험)', fee: 8400, isMobile: true },
+  { product: '노트북', months: 36, priceRange: '엔트리급', code: 'P-NT-ENTRY-7200', name: '노트북 엔트리급 (무상수리+파손보험)', fee: 7200, isMobile: true },
+
+  // 태블릿 (무상수리 + 파손보험)
+  { product: '태블릿', months: 36, priceRange: '전체', code: 'P-TAB-5600', name: '태블릿 (무상수리+파손보험)', fee: 5600, isMobile: true }
 ];
 
 const CARD_EVENT_QR_ITEMS = [
@@ -1827,9 +1834,12 @@ export default function BenefitCalculator({ onBack }) {
           freeRepairMonths: item.months || 60,
           freeRepairQty: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? p.freeRepairQty : (p.quantity || 1)
         };
+        if (item.isMobile !== undefined) {
+          patch.isMobile = item.isMobile;
+        }
         // 모델명이 비어있을 경우 해당 품목 대표명으로 자동 입력
         if (!p.name || p.name.trim() === '') {
-          patch.name = item.product.slice(0, 15);
+          patch.name = (item.product + (item.priceRange && item.priceRange !== '전체' && item.priceRange !== '~300만원 이하' ? ` ${item.priceRange}` : '')).slice(0, 15);
         }
         return { ...p, ...patch };
       })
@@ -14830,7 +14840,7 @@ export default function BenefitCalculator({ onBack }) {
                                   <optgroup key={prod} label={`[${prod}]`}>
                                     {FREE_REPAIR_SERVICE_LIST.filter((it) => it.product === prod).map((it) => (
                                       <option key={it.code} value={it.code}>
-                                        {it.product} {it.priceRange} ({formatWon(it.fee)}/월)
+                                        {it.product} {it.priceRange !== '전체' ? it.priceRange : ''} ({formatWon(it.fee)}/월)
                                       </option>
                                     ))}
                                   </optgroup>
