@@ -1,5 +1,19 @@
 import React, { useState, useEffect } from 'react';
 
+const ADMIN_SCHEDULE_PW_HASH = '05cd4fcb34e265ff90d11e63994b970aeb14545147dede907664515306d7fe5a';
+
+async function verifySchedulePassword(inputPw) {
+  const raw = `JCC_SCHEDULE_ADMIN_SALT_2026::${String(inputPw ?? '').trim()}`;
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+    const buf = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    const hex = Array.from(new Uint8Array(buf))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    return hex === ADMIN_SCHEDULE_PW_HASH;
+  }
+  return false;
+}
+
 export default function AdminSchedule({ onBack }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
@@ -23,9 +37,10 @@ export default function AdminSchedule({ onBack }) {
     fetchSchedule();
   }, []);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (passwordInput === '1207') {
+    const ok = await verifySchedulePassword(passwordInput);
+    if (ok) {
       setIsAuthenticated(true);
     } else {
       alert('비밀번호가 틀렸습니다.');

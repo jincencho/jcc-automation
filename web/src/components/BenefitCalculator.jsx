@@ -6,7 +6,6 @@ import { DEPT_POS_BARCODES } from '../constants/deptBarcodes';
 import { BRAND_LOGO_B64, MANAGER_PROFILE_B64 } from '../constants/brandAssets';
 import {
   User,
-  Users,
   Globe,
   Lock,
   Unlock,
@@ -50,7 +49,9 @@ import {
   ArrowRight,
   FileDown,
   Package,
-  Store
+  Store,
+  Sun,
+  Moon
 } from 'lucide-react';
 import {
   fetchCloudQuotes,
@@ -1044,12 +1045,89 @@ function CardEventQrSvg({ url, size = 72, label = '이벤트 대상 확인 QR코
 
 const AUTH_ACCOUNTS_STORAGE_KEY = 'jcc_auth_accounts_v1';
 const AUTH_SESSION_USER_KEY = 'jcc_calc_auth_user';
+const AUTH_PW_SALT = 'JCC_AUTH_SECURE_SALT_2026_V2';
+const SHA256_K = [
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+];
+
+function computeSha256Hex(str) {
+  const bytes = new TextEncoder().encode(String(str));
+  const bitLen = bytes.length * 8;
+  const padLen = (bytes.length + 9 + 63) & ~63;
+  const buf = new Uint8Array(padLen);
+  buf.set(bytes);
+  buf[bytes.length] = 0x80;
+  const view = new DataView(buf.buffer);
+  view.setUint32(padLen - 4, bitLen >>> 0, false);
+  view.setUint32(padLen - 8, Math.floor(bitLen / 4294967296) >>> 0, false);
+
+  let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+  let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+  const w = new Uint32Array(64);
+
+  for (let i = 0; i < padLen; i += 64) {
+    for (let t = 0; t < 16; t++) w[t] = view.getUint32(i + t * 4, false);
+    for (let t = 16; t < 64; t++) {
+      const s0 = ((w[t - 15] >>> 7) | (w[t - 15] << 25)) ^ ((w[t - 15] >>> 18) | (w[t - 15] << 14)) ^ (w[t - 15] >>> 3);
+      const s1 = ((w[t - 2] >>> 17) | (w[t - 2] << 15)) ^ ((w[t - 2] >>> 19) | (w[t - 2] << 13)) ^ (w[t - 2] >>> 10);
+      w[t] = (w[t - 16] + s0 + w[t - 7] + s1) >>> 0;
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+    for (let t = 0; t < 64; t++) {
+      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + SHA256_K[t] + w[t]) >>> 0;
+      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0; h5 = (h5 + f) >>> 0; h6 = (h6 + g) >>> 0; h7 = (h7 + h) >>> 0;
+  }
+  return [h0, h1, h2, h3, h4, h5, h6, h7].map((v) => v.toString(16).padStart(8, '0')).join('');
+}
+
+function isHashedPassword(pwVal) {
+  return typeof pwVal === 'string' && /^sha256\$[0-9a-f]{64}$/i.test(pwVal.trim());
+}
+
+function hashAccountPassword(accountId, rawPw) {
+  const strPw = String(rawPw ?? '').trim();
+  if (!strPw) return '';
+  if (isHashedPassword(strPw)) return strPw.toLowerCase();
+  const normId = String(accountId ?? '').trim().toLowerCase();
+  return `sha256$${computeSha256Hex(`${AUTH_PW_SALT}::${normId}::${strPw}`)}`;
+}
+
+function verifyAccountPassword(account, inputPw) {
+  if (!account || !inputPw) return false;
+  const stored = String(account.pw ?? '').trim();
+  const candidate = String(inputPw ?? '').trim();
+  if (!stored || !candidate) return false;
+  if (isHashedPassword(stored)) {
+    return stored.toLowerCase() === hashAccountPassword(account.id, candidate);
+  }
+  // 레거시 평문 데이터인 경우에도 해시 비교로 검증
+  return stored === candidate;
+}
+
+// 마스터 보조 별칭('jcc') 단방향 해시 (소스 코드 내 평문 비밀번호 완전 제거)
+const MASTER_ALIAS_JCC_HASH = 'sha256$2daf9fc07c1c59f02087c4a797476d004ccf93a238d0f1c8336250dcd4ceaea3';
+const MASTER_PRIMARY_HASH = 'sha256$c045e5710b4a7195a858352c7cc1b5c2a7a0a0d1f75fefb31f776c963124bc9a';
 
 const DEFAULT_USER_ACCOUNTS = [
   {
     uid: 'acc_master_saeootang',
     id: 'saeootang',
-    pw: '08931121',
+    pw: 'sha256$c045e5710b4a7195a858352c7cc1b5c2a7a0a0d1f75fefb31f776c963124bc9a',
     name: '총괄 관리자',
     level: 'admin',
     isMaster: true,
@@ -1058,7 +1136,7 @@ const DEFAULT_USER_ACCOUNTS = [
   {
     uid: 'acc_admin_master',
     id: 'admin',
-    pw: '08931121',
+    pw: 'sha256$c263dfc413b93a21e23235b027025c312dd378b2b52e5d9af30d993951ceba98',
     name: '조준석 총괄 관리자',
     level: 'admin', // 'lv1' | 'lv2' | 'admin'
     isMaster: true,
@@ -1067,7 +1145,7 @@ const DEFAULT_USER_ACCOUNTS = [
   {
     uid: 'acc_lv1_default',
     id: 'lv1',
-    pw: '1111',
+    pw: 'sha256$0ce96a0bebdce5a4b01dab9ac03f2a73e963ca03f335e496a222934555f87f46',
     name: '매니저 (Lv.1 기본)',
     level: 'lv1',
     isMaster: false,
@@ -1076,7 +1154,7 @@ const DEFAULT_USER_ACCOUNTS = [
   {
     uid: 'acc_lv2_default',
     id: 'lv2',
-    pw: '2222',
+    pw: 'sha256$e3b58e2fc7e1c193873445d8eadbb03bbfc1002d6b5f2a0cdbf85f118c2cabb5',
     name: '수석 매니저 (Lv.2 전체)',
     level: 'lv2',
     isMaster: false,
@@ -1133,10 +1211,16 @@ function sanitizeUserAccounts(rawList) {
     .filter((it) => it && typeof it.id === 'string' && it.id.trim())
     .map((it, idx) => {
       const isPending = it.status === 'pending' || it.level === 'pending';
+      const cleanId = it.id.trim();
+      const rawPwStr = String(it.pw ?? '').trim();
+      // 평문 비밀번호가 남아있는 경우 즉시 단방향 SHA-256 해시로 자동 변환하여 누구도 원본을 알 수 없도록 보호
+      const hashedPw = isHashedPassword(rawPwStr)
+        ? rawPwStr.toLowerCase()
+        : (rawPwStr ? hashAccountPassword(cleanId, rawPwStr) : DEFAULT_USER_ACCOUNTS[2].pw);
       return {
         uid: it.uid || `acc_${idx}_${Date.now()}`,
-        id: it.id.trim(),
-        pw: String(it.pw ?? ''),
+        id: cleanId,
+        pw: hashedPw,
         name: (it.name || it.id).trim(),
         status: isPending ? 'pending' : 'approved',
         level: isPending
@@ -1231,6 +1315,39 @@ export default function BenefitCalculator({ onBack }) {
   const [unlockPasswordInput, setUnlockPasswordInput] = useState('');
   const [unlockErrorMsg, setUnlockErrorMsg] = useState('');
   const lastActivityRef = React.useRef(Date.now());
+  const quoteScrollRef = React.useRef(null);
+  const quoteDragRef = React.useRef({ isDown: false, startX: 0, scrollLeft: 0, hasMoved: false });
+
+  // 계산기 테마 모드 ('dark' | 'light') - 사용자 선택 로컬 저장 및 즉시 반영
+  const [themeMode, setThemeMode] = useState(() => {
+    try {
+      return localStorage.getItem('jcc_calc_theme') || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (typeof document !== 'undefined') {
+        if (themeMode === 'light') {
+          document.body.classList.add('theme-light');
+          document.documentElement.setAttribute('data-theme', 'light');
+        } else {
+          document.body.classList.remove('theme-light');
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      }
+    } catch {}
+  }, [themeMode]);
+
+  const handleToggleTheme = () => {
+    const next = themeMode === 'light' ? 'dark' : 'light';
+    setThemeMode(next);
+    try {
+      localStorage.setItem('jcc_calc_theme', next);
+    } catch {}
+  };
 
   // HTML 오프라인 단일 파일 & 온라인 서버 OTA 최신 기능 동기화 상태
   const [otaState, setOtaState] = useState(() => {
@@ -1319,7 +1436,10 @@ export default function BenefitCalculator({ onBack }) {
   const [editAccPw, setEditAccPw] = useState('');
   const [editAccName, setEditAccName] = useState('');
   const [editAccLevel, setEditAccLevel] = useState('lv1');
-  const [showPasswordsInAdmin, setShowPasswordsInAdmin] = useState(true);
+
+  // 견적 보관함 전체 목록 팝업 모달 상태 및 검색어
+  const [showQuoteListModal, setShowQuoteListModal] = useState(false);
+  const [quoteSearchQuery, setQuoteSearchQuery] = useState('');
 
   // 현재 접속자 권한 레벨 판별 ('lv1': 1번 계산기 전용 | 'lv2': 1+2번 전체 | 'admin': 전체 + 계정관리)
   const currentUserLevel = currentUser?.level || 'lv1';
@@ -1359,7 +1479,7 @@ export default function BenefitCalculator({ onBack }) {
   const [mixedLumpItems, setMixedLumpItems] = useState(DEFAULT_MIXED_LUMP_ITEMS);
 
   // 혼합 견적기 행사 유형 (4가지: 'wedding': 혼수 | 'moving_in': 입주 | 'moving': 이사 | 'normal': 일반)
-  const [mixedEventType, setMixedEventType] = useState('wedding');
+  const [mixedEventType, setMixedEventType] = useState('normal');
 
   // 혼합 견적기 전용: 캐시백 항목군 (이벤트 사유/명칭 · 금액 · 서류 증빙 조건 여부)
   const DEFAULT_MIXED_CASHBACK_ITEMS = [{ id: 1, name: '', amount: 0, hasProof: true }];
@@ -1438,14 +1558,13 @@ export default function BenefitCalculator({ onBack }) {
   const handleAddMixedSubItem = () => {
     setMixedSubItems((prev) => {
       const nextId = prev.length > 0 ? Math.max(...prev.map((it) => it.id)) + 1 : 1;
-      const lastMonths = prev[prev.length - 1]?.months || 72;
       return [
         ...prev,
         {
           id: nextId,
           name: '',
           quantity: 1,
-          months: lastMonths,
+          months: 72,
           serviceCycle: 12,
           baseMonthlyFee: 0,
           discountMonthlyFee: 0,
@@ -1471,7 +1590,7 @@ export default function BenefitCalculator({ onBack }) {
   const [customerName, setCustomerName] = useState('');
   const [consultDate, setConsultDate] = useState(() => getLocalTodayString());
   const [isManualConsultDate, setIsManualConsultDate] = useState(false);
-  const [consultType, setConsultType] = useState('입주가전 맞춤설계');
+  const [consultType, setConsultType] = useState('단품·패키지 비교견적');
   const [productSummary, setProductSummary] = useState('');
   const [memo, setMemo] = useState('');
 
@@ -1772,12 +1891,6 @@ export default function BenefitCalculator({ onBack }) {
     });
   };
 
-  const handleDirectSingleCardChange = (val) => {
-    setSubCardMonthly(val);
-    setSubSegmentCardOverrides({});
-    handleUpdateCard(subCards[0]?.id || 1, { monthly: val });
-  };
-
   const handleSegmentCardOverride = (endMonth, val, isFirstSegment = false) => {
     if (isFirstSegment) {
       setSubCardMonthly(val);
@@ -1786,12 +1899,6 @@ export default function BenefitCalculator({ onBack }) {
       ...prev,
       [endMonth]: val
     }));
-  };
-
-  const handleDirectSingleSpendChange = (val) => {
-    setSubCardMinSpend(val);
-    setSubSegmentSpendOverrides({});
-    handleUpdateCard(subCards[0]?.id || 1, { minSpend: val });
   };
 
   const handleSegmentSpendOverride = (endMonth, val, isFirstSegment = false) => {
@@ -1805,16 +1912,7 @@ export default function BenefitCalculator({ onBack }) {
   };
 
   const handleAddSubPlan = () => {
-    let nextDefaultMonths = 60;
     setSubPlans((prev) => {
-      const usedMonths = prev.map((p) => p.months);
-      nextDefaultMonths = !usedMonths.includes(60)
-        ? 60
-        : !usedMonths.includes(72)
-          ? 72
-          : !usedMonths.includes(48)
-            ? 48
-            : 36;
       const nextId = prev.reduce((maxId, p) => Math.max(maxId, p.id), 0) + 1;
       return [
         ...prev,
@@ -1822,7 +1920,7 @@ export default function BenefitCalculator({ onBack }) {
           id: nextId,
           name: '',
           quantity: 1,
-          months: nextDefaultMonths,
+          months: 72,
           prepay: 0,
           baseMonthlyFee: 0,
           discountMonthlyFee: 0,
@@ -1891,43 +1989,14 @@ export default function BenefitCalculator({ onBack }) {
     );
   };
 
-  // 최고 혜택 풀패키지 구독케어 (무상60 + 방문36 + 소모품36) 원클릭 프리셋
-  const handleApplyFullCarePackage = (planId) => {
-    setSubPlans((prev) =>
-      prev.map((p) => {
-        if (p.id !== planId) return p;
-        const currentCareItems = Array.isArray(p.careItems) ? p.careItems : [];
-        const existingVisit = currentCareItems.find((c) => c.type === 'visit');
-        const existingConsumable = currentCareItems.find((c) => c.type === 'consumable' || c.type === 'all');
-        const visitItem = existingVisit
-          ? { ...existingVisit, cycle: 36, amount: Number(existingVisit.amount) > 0 ? existingVisit.amount : 50000 }
-          : { id: 1, type: 'visit', cycle: 36, count: 1, amount: 50000, customName: '' };
-        const consumableItem = existingConsumable
-          ? { ...existingConsumable, cycle: 36, amount: Number(existingConsumable.amount) > 0 ? existingConsumable.amount : 20000 }
-          : { id: 2, type: 'consumable', cycle: 36, count: 1, amount: 20000, customName: '' };
-        return {
-          ...p,
-          freeRepairFee: Number(p.freeRepairFee) > 0 ? p.freeRepairFee : 3000,
-          freeRepairMonths: 60,
-          careItems: [visitItem, consumableItem]
-        };
-      })
-    );
-  };
-
   const handleUpdateSubPlan = (id, patch) => {
     setSubPlans((prev) => {
       const isFirst = prev[0]?.id === id;
       const updated = prev.map((p) => {
         if (p.id !== id) return p;
         const nextP = { ...p, ...patch };
-        // 약정기간 변경 시 무상수리 보증기간도 별도 지정하지 않았거나 기존 약정과 동일했던 경우 동기화
-        // 특히 모바일 제품이거나 약정기간 변경 시 보증기간도 해당 약정기간(예: 48개월)으로 자동 연동!
-        if (patch.months) {
-          if (p.isMobile || patch.isMobile || !p.freeRepairMonths || p.freeRepairMonths === p.months || p.freeRepairMonths === 36 || p.freeRepairMonths === 60) {
-            nextP.freeRepairMonths = patch.months;
-          }
-        }
+        // 약정기간과 무상수리 보증기간을 항상 100% 동일하게 자동 일치
+        nextP.freeRepairMonths = Number(nextP.months) || 72;
         return nextP;
       });
       if (patch.months && (isFirst || prev.length === 1)) {
@@ -1967,19 +2036,16 @@ export default function BenefitCalculator({ onBack }) {
 
         const item = getFreeRepairItemByProductAndPrice(category, computedTotal);
         if (!item) {
-          return { ...p, productCategory: category, totalAmount: computedTotal };
+          return { ...p, productCategory: category, totalAmount: computedTotal, freeRepairMonths: m };
         }
 
         const isMobileItem = Boolean(item.isMobile || p.isMobile || category.includes('노트북') || category.includes('태블릿'));
-        const targetMonths = isMobileItem
-          ? (p.months || item.months || 48)
-          : (item.months || 60);
 
         const patch = {
           productCategory: category,
           serviceModelCode: item.code,
           freeRepairFee: item.fee,
-          freeRepairMonths: targetMonths,
+          freeRepairMonths: m,
           freeRepairQty: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? p.freeRepairQty : (p.quantity || 1),
           isMobile: isMobileItem,
           totalAmount: computedTotal
@@ -2004,7 +2070,8 @@ export default function BenefitCalculator({ onBack }) {
         const computedTotal = (numBase * m) + prepay;
         const patch = {
           baseMonthlyFee: numBase,
-          totalAmount: computedTotal
+          totalAmount: computedTotal,
+          freeRepairMonths: m
         };
         const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
         if (cat) {
@@ -2012,7 +2079,6 @@ export default function BenefitCalculator({ onBack }) {
           if (item) {
             patch.serviceModelCode = item.code;
             patch.freeRepairFee = item.fee;
-            patch.freeRepairMonths = (item.isMobile || p.isMobile) ? (p.months || item.months || 48) : (item.months || 60);
             if (item.isMobile !== undefined) patch.isMobile = item.isMobile;
           }
         }
@@ -2031,7 +2097,8 @@ export default function BenefitCalculator({ onBack }) {
         const computedTotal = (baseFee * m) + numPrepay;
         const patch = {
           prepay: numPrepay,
-          totalAmount: computedTotal
+          totalAmount: computedTotal,
+          freeRepairMonths: m
         };
         const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
         if (cat) {
@@ -2056,12 +2123,9 @@ export default function BenefitCalculator({ onBack }) {
         const computedTotal = (baseFee * m) + prepay;
         const patch = {
           months: m,
+          freeRepairMonths: m,
           totalAmount: computedTotal
         };
-        const isMobile = Boolean(p.isMobile || (p.productCategory && (p.productCategory.includes('노트북') || p.productCategory.includes('태블릿'))));
-        if (isMobile) {
-          patch.freeRepairMonths = m;
-        }
         const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
         if (cat) {
           const item = getFreeRepairItemByProductAndPrice(cat, computedTotal);
@@ -2069,41 +2133,6 @@ export default function BenefitCalculator({ onBack }) {
             patch.serviceModelCode = item.code;
             patch.freeRepairFee = item.fee;
           }
-        }
-        return { ...p, ...patch };
-      })
-    );
-  };
-
-  const handleSelectFreeRepairItem = (planId, selectedCode) => {
-    if (!selectedCode) {
-      handleUpdateSubPlan(planId, { serviceModelCode: '' });
-      return;
-    }
-    const item = FREE_REPAIR_SERVICE_LIST.find((it) => it.code === selectedCode);
-    if (!item) return;
-
-    setSubPlans((prev) =>
-      prev.map((p) => {
-        if (p.id !== planId) return p;
-        // 모바일/IT 제품인 경우 플랜 약정기간(p.months)을 우선 보증기간으로 동기화 (예: 약정 48개월이면 보증 48개월)
-        const isMobileItem = Boolean(item.isMobile || p.isMobile);
-        const targetMonths = isMobileItem
-          ? (p.months || item.months || 48)
-          : (item.months || 60);
-
-        const patch = {
-          serviceModelCode: item.code,
-          freeRepairFee: item.fee,
-          freeRepairMonths: targetMonths,
-          freeRepairQty: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? p.freeRepairQty : (p.quantity || 1)
-        };
-        if (item.isMobile !== undefined) {
-          patch.isMobile = item.isMobile;
-        }
-        // 모델명이 비어있을 경우 해당 품목 대표명으로 자동 입력
-        if (!p.name || p.name.trim() === '') {
-          patch.name = (item.product + (item.priceRange && item.priceRange !== '전체' && item.priceRange !== '~300만원 이하' ? ` ${item.priceRange}` : '')).slice(0, 15);
         }
         return { ...p, ...patch };
       })
@@ -2175,11 +2204,17 @@ export default function BenefitCalculator({ onBack }) {
     setIsAccountCloudSyncing(false);
 
     if (res.success && Array.isArray(res.accounts) && res.accounts.length > 0) {
+      const hadPlaintextInCloud = res.accounts.some((a) => a && a.pw && !isHashedPassword(String(a.pw)));
       const sanitized = sanitizeUserAccounts(res.accounts);
       setUserAccounts(sanitized);
       try {
         localStorage.setItem(AUTH_ACCOUNTS_STORAGE_KEY, JSON.stringify(sanitized));
       } catch {}
+
+      // 클라우드 DB에 과거 평문 비밀번호가 남아있었다면 즉시 단방향 해시본으로 덮어써서 DB 평문 노출을 영구 차단
+      if (hadPlaintextInCloud) {
+        saveCloudUserAccounts(sanitized).catch(() => {});
+      }
 
       if (currentUser) {
         const myLatest =
@@ -2238,17 +2273,20 @@ export default function BenefitCalculator({ onBack }) {
 
   const findMatchedAccount = (list, rawId, rawPw) => {
     const idLower = rawId.trim().toLowerCase();
-    const pwStr = String(rawPw);
+    const pwStr = String(rawPw ?? '').trim();
+    if (!idLower || !pwStr) return null;
+
     const directMatch = list.find(
-      (acc) => acc.id.trim().toLowerCase() === idLower && String(acc.pw) === pwStr
+      (acc) => acc.id.trim().toLowerCase() === idLower && verifyAccountPassword(acc, pwStr)
     );
     if (directMatch) return directMatch;
 
-    // 마스터 관리자 보조 별칭 ('jcc', 'saeootang') 지원
-    if ((idLower === 'jcc' || idLower === 'saeootang') && pwStr === '08931121') {
-      const found = list.find((acc) => acc.id.trim().toLowerCase() === idLower);
-      if (found && String(found.pw) === pwStr) return found;
+    // 마스터 관리자 보조 별칭 ('jcc', 'saeootang') 단방향 해시 검증 (평문 비교 없음)
+    if (idLower === 'jcc' && hashAccountPassword('jcc', pwStr) === MASTER_ALIAS_JCC_HASH) {
       return list.find((acc) => acc.isMaster || acc.level === 'admin') || null;
+    }
+    if (idLower === 'saeootang' && hashAccountPassword('saeootang', pwStr) === MASTER_PRIMARY_HASH) {
+      return list.find((acc) => acc.id.trim().toLowerCase() === 'saeootang' || acc.isMaster || acc.level === 'admin') || null;
     }
     return null;
   };
@@ -2385,7 +2423,7 @@ export default function BenefitCalculator({ onBack }) {
     const newReqAccount = {
       uid: `req_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       id: trimmedId,
-      pw: trimmedPw,
+      pw: hashAccountPassword(trimmedId, trimmedPw),
       name: trimmedName,
       status: 'pending',
       level: 'pending',
@@ -2642,7 +2680,7 @@ export default function BenefitCalculator({ onBack }) {
     const newAccount = {
       uid: `acc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       id: trimmedId,
-      pw: trimmedPw,
+      pw: hashAccountPassword(trimmedId, trimmedPw),
       name: trimmedName,
       level: newAccLevel === 'admin' ? 'admin' : newAccLevel === 'lv2' ? 'lv2' : 'lv1',
       isMaster: false,
@@ -2689,11 +2727,12 @@ export default function BenefitCalculator({ onBack }) {
     );
   };
 
-  // 관리자 전용: 계정 ID / PW / 이름 수정 시작 및 저장
+  // 관리자 전용: 계정 ID / 이름 수정 및 비밀번호 재설정(초기화) 시작 및 저장
+  // (기존 비밀번호는 단방향 해시 처리되어 관리자도 절대 볼 수 없으므로 항상 빈칸으로 시작하며, 입력 시에만 새 비밀번호 해시로 교체)
   const handleAdminStartEdit = (acc) => {
     setEditingAccUid(acc.uid);
     setEditAccId(acc.id);
-    setEditAccPw(acc.pw);
+    setEditAccPw('');
     setEditAccName(acc.name || acc.id);
     setEditAccLevel(acc.level || 'lv1');
   };
@@ -2704,8 +2743,8 @@ export default function BenefitCalculator({ onBack }) {
     const trimmedPw = editAccPw.trim();
     const trimmedName = editAccName.trim() || trimmedId;
 
-    if (!trimmedId || !trimmedPw) {
-      alert('아이디(ID)와 비밀번호(PW)를 모두 입력해주세요.');
+    if (!trimmedId) {
+      alert('아이디(ID)를 입력해주세요.');
       return;
     }
 
@@ -2718,6 +2757,11 @@ export default function BenefitCalculator({ onBack }) {
     }
 
     const targetAcc = userAccounts.find((a) => a.uid === targetUid);
+    const isIdChanged = targetAcc && targetAcc.id.trim().toLowerCase() !== trimmedId.toLowerCase();
+    if (isIdChanged && !trimmedPw) {
+      alert('보안상 아이디(ID)를 변경할 때에는 새 비밀번호(PW)도 함께 입력하여 재설정해야 합니다.');
+      return;
+    }
     if (targetAcc?.level === 'admin' && editAccLevel !== 'admin') {
       const remainingAdmins = userAccounts.filter((a) => a.level === 'admin' && a.uid !== targetUid);
       if (remainingAdmins.length === 0) {
@@ -2731,16 +2775,19 @@ export default function BenefitCalculator({ onBack }) {
         ? {
             ...acc,
             id: trimmedId,
-            pw: trimmedPw,
+            pw: trimmedPw ? hashAccountPassword(trimmedId, trimmedPw) : acc.pw,
             name: trimmedName,
             level: editAccLevel
           }
         : acc
     );
     setEditingAccUid(null);
+    setEditAccPw('');
     await persistAndSyncUserAccounts(
       nextList,
-      `'${trimmedName} (${trimmedId})' 계정 정보(ID/PW/레벨)가 수정되었습니다.`
+      trimmedPw
+        ? `'${trimmedName} (${trimmedId})' 계정 정보 및 새 암호화 비밀번호가 적용되었습니다.`
+        : `'${trimmedName} (${trimmedId})' 계정 정보(기존 암호화 비밀번호 유지)가 수정되었습니다.`
     );
   };
 
@@ -3386,7 +3433,7 @@ export default function BenefitCalculator({ onBack }) {
 
   const subMonthlyAfterCard = Math.max(0, effectiveMonthlyBase - startingTotalCardMonthly);
 
-  // 무상수리 연장 이용료 총액: 1번 계산기(!isMixedMode)에서는 subPlans의 품목별 설정에서 직접 파생
+  // 무상수리 연장 이용료 총액: 1번 계산기(!isMixedMode)에서는 subPlans의 품목별 설정(약정기간과 100% 일치)에서 직접 파생
   const activeSubFreeItems = isMixedMode
     ? subFreeServiceItems
     : subPlans
@@ -3395,7 +3442,7 @@ export default function BenefitCalculator({ onBack }) {
           id: p.id,
           monthlyFee: Number(p.freeRepairFee) || 0,
           quantity: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? Number(p.freeRepairQty) || 1 : (Number(p.quantity) || 1),
-          months: Number(p.freeRepairMonths) || Number(p.months) || 72,
+          months: Number(p.months) || 72,
           isMobile: Boolean(p.isMobile),
           name: p.name
         }));
@@ -4703,7 +4750,7 @@ export default function BenefitCalculator({ onBack }) {
     setCustomerName('');
     setConsultDate(getLocalTodayString());
     setIsManualConsultDate(false);
-    setConsultType('신혼·혼수가전 맞춤설계');
+    setConsultType('단품·패키지 비교견적');
     setProductSummary('');
     setMemo('');
     setLumpBasePrice(0);
@@ -4756,7 +4803,7 @@ export default function BenefitCalculator({ onBack }) {
     setCheckpoints(DEFAULT_CHECKPOINTS);
     setMixedSubItems(DEFAULT_MIXED_SUB_ITEMS);
     setMixedLumpItems(DEFAULT_MIXED_LUMP_ITEMS);
-    setMixedEventType('wedding');
+    setMixedEventType('normal');
     setMixedCashbackItems(DEFAULT_MIXED_CASHBACK_ITEMS);
     setMixedVoucherItems(DEFAULT_MIXED_VOUCHER_ITEMS);
     setMixedChannelType('dept');
@@ -4772,51 +4819,6 @@ export default function BenefitCalculator({ onBack }) {
     setActiveQuoteId(null);
     setQuoteTitleInput('');
     setStep('input');
-  };
-
-  // 무상 A/S 연장 품목 관리
-  const handleAddFreeServiceItem = () => {
-    setSubFreeServiceItems((prev) => {
-      const nextId = prev.length > 0 ? Math.max(...prev.map((it) => it.id)) + 1 : 1;
-      const defaultMonths = subPlans[0]?.months || subMonths || 72;
-      return [...prev, { id: nextId, monthlyFee: 0, quantity: 1, months: defaultMonths, isMobile: false }];
-    });
-  };
-
-  const handleRemoveFreeServiceItem = (id) => {
-    setSubFreeServiceItems((prev) => {
-      if (prev.length <= 1) return prev;
-      return prev.filter((it) => it.id !== id);
-    });
-  };
-
-  const handleUpdateFreeServiceItem = (id, field, value) => {
-    setSubFreeServiceItems((prev) => {
-      return prev.map((it) => (it.id === id ? { ...it, [field]: value } : it));
-    });
-  };
-
-  // 케어서비스 혜택 항목 관리 (1번 소모품비용 갯수, 2번 방문케어 횟수 ...)
-  const handleAddCareServiceItem = () => {
-    setSubCareServiceItems((prev) => {
-      const nextId = prev.length > 0 ? Math.max(...prev.map((it) => it.id)) + 1 : 1;
-      const defaultName = nextId === 1 ? '소모품비용' : nextId === 2 ? '방문케어' : `추가 케어서비스 ${nextId}`;
-      const defaultUnit = defaultName.includes('소모품') ? '개' : '회';
-      return [...prev, { id: nextId, name: defaultName, amount: 0, count: 1, unit: defaultUnit }];
-    });
-  };
-
-  const handleRemoveCareServiceItem = (id) => {
-    setSubCareServiceItems((prev) => {
-      if (prev.length <= 1) return prev;
-      return prev.filter((it) => it.id !== id);
-    });
-  };
-
-  const handleUpdateCareServiceItem = (id, field, value) => {
-    setSubCareServiceItems((prev) => {
-      return prev.map((it) => (it.id === id ? { ...it, [field]: value } : it));
-    });
   };
 
   // ---------------- 견적 보관함 (1번 구독비교 / 2번 구독포함 저장소 및 파일 완전 분리) ----------------
@@ -5065,7 +5067,7 @@ export default function BenefitCalculator({ onBack }) {
     if (d.cardLowestRate !== undefined) setCardLowestRate(String(d.cardLowestRate));
     setLumpBasePrice(Number(d.lumpBasePrice) || 0);
     setLumpTotalBenefit(Number(d.lumpTotalBenefit) || 0);
-    setSubInputMode(d.subInputMode === 'total' ? 'total' : 'monthly');
+    setSubInputMode('monthly');
     setSubPrepay(Number(d.subPrepay) || 0);
     setSubPlans(
       Array.isArray(d.subPlans) && d.subPlans.length > 0
@@ -6744,6 +6746,7 @@ export default function BenefitCalculator({ onBack }) {
             }}
           >
             <div
+              className="calc-modal-dialog"
               style={{
                 background: '#0f172a',
                 border: '1px solid rgba(52, 211, 153, 0.5)',
@@ -6944,6 +6947,7 @@ export default function BenefitCalculator({ onBack }) {
         onClick={() => setShowAdminAccountModal(false)}
       >
         <div
+          className="calc-modal-dialog"
           style={{
             background: '#0f172a',
             border: '1px solid rgba(212, 175, 55, 0.55)',
@@ -7200,7 +7204,7 @@ export default function BenefitCalculator({ onBack }) {
                 </div>
                 <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
                   {pendingAccountRequests.length > 0
-                    ? '신청자가 입력한 이름·ID·PW를 확인하고 부여할 레벨(Lv.1 또는 Lv.2)로 승인해 주세요.'
+                    ? '신청자가 입력한 이름·ID를 확인하고 부여할 레벨(Lv.1 또는 Lv.2)로 승인해 주세요. (비밀번호는 단방향 암호화되어 관리자도 열람 불가)'
                     : '현재 대기 중인 신규 아이디 신청 건이 없습니다.'}
                 </span>
               </div>
@@ -7246,7 +7250,7 @@ export default function BenefitCalculator({ onBack }) {
                           <div style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: '3px', fontFamily: 'monospace' }}>
                             희망 ID: <strong style={{ color: '#38bdf8' }}>{req.id}</strong>
                             <span style={{ margin: '0 8px', color: '#475569' }}>|</span>
-                            설정한 PW: <strong style={{ color: '#fcd34d' }}>{showPasswordsInAdmin ? req.pw : '••••••'}</strong>
+                            설정한 PW: <strong style={{ color: '#10b981' }}>🔒 단방향 암호화 보호됨 (열람불가)</strong>
                           </div>
                         </div>
                       </div>
@@ -7354,6 +7358,7 @@ export default function BenefitCalculator({ onBack }) {
                     value={newAccId}
                     onChange={(e) => setNewAccId(e.target.value)}
                     placeholder="예: staff01"
+                    className="calc-input-editable"
                     style={{
                       width: '100%',
                       padding: '0.55rem 0.75rem',
@@ -7368,13 +7373,15 @@ export default function BenefitCalculator({ onBack }) {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.76rem', color: '#94a3b8', fontWeight: 700, marginBottom: '4px' }}>
-                    비밀번호 (PW) *
+                    초기 비밀번호 (암호화 저장) *
                   </label>
                   <input
-                    type="text"
+                    type="password"
                     value={newAccPw}
                     onChange={(e) => setNewAccPw(e.target.value)}
-                    placeholder="예: 1234"
+                    placeholder="초기 비밀번호 입력"
+                    autoComplete="new-password"
+                    className="calc-input-editable"
                     style={{
                       width: '100%',
                       padding: '0.55rem 0.75rem',
@@ -7396,6 +7403,7 @@ export default function BenefitCalculator({ onBack }) {
                     value={newAccName}
                     onChange={(e) => setNewAccName(e.target.value)}
                     placeholder="예: 김삼성 매니저"
+                    className="calc-input-editable"
                     style={{
                       width: '100%',
                       padding: '0.55rem 0.75rem',
@@ -7414,9 +7422,10 @@ export default function BenefitCalculator({ onBack }) {
                   <select
                     value={newAccLevel}
                     onChange={(e) => setNewAccLevel(e.target.value)}
+                    className="calc-select-clickable"
                     style={{
                       width: '100%',
-                      padding: '0.55rem 0.7rem',
+                      padding: '0.55rem 2rem 0.55rem 0.7rem',
                       borderRadius: '8px',
                       background: '#0f172a',
                       border: '1px solid rgba(212, 175, 55, 0.45)',
@@ -7458,24 +7467,21 @@ export default function BenefitCalculator({ onBack }) {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#e2e8f0' }}>
-                  승인 완료된 활성 계정 목록 ({approvedUserAccounts.length}개) — 매니저별 접속 횟수·최근 접속 확인 및 권한(Lv.1 ↔ Lv.2) 즉시 변경
+                  승인 완료된 활성 계정 목록 ({approvedUserAccounts.length}개) — 매니저별 접속 현황 및 권한(Lv.1 ↔ Lv.2) 변경
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordsInAdmin((prev) => !prev)}
+                <span
                   style={{
-                    background: 'rgba(255,255,255,0.07)',
-                    border: '1px solid rgba(255,255,255,0.16)',
-                    color: '#cbd5e1',
+                    background: 'rgba(16, 185, 129, 0.14)',
+                    border: '1px solid rgba(16, 185, 129, 0.45)',
+                    color: '#6ee7b7',
                     padding: '4px 10px',
                     borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer'
+                    fontSize: '0.74rem',
+                    fontWeight: 800
                   }}
                 >
-                  {showPasswordsInAdmin ? '🔒 비밀번호 숨기기' : '👁️ 비밀번호 표시'}
-                </button>
+                  🛡️ SHA-256 단방향 암호화 적용중 (관리자도 기존 비밀번호 열람 불가 · 초기화만 가능)
+                </span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
@@ -7508,8 +7514,10 @@ export default function BenefitCalculator({ onBack }) {
                               type="text"
                               value={editAccId}
                               onChange={(e) => setEditAccId(e.target.value)}
+                              className="calc-input-editable"
                               style={{
                                 width: '100%',
+                                height: '36px',
                                 padding: '0.4rem 0.6rem',
                                 borderRadius: '6px',
                                 background: '#020617',
@@ -7520,14 +7528,18 @@ export default function BenefitCalculator({ onBack }) {
                               }}
                             />
                           </div>
-                          <div style={{ flex: '1 1 130px' }}>
-                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>비밀번호 (PW)</span>
+                          <div style={{ flex: '1 1 170px' }}>
+                            <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>새 비밀번호 재설정 (미입력 시 기존 유지)</span>
                             <input
-                              type="text"
+                              type="password"
                               value={editAccPw}
                               onChange={(e) => setEditAccPw(e.target.value)}
+                              placeholder="변경할 때만 새 PW 입력"
+                              autoComplete="new-password"
+                              className="calc-input-editable"
                               style={{
                                 width: '100%',
+                                height: '36px',
                                 padding: '0.4rem 0.6rem',
                                 borderRadius: '6px',
                                 background: '#020617',
@@ -7544,8 +7556,10 @@ export default function BenefitCalculator({ onBack }) {
                               type="text"
                               value={editAccName}
                               onChange={(e) => setEditAccName(e.target.value)}
+                              className="calc-input-editable"
                               style={{
                                 width: '100%',
+                                height: '36px',
                                 padding: '0.4rem 0.6rem',
                                 borderRadius: '6px',
                                 background: '#020617',
@@ -7560,9 +7574,11 @@ export default function BenefitCalculator({ onBack }) {
                             <select
                               value={editAccLevel}
                               onChange={(e) => setEditAccLevel(e.target.value)}
+                              className="calc-select-clickable"
                               style={{
                                 width: '100%',
-                                padding: '0.42rem 0.6rem',
+                                height: '36px',
+                                padding: '0.42rem 2rem 0.42rem 0.6rem',
                                 borderRadius: '6px',
                                 background: '#020617',
                                 border: '1px solid #fbbf24',
@@ -7676,7 +7692,7 @@ export default function BenefitCalculator({ onBack }) {
                               <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', fontFamily: 'monospace' }}>
                                 ID: <strong style={{ color: '#38bdf8' }}>{maskAccountId(acc.id)}</strong>
                                 <span style={{ margin: '0 8px', color: '#475569' }}>|</span>
-                                PW: <strong style={{ color: '#fcd34d' }}>{showPasswordsInAdmin ? (isProtectedAdminId(acc.id) ? '••••••••' : acc.pw) : '••••••'}</strong>
+                                PW: <strong style={{ color: '#10b981' }}>🔒 단방향 암호화됨 (열람불가)</strong>
                                 {acc.lastLoginAt && (
                                   <>
                                     <span style={{ margin: '0 8px', color: '#475569' }}>|</span>
@@ -7784,8 +7800,9 @@ export default function BenefitCalculator({ onBack }) {
                                     fontWeight: 700,
                                     cursor: 'pointer'
                                   }}
+                                  title="기존 비밀번호는 열람할 수 없으며, 새 비밀번호로 재설정(초기화)하거나 이름을 변경합니다."
                                 >
-                                  ID/PW 수정
+                                  정보수정 / PW재설정
                                 </button>
                               </>
                             )}
@@ -7865,7 +7882,7 @@ export default function BenefitCalculator({ onBack }) {
   // ============================================================================
   if (!isAuthenticated) {
     return (
-      <section className="container" style={{ paddingTop: '2.5rem', minHeight: '82vh' }}>
+      <section className={`container ${themeMode === 'light' ? 'theme-light' : 'theme-dark'}`} style={{ paddingTop: '2.5rem', minHeight: '82vh' }}>
         {otaState.status === 'ready_to_apply' && (
           <div
             style={{
@@ -8075,8 +8092,10 @@ export default function BenefitCalculator({ onBack }) {
                       placeholder="아이디 입력"
                       autoFocus
                       autoComplete="username"
+                      className="calc-input-editable"
                       style={{
                         width: '100%',
+                        height: '46px',
                         padding: '0.88rem 1rem',
                         borderRadius: '10px',
                         background: 'rgba(255,255,255,0.06)',
@@ -8102,8 +8121,10 @@ export default function BenefitCalculator({ onBack }) {
                       }}
                       placeholder="비밀번호 입력"
                       autoComplete="current-password"
+                      className="calc-input-editable"
                       style={{
                         width: '100%',
+                        height: '46px',
                         padding: '0.88rem 1rem',
                         borderRadius: '10px',
                         background: 'rgba(255,255,255,0.06)',
@@ -8224,8 +8245,10 @@ export default function BenefitCalculator({ onBack }) {
                       }}
                       placeholder="예: 홍길동 매니저"
                       autoFocus
+                      className="calc-input-editable"
                       style={{
                         width: '100%',
+                        height: '44px',
                         padding: '0.85rem 1rem',
                         borderRadius: '10px',
                         background: 'rgba(255,255,255,0.06)',
@@ -8251,8 +8274,10 @@ export default function BenefitCalculator({ onBack }) {
                       }}
                       placeholder="원하시는 아이디 입력 (영문/숫자)"
                       autoComplete="username"
+                      className="calc-input-editable"
                       style={{
                         width: '100%',
+                        height: '44px',
                         padding: '0.85rem 1rem',
                         borderRadius: '10px',
                         background: 'rgba(255,255,255,0.06)',
@@ -8278,8 +8303,10 @@ export default function BenefitCalculator({ onBack }) {
                       }}
                       placeholder="원하시는 비밀번호 입력"
                       autoComplete="new-password"
+                      className="calc-input-editable"
                       style={{
                         width: '100%',
+                        height: '44px',
                         padding: '0.85rem 1rem',
                         borderRadius: '10px',
                         background: 'rgba(255,255,255,0.06)',
@@ -8382,7 +8409,7 @@ export default function BenefitCalculator({ onBack }) {
   // ============================================================================
   if (isScreenLocked) {
     return (
-      <section className="container" style={{ paddingTop: '3.5rem', minHeight: '82vh' }}>
+      <section className={`container ${themeMode === 'light' ? 'theme-light' : 'theme-dark'}`} style={{ paddingTop: '3.5rem', minHeight: '82vh' }}>
         {onBack && (
           <button onClick={onBack} className="btn-back">
             <span>←</span> 홈으로 돌아가기
@@ -8461,8 +8488,10 @@ export default function BenefitCalculator({ onBack }) {
                   placeholder="비밀번호 입력하여 잠금 해제"
                   autoFocus
                   autoComplete="current-password"
+                  className="calc-input-editable"
                   style={{
                     width: '100%',
+                    height: '46px',
                     padding: '0.9rem 1rem',
                     borderRadius: '10px',
                     background: 'rgba(255,255,255,0.06)',
@@ -8607,6 +8636,7 @@ export default function BenefitCalculator({ onBack }) {
 
       {/* 상단 접속자 계정 & 레벨 상태 바 */}
       <div
+        className="calc-modal-dialog"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -8910,7 +8940,7 @@ export default function BenefitCalculator({ onBack }) {
     const checkedPoints = checkpoints.filter((c) => c.checked && (hasCareService || c.id !== 'cp3'));
 
     return (
-      <section className="calc-result-section" style={{ paddingTop: '1.5rem', paddingBottom: '5rem' }}>
+      <section className={`calc-result-section ${themeMode === 'light' ? 'theme-light' : 'theme-dark'}`} style={{ paddingTop: '1.5rem', paddingBottom: '5rem' }}>
         {/* 상단 컨트롤 바 (인쇄 시 숨김) */}
         <div
           className="container no-print"
@@ -10749,7 +10779,7 @@ export default function BenefitCalculator({ onBack }) {
                         // 모델별 설정된 케어서비스 아이콘 판별 (무상36/48/60/72, 방문/소모품/셀프 주기 동적 연동)
                         const pCareItems = Array.isArray(p.careItems) ? p.careItems : [];
                         const hasFree = (Number(p.freeRepairFee) || 0) > 0;
-                        const pFreeMonths = Number(p.freeRepairMonths) || Number(p.months) || 60;
+                        const pFreeMonths = Number(p.months) || 60;
 
                         const pVisitItems = pCareItems.filter((c) => (c.type === 'visit' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
                         const pVisitCount = pVisitItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
@@ -10763,7 +10793,7 @@ export default function BenefitCalculator({ onBack }) {
                         const pConsumableCount = pConsumableItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
                           || ((p.careType === 'consumable' || p.careType === 'all') && (Number(p.careAmount) || 0) > 0 ? (Number(p.careCount) || 1) : 0);
 
-                        const pDamageMonths = Number(p.damageMonths) || Number(p.freeRepairMonths) || Number(p.months) || 36;
+                        const pDamageMonths = Number(p.damageMonths) || Number(p.months) || 36;
                         const pCustomItems = pCareItems.filter((c) => c.type === 'custom' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
                         const pReinstallItems = pCareItems.filter((c) => c.type === 'reinstall');
                         const pHasReinstall = Boolean(p.hasReinstall) || pReinstallItems.length > 0;
@@ -11376,6 +11406,7 @@ export default function BenefitCalculator({ onBack }) {
             onClick={() => setImageModalData(null)}
           >
             <div
+              className="calc-modal-dialog"
               style={{
                 background: '#0f172a',
                 border: '1px solid rgba(212, 175, 55, 0.45)',
@@ -11606,7 +11637,7 @@ export default function BenefitCalculator({ onBack }) {
   // 3. 혜택 조건 입력 화면 ('input')
   // ============================================================================
   return (
-    <section className="container" style={{ paddingTop: '1.5rem', paddingBottom: '6rem', maxWidth: '1140px' }}>
+    <section className={`container benefit-calc-container ${themeMode === 'light' ? 'theme-light' : 'theme-dark'}`} style={{ paddingTop: '1.5rem', paddingBottom: '6rem', maxWidth: '1140px' }}>
       {/* 계산기 카테고리 전환 상단 탭 바 */}
       {renderModeTabs()}
 
@@ -11622,113 +11653,36 @@ export default function BenefitCalculator({ onBack }) {
           gap: '0.55rem'
         }}
       >
-        {onBack ? (
-          <button
-            type="button"
-            onClick={onBack}
-            title="메인 홈 화면으로 이동합니다."
-            style={{
-              height: '38px',
-              padding: '0 0.95rem',
-              borderRadius: '8px',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.14)',
-              color: '#cbd5e1',
-              fontWeight: 700,
-              fontSize: '0.83rem',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              whiteSpace: 'nowrap',
-              boxSizing: 'border-box',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <span>←</span> 홈으로
-          </button>
-        ) : (
-          <div />
-        )}
+        <div style={{ display: 'inline-flex', gap: '0.45rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              title="메인 홈 화면으로 이동합니다."
+              style={{
+                height: '38px',
+                padding: '0 0.95rem',
+                borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.14)',
+                color: '#cbd5e1',
+                fontWeight: 700,
+                fontSize: '0.83rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                whiteSpace: 'nowrap',
+                boxSizing: 'border-box',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <span>←</span> 홈으로
+            </button>
+          )}
+        </div>
 
         <div style={{ display: 'inline-flex', gap: '0.42rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button
-            type="button"
-            onClick={handleGoToResult}
-            title="현재 입력된 조건으로 A4 인쇄 / PDF 견적서를 확인합니다."
-            style={{
-              height: '38px',
-              padding: '0 1.05rem',
-              borderRadius: '8px',
-              background: isMixedMode
-                ? 'linear-gradient(135deg, #059669, #10b981)'
-                : 'linear-gradient(135deg, #1d4ed8, #2563eb)',
-              color: '#ffffff',
-              border: isMixedMode ? '1px solid #34d399' : '1px solid #3b82f6',
-              cursor: 'pointer',
-              fontSize: '0.84rem',
-              fontWeight: 800,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              boxShadow: isMixedMode
-                ? '0 3px 12px rgba(16, 185, 129, 0.35)'
-                : '0 3px 12px rgba(37, 99, 235, 0.35)',
-              whiteSpace: 'nowrap',
-              boxSizing: 'border-box',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <Printer size={15} /> {isMixedMode ? '스마트 견적서 보기' : '비교 견적서 보기'}
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveNewQuote}
-            title="현재 입력된 견적을 보관함에 새로 저장합니다."
-            style={{
-              height: '38px',
-              padding: '0 0.82rem',
-              borderRadius: '8px',
-              background: 'rgba(255, 255, 255, 0.06)',
-              border: '1px solid rgba(255, 255, 255, 0.16)',
-              color: '#6ee7b7',
-              cursor: 'pointer',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.35rem',
-              whiteSpace: 'nowrap',
-              boxSizing: 'border-box',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <Save size={14} /> 견적 저장
-          </button>
-          <button
-            type="button"
-            onClick={handleOverwriteActiveQuote}
-            title={activeQuoteId ? '현재 선택된 보관 견적에 수정사항을 덮어씁니다.' : '보관 견적에 덮어쓰거나 수정 저장합니다.'}
-            style={{
-              height: '38px',
-              padding: '0 0.82rem',
-              borderRadius: '8px',
-              background: activeQuoteId ? 'rgba(212, 175, 55, 0.16)' : 'rgba(255, 255, 255, 0.05)',
-              border: activeQuoteId ? '1px solid rgba(212, 175, 55, 0.5)' : '1px solid rgba(255, 255, 255, 0.14)',
-              color: activeQuoteId ? 'var(--accent-gold-light)' : '#94a3b8',
-              cursor: 'pointer',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.35rem',
-              whiteSpace: 'nowrap',
-              boxSizing: 'border-box',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <RotateCcw size={13} /> 덮어쓰기
-          </button>
           <button
             type="button"
             onClick={handleResetAll}
@@ -11875,28 +11829,37 @@ export default function BenefitCalculator({ onBack }) {
               {currentUser?.name || currentUser?.id || '매니저'}
               {isAdminUser && <span style={{ color: '#fde047', fontSize: '0.7rem' }}> (관리자)</span>}
             </span>
-
-            <span
-              style={{
-                fontSize: '0.72rem',
-                fontWeight: 700,
-                padding: '0.16rem 0.55rem',
-                borderRadius: '999px',
-                background: cloudSyncStatus === 'error' ? 'rgba(239, 68, 68, 0.16)' : 'rgba(59, 130, 246, 0.16)',
-                border: cloudSyncStatus === 'error' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)',
-                color: cloudSyncStatus === 'error' ? '#fca5a5' : '#93c5fd',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.28rem'
-              }}
-              title="어느 기기(스마트폰, 다른 PC, 태블릿)에서 접속하더라도 실시간 자동 동기화됩니다."
-            >
-              <Cloud size={12} />
-              {isCloudSyncing ? '클라우드 동기화 중...' : '클라우드 실시간 연동'}
-            </span>
           </div>
 
           <div style={{ display: 'inline-flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setQuoteSearchQuery('');
+                setShowQuoteListModal(true);
+              }}
+              title="보관된 전체 견적 목록을 큰 팝업창(전체 페이지)으로 한눈에 열람하고 검색합니다."
+              style={{
+                height: '32px',
+                background: 'linear-gradient(135deg, #10b981, #059669)',
+                border: '1px solid #34d399',
+                color: '#ffffff',
+                borderRadius: '6px',
+                padding: '0 0.8rem',
+                fontSize: '0.79rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                whiteSpace: 'nowrap',
+                boxSizing: 'border-box',
+                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+              }}
+            >
+              <Maximize2 size={13} />
+              <span>📋 목록 전체보기 ({displayedQuotes.length}건)</span>
+            </button>
             <button
               type="button"
               onClick={() => syncQuotesWithCloud(isMixedMode ? 'mixed' : 'compare', true)}
@@ -11928,145 +11891,154 @@ export default function BenefitCalculator({ onBack }) {
               />
               <span>동기화</span>
             </button>
-            <button
-              type="button"
-              onClick={handleExportQuoteFile}
-              title={`현재 선택된 [${quoteStorageTab === 'public' ? '공용' : '개인'}] 보관함 목록을 파일(.json)로 내보냅니다.`}
-              style={{
-                height: '32px',
-                background: 'rgba(59, 130, 246, 0.12)',
-                border: '1px solid rgba(59, 130, 246, 0.4)',
-                color: '#93c5fd',
-                borderRadius: '6px',
-                padding: '0 0.7rem',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                whiteSpace: 'nowrap',
-                boxSizing: 'border-box'
-              }}
-            >
-              <Download size={13} /> {quoteStorageTab === 'public' ? '공용' : '개인'} 내보내기 (.json)
-            </button>
-            <label
-              title="저장해둔 견적 백업 파일(.json)을 불러옵니다."
-              style={{
-                height: '32px',
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid var(--glass-border)',
-                color: '#e2e8f0',
-                borderRadius: '6px',
-                padding: '0 0.7rem',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                whiteSpace: 'nowrap',
-                boxSizing: 'border-box',
-                margin: 0
-              }}
-            >
-              <Upload size={13} /> 가져오기
-              <input
-                type="file"
-                accept=".json,application/json"
-                onChange={handleImportQuoteFile}
-                style={{ display: 'none' }}
-              />
-            </label>
           </div>
         </div>
 
-        {/* 보관함 구분 탭: [ 🔒 내 개인 보관함 (N) ] vs [ 🌐 팀 공용 보관함 (M) ] */}
+        {/* 보관함 구분 탭: [ 🔒 내 개인 보관함 (N) ] vs [ 🌐 팀 공용 보관함 (M) ] (슬라이딩 토글 트랙) */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: '0.6rem',
-            padding: '0.45rem 0.6rem',
-            borderRadius: '10px',
-            background: 'rgba(2, 6, 23, 0.55)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            marginBottom: '0.9rem'
+            gap: '0.75rem',
+            padding: '0.6rem 0.8rem',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, rgba(2, 6, 23, 0.75), rgba(15, 23, 42, 0.65))',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            marginBottom: '0.9rem',
+            boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.4)'
           }}
         >
-          <div style={{ display: 'inline-flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => setQuoteStorageTab('private')}
+          {/* 슬라이드 세그먼트 토글 컨트롤 */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+            <div
               style={{
-                height: '34px',
-                padding: '0 1rem',
-                borderRadius: '8px',
-                fontSize: '0.84rem',
-                fontWeight: quoteStorageTab === 'private' ? 800 : 600,
-                cursor: 'pointer',
+                position: 'relative',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.42rem',
-                border: quoteStorageTab === 'private' ? '1px solid #10b981' : '1px solid transparent',
-                background: quoteStorageTab === 'private' ? 'rgba(16, 185, 129, 0.22)' : 'transparent',
-                color: quoteStorageTab === 'private' ? '#6ee7b7' : '#94a3b8',
-                transition: 'all 0.15s ease'
+                padding: '3px',
+                borderRadius: '10px',
+                background: 'rgba(0, 0, 0, 0.55)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.6)'
               }}
             >
-              <Lock size={14} />
-              <span>내 개인 보관함</span>
-              <span
+              {/* 슬라이딩 백그라운드 인디케이터 */}
+              <div
                 style={{
-                  fontSize: '0.72rem',
-                  padding: '0.08rem 0.45rem',
-                  borderRadius: '999px',
-                  background: quoteStorageTab === 'private' ? '#10b981' : 'rgba(255,255,255,0.1)',
-                  color: quoteStorageTab === 'private' ? '#042f24' : '#cbd5e1',
-                  fontWeight: 800
+                  position: 'absolute',
+                  top: '3px',
+                  bottom: '3px',
+                  left: quoteStorageTab === 'private' ? '3px' : '50%',
+                  width: 'calc(50% - 3px)',
+                  borderRadius: '8px',
+                  background: quoteStorageTab === 'private'
+                    ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(5, 150, 105, 0.9))'
+                    : 'linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.9))',
+                  boxShadow: quoteStorageTab === 'private'
+                    ? '0 2px 8px rgba(16, 185, 129, 0.4), inset 0 1px 0 rgba(255,255,255,0.3)'
+                    : '0 2px 8px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.3)',
+                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  zIndex: 1,
+                  pointerEvents: 'none'
                 }}
-              >
-                {currentManagerPrivateQuotes.length}
-              </span>
-            </button>
+              />
 
-            <button
-              type="button"
-              onClick={() => setQuoteStorageTab('public')}
-              style={{
-                height: '34px',
-                padding: '0 1rem',
-                borderRadius: '8px',
-                fontSize: '0.84rem',
-                fontWeight: quoteStorageTab === 'public' ? 800 : 600,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.42rem',
-                border: quoteStorageTab === 'public' ? '1px solid #3b82f6' : '1px solid transparent',
-                background: quoteStorageTab === 'public' ? 'rgba(59, 130, 246, 0.22)' : 'transparent',
-                color: quoteStorageTab === 'public' ? '#93c5fd' : '#94a3b8',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Globe size={14} />
-              <span>팀 공용 보관함</span>
-              <span
+              <button
+                type="button"
+                onClick={() => setQuoteStorageTab('private')}
                 style={{
-                  fontSize: '0.72rem',
-                  padding: '0.08rem 0.45rem',
-                  borderRadius: '999px',
-                  background: quoteStorageTab === 'public' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-                  color: quoteStorageTab === 'public' ? '#0f172a' : '#cbd5e1',
-                  fontWeight: 800
+                  position: 'relative',
+                  zIndex: 2,
+                  height: '36px',
+                  padding: '0 1.1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.86rem',
+                  fontWeight: quoteStorageTab === 'private' ? 800 : 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  border: 'none',
+                  background: 'transparent',
+                  color: quoteStorageTab === 'private' ? '#ffffff' : '#94a3b8',
+                  transition: 'color 0.2s ease',
+                  userSelect: 'none'
                 }}
               >
-                {publicQuotes.length}
-              </span>
-            </button>
+                <Lock size={15} style={{ filter: quoteStorageTab === 'private' ? 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' : 'none' }} />
+                <span>내 개인 보관함</span>
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '0.1rem 0.48rem',
+                    borderRadius: '999px',
+                    background: quoteStorageTab === 'private' ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255,255,255,0.1)',
+                    color: quoteStorageTab === 'private' ? '#a7f3d0' : '#cbd5e1',
+                    fontWeight: 800
+                  }}
+                >
+                  {currentManagerPrivateQuotes.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuoteStorageTab('public')}
+                style={{
+                  position: 'relative',
+                  zIndex: 2,
+                  height: '36px',
+                  padding: '0 1.1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.86rem',
+                  fontWeight: quoteStorageTab === 'public' ? 800 : 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  border: 'none',
+                  background: 'transparent',
+                  color: quoteStorageTab === 'public' ? '#ffffff' : '#94a3b8',
+                  transition: 'color 0.2s ease',
+                  userSelect: 'none'
+                }}
+              >
+                <Globe size={15} style={{ filter: quoteStorageTab === 'public' ? 'drop-shadow(0 1px 2px rgba(0,0,0,0.5))' : 'none' }} />
+                <span>팀 공용 보관함</span>
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '0.1rem 0.48rem',
+                    borderRadius: '999px',
+                    background: quoteStorageTab === 'public' ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255,255,255,0.1)',
+                    color: quoteStorageTab === 'public' ? '#bfdbfe' : '#cbd5e1',
+                    fontWeight: 800
+                  }}
+                >
+                  {publicQuotes.length}
+                </span>
+              </button>
+            </div>
+
+            {/* 슬라이드 전환 안내 뱃지 */}
+            <span
+              style={{
+                fontSize: '0.74rem',
+                color: '#94a3b8',
+                background: 'rgba(255, 255, 255, 0.05)',
+                padding: '0.2rem 0.55rem',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem'
+              }}
+            >
+              <span>⇄</span>
+              <span>원클릭 슬라이드 전환</span>
+            </span>
           </div>
 
           {/* 관리자(admin)일 때 개인 보관함 매니저별 필터 선택기 */}
@@ -12076,13 +12048,15 @@ export default function BenefitCalculator({ onBack }) {
               <select
                 value={adminFilterManager}
                 onChange={(e) => setAdminFilterManager(e.target.value)}
+                className="calc-select-clickable"
                 style={{
-                  height: '30px',
+                  height: '32px',
+                  width: 'auto',
                   background: 'rgba(15, 23, 42, 0.9)',
                   border: '1px solid rgba(255, 255, 255, 0.18)',
                   color: '#f8fafc',
                   borderRadius: '6px',
-                  padding: '0 0.5rem',
+                  padding: '0 2rem 0 0.6rem',
                   fontSize: '0.76rem',
                   cursor: 'pointer'
                 }}
@@ -12177,6 +12151,7 @@ export default function BenefitCalculator({ onBack }) {
                 ? "내 개인 견적 이름 (비워두면 '고객성함 · 품목'으로 자동 생성)"
                 : "팀 공용 견적 이름 (예: 신혼 4대 패키지 / 입주 필수 세트)"
             }
+            className="calc-input-editable"
             style={{
               ...textInputStyle,
               flex: '1 1 240px',
@@ -12256,169 +12231,325 @@ export default function BenefitCalculator({ onBack }) {
           </div>
         )}
 
-        {/* 저장된 견적 목록 */}
+        {/* 저장된 견적 목록 (좌우 드래그 & 가로 스크롤 방식) */}
         {displayedQuotes.length > 0 ? (
-          <div
-            style={{
-              marginTop: '0.85rem',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: '0.55rem',
-              maxHeight: '260px',
-              overflowY: 'auto',
-              paddingRight: '0.2rem'
-            }}
-          >
-            {displayedQuotes.map((q) => {
-              const isSelected = q.id === activeQuoteId;
-              const isQuotePrivate = q.scope === 'private' || q.data?.scope === 'private';
-              const authorLabel = q.creatorName || q.creatorId || '매니저';
-
-              return (
-                <div
-                  key={q.id}
-                  className="saved-quote-item"
-                  data-quote-title={q.title}
+          <div style={{ marginTop: '0.85rem' }}>
+            {/* 상단 드래그 안내 및 좌/우 이동 컨트롤 바 */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '0.45rem',
+                flexWrap: 'wrap',
+                gap: '0.4rem'
+              }}
+            >
+              <span style={{ fontSize: '0.76rem', color: '#94a3b8', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span>↔ 마우스로 잡고 옆으로 드래그하거나 좌우 버튼으로 보관 견적을 찾으세요</span>
+                <strong style={{ color: '#38bdf8' }}>(총 {displayedQuotes.length}건)</strong>
+              </span>
+              <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuoteSearchQuery('');
+                    setShowQuoteListModal(true);
+                  }}
+                  title="전체 목록을 팝업창으로 크게 열어 한눈에 찾습니다."
                   style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.45rem',
-                    padding: '0.7rem 0.85rem',
-                    borderRadius: '10px',
-                    background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.04)',
-                    border: isSelected
-                      ? '1px solid rgba(16, 185, 129, 0.6)'
-                      : '1px solid rgba(255, 255, 255, 0.09)',
-                    transition: 'all 0.15s ease'
+                    height: '28px',
+                    padding: '0 0.7rem',
+                    borderRadius: '6px',
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    border: '1px solid rgba(16, 185, 129, 0.55)',
+                    color: '#6ee7b7',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
                   }}
                 >
-                  {/* 상단: 배지 및 견적 제목 (전체 너비 사용) */}
-                  <div
-                    onClick={() => handleLoadQuote(q)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.4rem',
-                      cursor: 'pointer',
-                      minWidth: 0
-                    }}
-                    title="클릭하여 이 견적 불러오기"
-                  >
-                    <span
-                      style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 800,
-                        padding: '0.12rem 0.45rem',
-                        borderRadius: '4px',
-                        background: isQuotePrivate ? 'rgba(16, 185, 129, 0.22)' : 'rgba(59, 130, 246, 0.22)',
-                        border: isQuotePrivate ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(59, 130, 246, 0.5)',
-                        color: isQuotePrivate ? '#6ee7b7' : '#93c5fd',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.22rem',
-                        flexShrink: 0
-                      }}
-                    >
-                      {isQuotePrivate ? <Lock size={10} /> : <Globe size={10} />}
-                      {isQuotePrivate ? authorLabel : '팀공용'}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '0.88rem',
-                        fontWeight: 800,
-                        color: isSelected ? '#6ee7b7' : '#f8fafc',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        flex: 1
-                      }}
-                    >
-                      {isSelected ? '● ' : ''}
-                      {q.title}
-                    </span>
-                  </div>
+                  <Maximize2 size={12} />
+                  <span>📋 목록 (전체보기)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (quoteScrollRef.current) {
+                      quoteScrollRef.current.scrollBy({ left: -320, behavior: 'smooth' });
+                    }
+                  }}
+                  title="왼쪽으로 이동"
+                  style={{
+                    height: '28px',
+                    padding: '0 0.65rem',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#e2e8f0',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.2rem'
+                  }}
+                >
+                  ◀ 이전
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (quoteScrollRef.current) {
+                      quoteScrollRef.current.scrollBy({ left: 320, behavior: 'smooth' });
+                    }
+                  }}
+                  title="오른쪽으로 이동"
+                  style={{
+                    height: '28px',
+                    padding: '0 0.65rem',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#e2e8f0',
+                    fontSize: '0.75rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.2rem'
+                  }}
+                >
+                  다음 ▶
+                </button>
+              </div>
+            </div>
 
-                  {/* 하단: 저장일시/금액 정보 (좌) + 조작 버튼 3종 (우) */}
+            <div
+              ref={quoteScrollRef}
+              className="quote-horizontal-scroll"
+              onMouseDown={(e) => {
+                const el = quoteScrollRef.current;
+                if (!el) return;
+                quoteDragRef.current = {
+                  isDown: true,
+                  startX: e.pageX - el.offsetLeft,
+                  scrollLeft: el.scrollLeft,
+                  hasMoved: false
+                };
+                el.style.cursor = 'grabbing';
+              }}
+              onMouseMove={(e) => {
+                if (!quoteDragRef.current.isDown) return;
+                const el = quoteScrollRef.current;
+                if (!el) return;
+                const x = e.pageX - el.offsetLeft;
+                const walk = x - quoteDragRef.current.startX;
+                if (Math.abs(walk) > 6) {
+                  quoteDragRef.current.hasMoved = true;
+                }
+                if (quoteDragRef.current.hasMoved) {
+                  e.preventDefault();
+                  el.scrollLeft = quoteDragRef.current.scrollLeft - walk * 1.3;
+                }
+              }}
+              onMouseUp={() => {
+                quoteDragRef.current.isDown = false;
+                if (quoteScrollRef.current) {
+                  quoteScrollRef.current.style.cursor = 'grab';
+                }
+              }}
+              onMouseLeave={() => {
+                quoteDragRef.current.isDown = false;
+                if (quoteScrollRef.current) {
+                  quoteScrollRef.current.style.cursor = 'grab';
+                }
+              }}
+              onClickCapture={(e) => {
+                if (quoteDragRef.current.hasMoved) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  quoteDragRef.current.hasMoved = false;
+                }
+              }}
+              onWheel={(e) => {
+                const el = quoteScrollRef.current;
+                if (!el) return;
+                if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el.scrollWidth > el.clientWidth) {
+                  el.scrollLeft += e.deltaY;
+                }
+              }}
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'nowrap',
+                gap: '0.65rem',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                paddingBottom: '0.55rem',
+                cursor: 'grab',
+                userSelect: 'none',
+                WebkitOverflowScrolling: 'touch'
+              }}
+            >
+              {displayedQuotes.map((q) => {
+                const isSelected = q.id === activeQuoteId;
+                const isQuotePrivate = q.scope === 'private' || q.data?.scope === 'private';
+                const authorLabel = q.creatorName || q.creatorId || '매니저';
+
+                return (
                   <div
+                    key={q.id}
+                    className="saved-quote-item"
+                    data-quote-title={q.title}
                     style={{
+                      flex: '0 0 305px',
+                      minWidth: '295px',
+                      maxWidth: '320px',
                       display: 'flex',
+                      flexDirection: 'column',
                       justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      paddingTop: '0.25rem',
-                      borderTop: '1px solid rgba(255, 255, 255, 0.06)'
+                      gap: '0.45rem',
+                      padding: '0.75rem 0.9rem',
+                      borderRadius: '10px',
+                      background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                      border: isSelected
+                        ? '2px solid #10b981'
+                        : '1px solid rgba(255, 255, 255, 0.14)',
+                      transition: 'border-color 0.15s ease, background-color 0.15s ease'
                     }}
                   >
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {q.savedAt} ·{' '}
-                      <span style={{ color: '#cbd5e1', fontWeight: 600 }}>
-                        {isMixedMode
-                          ? `실체감가 ${formatWon(q.summary?.mixedGrandFinal || 0)}`
-                          : `구독 체감 ${formatWon(q.summary?.subFinalPrice || 0)}`}
+                    {/* 상단: 배지 및 견적 제목 (전체 너비 사용) */}
+                    <div
+                      onClick={() => handleLoadQuote(q)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        cursor: 'pointer',
+                        minWidth: 0
+                      }}
+                      title="클릭하여 이 견적 불러오기"
+                    >
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 800,
+                          padding: '0.12rem 0.45rem',
+                          borderRadius: '4px',
+                          background: isQuotePrivate ? 'rgba(16, 185, 129, 0.22)' : 'rgba(59, 130, 246, 0.22)',
+                          border: isQuotePrivate ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(59, 130, 246, 0.5)',
+                          color: isQuotePrivate ? '#6ee7b7' : '#93c5fd',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.22rem',
+                          flexShrink: 0
+                        }}
+                      >
+                        {isQuotePrivate ? <Lock size={10} /> : <Globe size={10} />}
+                        {isQuotePrivate ? authorLabel : '팀공용'}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.88rem',
+                          fontWeight: 800,
+                          color: isSelected ? '#6ee7b7' : '#f8fafc',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          flex: 1
+                        }}
+                      >
+                        {isSelected ? '● ' : ''}
+                        {q.title}
                       </span>
                     </div>
 
-                    <div style={{ display: 'inline-flex', gap: '0.3rem', flexShrink: 0, alignItems: 'center' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleLoadQuote(q)}
-                        style={{
-                          background: isSelected ? '#10b981' : 'rgba(59, 130, 246, 0.2)',
-                          border: isSelected ? 'none' : '1px solid rgba(59, 130, 246, 0.45)',
-                          color: isSelected ? '#06281e' : '#93c5fd',
-                          borderRadius: '6px',
-                          padding: '0.28rem 0.55rem',
-                          fontSize: '0.74rem',
-                          fontWeight: 800,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {isSelected ? '적용중' : '불러오기'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleQuoteScope(q)}
-                        title={isQuotePrivate ? '팀 공용 보관함으로 전환하여 다른 매니저들과 공유합니다.' : '내 개인 보관함으로 전환합니다.'}
-                        style={{
-                          background: 'rgba(255, 255, 255, 0.07)',
-                          border: '1px solid rgba(255, 255, 255, 0.15)',
-                          color: isQuotePrivate ? '#93c5fd' : '#6ee7b7',
-                          borderRadius: '6px',
-                          padding: '0.28rem 0.48rem',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.2rem'
-                        }}
-                      >
-                        {isQuotePrivate ? <Globe size={11} /> : <Lock size={11} />}
-                        {isQuotePrivate ? '공용전환' : '개인전환'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteQuote(q.id, q.title)}
-                        title="삭제"
-                        style={{
-                          background: 'rgba(239, 68, 68, 0.12)',
-                          border: '1px solid rgba(239, 68, 68, 0.3)',
-                          color: '#fca5a5',
-                          borderRadius: '6px',
-                          padding: '0.28rem 0.42rem',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                    {/* 하단: 저장일시/금액 정보 (좌) + 조작 버튼 3종 (우) */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        paddingTop: '0.3rem',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+                      }}
+                    >
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {q.savedAt} ·{' '}
+                        <span style={{ color: '#cbd5e1', fontWeight: 700 }}>
+                          {isMixedMode
+                            ? `실체감가 ${formatWon(q.summary?.mixedGrandFinal || 0)}`
+                            : `구독 체감 ${formatWon(q.summary?.subFinalPrice || 0)}`}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'inline-flex', gap: '0.3rem', flexShrink: 0, alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadQuote(q)}
+                          style={{
+                            background: isSelected ? '#10b981' : 'rgba(59, 130, 246, 0.2)',
+                            border: isSelected ? 'none' : '1px solid rgba(59, 130, 246, 0.45)',
+                            color: isSelected ? '#06281e' : '#93c5fd',
+                            borderRadius: '6px',
+                            padding: '0.28rem 0.55rem',
+                            fontSize: '0.74rem',
+                            fontWeight: 800,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isSelected ? '적용중' : '불러오기'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleQuoteScope(q)}
+                          title={isQuotePrivate ? '팀 공용 보관함으로 전환하여 다른 매니저들과 공유합니다.' : '내 개인 보관함으로 전환합니다.'}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.07)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            color: isQuotePrivate ? '#93c5fd' : '#6ee7b7',
+                            borderRadius: '6px',
+                            padding: '0.28rem 0.48rem',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.2rem'
+                          }}
+                        >
+                          {isQuotePrivate ? <Globe size={11} /> : <Lock size={11} />}
+                          {isQuotePrivate ? '공용전환' : '개인전환'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteQuote(q.id, q.title)}
+                          title="삭제"
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: '#fca5a5',
+                            borderRadius: '6px',
+                            padding: '0.28rem 0.42rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div
@@ -12604,7 +12735,7 @@ export default function BenefitCalculator({ onBack }) {
               className="calc-input-editable"
               style={{
                 cursor: 'pointer',
-                colorScheme: 'dark',
+                colorScheme: themeMode === 'light' ? 'light' : 'dark',
                 width: '100%'
               }}
             />
@@ -12830,25 +12961,17 @@ export default function BenefitCalculator({ onBack }) {
                 <button
                   type="button"
                   onClick={handleAddMixedLumpItem}
-                  className="calc-btn-interactive"
+                  className="calc-btn-hologram"
                   style={{
                     marginTop: '0.55rem',
                     width: '100%',
-                    height: '42px',
-                    borderRadius: '8px',
-                    border: '1.5px dashed rgba(212, 175, 55, 0.65)',
-                    background: 'rgba(212, 175, 55, 0.1)',
-                    color: 'var(--accent-gold-light)',
-                    fontSize: '0.85rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.35rem'
+                    height: '40px',
+                    fontSize: '0.86rem',
+                    letterSpacing: '-0.01em'
                   }}
                 >
-                  <Plus size={14} /> 일반구매 모델 추가
+                  <Plus size={15} strokeWidth={2.5} />
+                  <span>일반구매 품목 추가</span>
                 </button>
               </div>
 
@@ -13109,6 +13232,7 @@ export default function BenefitCalculator({ onBack }) {
                                   const val = parseFloat(e.target.value);
                                   setDeptRewardRate(isNaN(val) ? 0 : Number(val.toFixed(2)));
                                 }}
+                                className="calc-input-editable"
                                 style={{
                                   width: '100%',
                                   background: 'rgba(15, 23, 42, 0.85)',
@@ -14133,6 +14257,7 @@ export default function BenefitCalculator({ onBack }) {
                         value={mixedRoadDiscountNote}
                         onChange={(e) => setMixedRoadDiscountNote(e.target.value)}
                         placeholder={`할인 명칭 (미입력 시: ${effectiveRoadNote})`}
+                        className="calc-input-editable"
                         style={{ ...textInputStyle, padding: '0.42rem 0.65rem', fontSize: '0.8rem' }}
                       />
                     </div>
@@ -14291,6 +14416,7 @@ export default function BenefitCalculator({ onBack }) {
                   </button>
                 ))}
                 <div
+                  className="calc-money-wrapper compact"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -14302,7 +14428,7 @@ export default function BenefitCalculator({ onBack }) {
                     width: '105px'
                   }}
                 >
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginRight: '4px' }}>연</span>
+                  <span className="calc-money-unit-label" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginRight: '4px', marginLeft: 0 }}>연</span>
                   <input
                     type="number"
                     step="0.1"
@@ -14310,6 +14436,7 @@ export default function BenefitCalculator({ onBack }) {
                     max="30"
                     value={cardLowestRate}
                     onChange={(e) => setCardLowestRate(e.target.value)}
+                    className="calc-money-input-field"
                     style={{
                       width: '100%',
                       background: 'transparent',
@@ -14321,7 +14448,7 @@ export default function BenefitCalculator({ onBack }) {
                       textAlign: 'right'
                     }}
                   />
-                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: '3px' }}>%</span>
+                  <span className="calc-money-unit-label" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: '3px' }}>%</span>
                 </div>
               </div>
             </div>
@@ -14398,7 +14525,7 @@ export default function BenefitCalculator({ onBack }) {
                   {isMixedMode ? '✨ 1. 삼성AI구독 모델 & 전용 서비스' : '✨ 삼성AI구독 조건'}
                 </h3>
               </div>
-              {isMixedMode ? (
+              {isMixedMode && (
                 <button
                   type="button"
                   onClick={handleGoToResult}
@@ -14427,41 +14554,6 @@ export default function BenefitCalculator({ onBack }) {
                 >
                   <Printer size={15} /> 견적서 바로보기
                 </button>
-              ) : (
-                <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.8)', borderRadius: '8px', padding: '3px', border: '1px solid var(--glass-border)' }}>
-                  <button
-                    type="button"
-                    onClick={() => setSubInputMode('monthly')}
-                    style={{
-                      padding: '0.32rem 0.65rem',
-                      borderRadius: '6px',
-                      border: 'none',
-                      fontSize: '0.76rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      background: subInputMode === 'monthly' ? 'var(--accent-blue)' : 'transparent',
-                      color: subInputMode === 'monthly' ? 'white' : 'var(--text-secondary)'
-                    }}
-                  >
-                    월 구독료 입력
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSubInputMode('total')}
-                    style={{
-                      padding: '0.32rem 0.65rem',
-                      borderRadius: '6px',
-                      border: 'none',
-                      fontSize: '0.76rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      background: subInputMode === 'total' ? 'var(--accent-blue)' : 'transparent',
-                      color: subInputMode === 'total' ? 'white' : 'var(--text-secondary)'
-                    }}
-                  >
-                    총액 기준 입력
-                  </button>
-                </div>
               )}
             </div>
 
@@ -14471,13 +14563,16 @@ export default function BenefitCalculator({ onBack }) {
                   <label style={{ ...labelStyle, marginBottom: 0, color: '#93c5fd', fontSize: '0.88rem', fontWeight: 800 }}>
                     📦 개별 구독 모델 및 전용 서비스 상세 설정 (총 {mixedSubItems.length}개 모델)
                   </label>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.76rem', color: '#a7f3d0', cursor: 'pointer' }}>
+                  <label
+                    className={`calc-service-reflect-toggle ${includeServiceInFinal ? 'active' : ''}`}
+                    title="체크 시 무상수리·방문케어·소모품 등 서비스 혜택 금액을 최종 체감가에서 차감하여 반영합니다."
+                  >
                     <input
                       type="checkbox"
                       checked={includeServiceInFinal}
                       onChange={(e) => setIncludeServiceInFinal(e.target.checked)}
                     />
-                    서비스 혜택 체감가 차감 반영
+                    <span>서비스 혜택 최종 체감가에 차감 반영</span>
                   </label>
                 </div>
 
@@ -14824,48 +14919,21 @@ export default function BenefitCalculator({ onBack }) {
                 <button
                   type="button"
                   onClick={handleAddMixedSubItem}
+                  className="calc-btn-hologram"
                   style={{
-                    marginTop: '0.65rem',
+                    marginTop: '0.75rem',
                     width: '100%',
-                    padding: '0.52rem 0.8rem',
-                    borderRadius: '9px',
-                    border: '1px dashed rgba(96, 165, 250, 0.65)',
-                    background: 'rgba(59, 130, 246, 0.15)',
-                    color: '#93c5fd',
-                    fontSize: '0.84rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.4rem'
+                    height: '42px',
+                    fontSize: '0.9rem',
+                    letterSpacing: '-0.01em'
                   }}
                 >
-                  <Plus size={15} /> 구독 모델 추가 (품목별 전용서비스 동시 설정)
+                  <Plus size={16} strokeWidth={2.5} />
+                  <span>구독 품목 추가</span>
                 </button>
               </div>
             ) : (
               <>
-                {/* 1. 맨 위칸: 선납금 합계 안내 및 총액 입력 */}
-                <div style={{ marginBottom: '0.9rem', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '0.65rem 0.85rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: subPlansPrepayTotal > 0 ? '0' : '0.35rem', flexWrap: 'wrap', gap: '0.3rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#fde68a' }}>선납금 총 합계</span>
-                      <span style={{ fontSize: '0.7rem', fontWeight: 500, color: '#cbd5e1' }}>
-                        {subPlansPrepayTotal > 0 ? '(품목별 개별 선납금 합산 자동 연동)' : '(아래 품목별 입력 또는 일괄 입력)'}
-                      </span>
-                    </div>
-                    {subPlansPrepayTotal > 0 && (
-                      <strong style={{ fontSize: '1.05rem', fontWeight: 900, color: '#f59e0b' }}>
-                        {formatWon(effectiveSubPrepay)}
-                      </strong>
-                    )}
-                  </div>
-                  {subPlansPrepayTotal === 0 && (
-                    <MoneyInput value={subPrepay} onChange={setSubPrepay} placeholder="선납금 발생 시 입력 (예: 500,000)" accentColor="#f59e0b" compact />
-                  )}
-                </div>
-
                 {/* 2. 두 번째 칸~: 품목별 통합 카드 (품목명 + 월구독료 + 약정기간 + 모바일체크 + 무상수리 + 케어서비스) */}
                 <div style={{ marginBottom: '1rem' }}>
                   <div
@@ -14888,21 +14956,23 @@ export default function BenefitCalculator({ onBack }) {
                         </span>
                       )}
                     </div>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.74rem', color: '#a7f3d0', cursor: 'pointer' }}>
+                    <label
+                      className={`calc-service-reflect-toggle ${includeServiceInFinal ? 'active' : ''}`}
+                      title="체크 시 무상수리·방문케어·소모품 등 서비스 혜택 금액을 최종 체감가에서 차감하여 반영합니다."
+                    >
                       <input
                         type="checkbox"
                         checked={includeServiceInFinal}
                         onChange={(e) => setIncludeServiceInFinal(e.target.checked)}
-                        style={{ accentColor: '#34d399', cursor: 'pointer', width: '13px', height: '13px' }}
                       />
-                      서비스 혜택 최종 체감가에 차감 반영
+                      <span>서비스 혜택 최종 체감가에 차감 반영</span>
                     </label>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {subPlans.map((plan, idx) => {
                       const planMonths = Number(plan.months) || 72;
-                      const freeRepairMonths = Number(plan.freeRepairMonths) || planMonths;
+                      const freeRepairMonths = planMonths;
                       const planMonthly =
                         subInputMode === 'monthly'
                           ? Number(plan.monthlyFee) || 0
@@ -15020,168 +15090,177 @@ export default function BenefitCalculator({ onBack }) {
                             </div>
                           </div>
 
-                          {/* 1) 품목명 입력 (영문·숫자 15자 제한 및 설정된 케어 아이콘 표시) */}
+                          {/* 1) 품목선택 및 품목 모델명 입력 (영문·숫자 15자 제한 및 설정된 케어 아이콘 표시) */}
                           <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.3rem', flexWrap: 'wrap', gap: '0.3rem' }}>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
-                                <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>품목 모델명</span>
-                                <span style={{ fontSize: '0.66rem', color: '#94a3b8', fontWeight: 500 }}>(최대 15자)</span>
+                            <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'flex-end', width: '100%' }}>
+                              {/* 좌측: 품목 선택 드롭다운 (상단 [▼ 선택] 마크 부착) */}
+                              <div style={{ width: '185px', maxWidth: '46%', flexShrink: 0 }}>
+                                <div className="calc-label-guide" style={{ marginBottom: '0.28rem' }}>
+                                  <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>품목 선택</span>
+                                  <span className="calc-tag-type select">▼ 선택</span>
+                                </div>
+                                <select
+                                  value={plan.productCategory || getCategoryFromCode(plan.serviceModelCode) || ''}
+                                  onChange={(e) => handleSelectProductCategory(plan.id, e.target.value)}
+                                  title="무상수리 서비스 품목 선택 (출고가 및 월 이용료 자동반영)"
+                                  className="calc-select-clickable"
+                                  style={{
+                                    width: '100%',
+                                    height: '40px',
+                                    borderRadius: '8px',
+                                    background: '#0f172a',
+                                    border: (plan.productCategory || plan.serviceModelCode) ? '1px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.18)',
+                                    color: (plan.productCategory || plan.serviceModelCode) ? '#93c5fd' : '#94a3b8',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    padding: '0 2rem 0 0.55rem',
+                                    cursor: 'pointer',
+                                    outline: 'none',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  <option value="">품목 선택</option>
+                                  {SIMPLIFIED_PRODUCT_LIST.map((prod) => (
+                                    <option key={prod.id} value={prod.id}>
+                                      {prod.name}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
-                                {(() => {
-                                  const freeM = Number(plan.freeRepairMonths) || Number(plan.months) || 60;
-                                  const damageM = Number(plan.damageMonths) || Number(plan.freeRepairMonths) || Number(plan.months) || 36;
-                                  const items = Array.isArray(plan.careItems) ? plan.careItems : [];
 
-                                  const visitItems = items.filter((c) => (c.type === 'visit' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
-                                  const visitCount = visitItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
-                                    || ((plan.careType === 'visit' || plan.careType === 'all') && (Number(plan.careAmount) || 0) > 0 ? (Number(plan.careCount) || 1) : 0);
+                              {/* 우측: 품목 모델명 직접입력 */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.28rem', flexWrap: 'wrap', gap: '0.25rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem' }}>
+                                    <span style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 700 }}>품목 모델명</span>
+                                    <span style={{ fontSize: '0.66rem', color: '#94a3b8', fontWeight: 500 }}>(최대 15자)</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
+                                    {(() => {
+                                      const freeM = Number(plan.months) || 60;
+                                      const damageM = Number(plan.damageMonths) || Number(plan.months) || 36;
+                                      const items = Array.isArray(plan.careItems) ? plan.careItems : [];
 
-                                  const selfItems = items.filter((c) => c.type === 'self' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
-                                  const selfCount = selfItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
-                                    || (plan.careType === 'self' && (Number(plan.careAmount) || 0) > 0 ? (Number(plan.careCount) || 1) : 0);
+                                      const visitItems = items.filter((c) => (c.type === 'visit' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                                      const visitCount = visitItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                                        || ((plan.careType === 'visit' || plan.careType === 'all') && (Number(plan.careAmount) || 0) > 0 ? (Number(plan.careCount) || 1) : 0);
 
-                                  const consumableItems = items.filter((c) => (c.type === 'consumable' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
-                                  const consumableCount = consumableItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
-                                    || ((plan.careType === 'consumable' || plan.careType === 'all') && (Number(plan.careAmount) || 0) > 0 ? (Number(plan.careCount) || 1) : 0);
+                                      const selfItems = items.filter((c) => c.type === 'self' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                                      const selfCount = selfItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                                        || (plan.careType === 'self' && (Number(plan.careAmount) || 0) > 0 ? (Number(plan.careCount) || 1) : 0);
 
-                                  const customItems = items.filter((c) => c.type === 'custom' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
-                                  const reinstallItems = items.filter((c) => c.type === 'reinstall');
-                                  const hasPlanReinstall = Boolean(plan.hasReinstall) || reinstallItems.length > 0;
-                                  const reinstallCount = reinstallItems.length > 0
-                                    ? reinstallItems.reduce((s, c) => s + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
-                                    : (plan.hasReinstall ? 1 : 0);
+                                      const consumableItems = items.filter((c) => (c.type === 'consumable' || c.type === 'all') && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                                      const consumableCount = consumableItems.reduce((sum, c) => sum + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                                        || ((plan.careType === 'consumable' || plan.careType === 'all') && (Number(plan.careAmount) || 0) > 0 ? (Number(plan.careCount) || 1) : 0);
 
-                                  return (
-                                    <>
-                                      {plan.isMobile && (
-                                        <span
-                                          title={`모바일 파손보험 (${damageM}개월)`}
-                                          style={{
-                                            fontSize: '0.50rem',
-                                            fontWeight: 800,
-                                            color: '#38bdf8',
-                                            background: 'rgba(56, 189, 248, 0.18)',
-                                            border: '1px solid rgba(56, 189, 248, 0.45)',
-                                            borderRadius: '3px',
-                                            padding: '0.5px 3.5px',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '1.5px',
-                                            lineHeight: 1.2
-                                          }}
-                                        >
-                                          <Smartphone size={8} /> 파손{damageM}
-                                        </span>
-                                      )}
-                                      {(Number(plan.freeRepairFee) || 0) > 0 && (
-                                        <span
-                                          title={`무상수리 연장 (${freeM}개월 보증)`}
-                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#60a5fa', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
-                                        >
-                                          <ShieldCheck size={8} /> 무상{freeM}
-                                        </span>
-                                      )}
-                                      {visitCount > 0 && (
-                                        <span
-                                          key="visit"
-                                          title={`전문 엔지니어 방문케어 (${visitCount}회)`}
-                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#34d399', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
-                                        >
-                                          <Wrench size={8} /> 방문{visitCount}회
-                                        </span>
-                                      )}
-                                      {selfCount > 0 && (
-                                        <span
-                                          key="self"
-                                          title={`셀프케어 (${selfCount}회)`}
-                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#c084fc', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
-                                        >
-                                          <Sparkles size={8} /> 셀프{selfCount > 1 ? `${selfCount}회` : ''}
-                                        </span>
-                                      )}
-                                      {consumableCount > 0 && (
-                                        <span
-                                          key="consumable"
-                                          title={`정기 소모품 교체 (${consumableCount}회)`}
-                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
-                                        >
-                                          <Package size={8} /> 소모품{consumableCount}회
-                                        </span>
-                                      )}
-                                      {hasPlanReinstall && (
-                                        <span
-                                          title="무상 재설치 서비스 혜택"
-                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#2dd4bf', background: 'rgba(20, 184, 166, 0.18)', border: '1px solid rgba(45, 212, 191, 0.45)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
-                                        >
-                                          <RefreshCw size={8} /> 재설치{reinstallCount > 1 ? `${reinstallCount}회` : ''}
-                                        </span>
-                                      )}
-                                      {customItems.map((c, i) => (
-                                        <span
-                                          key={`custom-${c.id || i}`}
-                                          title={`맞춤 케어: ${c.customName || '케어'}`}
-                                          style={{ fontSize: '0.50rem', fontWeight: 800, color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
-                                        >
-                                          <Sparkles size={8} /> {(c.customName || '케어').slice(0, 4)}
-                                        </span>
-                                      ))}
-                                    </>
-                                  );
-                                })()}
-                                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: (plan.name || '').length >= 15 ? '#ef4444' : '#64748b', marginLeft: '2px' }}>
-                                  {(plan.name || '').length}/15
-                                </span>
+                                      const customItems = items.filter((c) => c.type === 'custom' && ((Number(c.amount) || 0) > 0 || (Number(c.count) || 0) > 0));
+                                      const reinstallItems = items.filter((c) => c.type === 'reinstall');
+                                      const hasPlanReinstall = Boolean(plan.hasReinstall) || reinstallItems.length > 0;
+                                      const reinstallCount = reinstallItems.length > 0
+                                        ? reinstallItems.reduce((s, c) => s + (c.count === '' || c.count === undefined ? 1 : Number(c.count) || 1), 0)
+                                        : (plan.hasReinstall ? 1 : 0);
+
+                                      return (
+                                        <>
+                                          {plan.isMobile && (
+                                            <span
+                                              title={`모바일 파손보험 (${damageM}개월)`}
+                                              style={{
+                                                fontSize: '0.50rem',
+                                                fontWeight: 800,
+                                                color: '#38bdf8',
+                                                background: 'rgba(56, 189, 248, 0.18)',
+                                                border: '1px solid rgba(56, 189, 248, 0.45)',
+                                                borderRadius: '3px',
+                                                padding: '0.5px 3.5px',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '1.5px',
+                                                lineHeight: 1.2
+                                              }}
+                                            >
+                                              <Smartphone size={8} /> 파손{damageM}
+                                            </span>
+                                          )}
+                                          {(Number(plan.freeRepairFee) || 0) > 0 && (
+                                            <span
+                                              title={`무상수리 연장 (${freeM}개월 보증)`}
+                                              style={{ fontSize: '0.50rem', fontWeight: 800, color: '#60a5fa', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                            >
+                                              <ShieldCheck size={8} /> 무상{freeM}
+                                            </span>
+                                          )}
+                                          {visitCount > 0 && (
+                                            <span
+                                              key="visit"
+                                              title={`전문 엔지니어 방문케어 (${visitCount}회)`}
+                                              style={{ fontSize: '0.50rem', fontWeight: 800, color: '#34d399', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                            >
+                                              <Wrench size={8} /> 방문{visitCount}회
+                                            </span>
+                                          )}
+                                          {selfCount > 0 && (
+                                            <span
+                                              key="self"
+                                              title={`셀프케어 (${selfCount}회)`}
+                                              style={{ fontSize: '0.50rem', fontWeight: 800, color: '#c084fc', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                            >
+                                              <Sparkles size={8} /> 셀프{selfCount > 1 ? `${selfCount}회` : ''}
+                                            </span>
+                                          )}
+                                          {consumableCount > 0 && (
+                                            <span
+                                              key="consumable"
+                                              title={`정기 소모품 교체 (${consumableCount}회)`}
+                                              style={{ fontSize: '0.50rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                            >
+                                              <Package size={8} /> 소모품{consumableCount}회
+                                            </span>
+                                          )}
+                                          {hasPlanReinstall && (
+                                            <span
+                                              title="무상 재설치 서비스 혜택"
+                                              style={{ fontSize: '0.50rem', fontWeight: 800, color: '#2dd4bf', background: 'rgba(20, 184, 166, 0.18)', border: '1px solid rgba(45, 212, 191, 0.45)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                            >
+                                              <RefreshCw size={8} /> 재설치{reinstallCount > 1 ? `${reinstallCount}회` : ''}
+                                            </span>
+                                          )}
+                                          {customItems.map((c, i) => (
+                                            <span
+                                              key={`custom-${c.id || i}`}
+                                              title={`맞춤 케어: ${c.customName || '케어'}`}
+                                              style={{ fontSize: '0.50rem', fontWeight: 800, color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '3px', padding: '0.5px 3.5px', display: 'inline-flex', alignItems: 'center', gap: '1.5px', lineHeight: 1.2 }}
+                                            >
+                                              <Sparkles size={8} /> {(c.customName || '케어').slice(0, 4)}
+                                            </span>
+                                          ))}
+                                        </>
+                                      );
+                                    })()}
+                                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: (plan.name || '').length >= 15 ? '#ef4444' : '#64748b', marginLeft: '2px' }}>
+                                      {(plan.name || '').length}/15
+                                    </span>
+                                    <span className="calc-tag-type input">✏️ 직접입력</span>
+                                  </div>
+                                </div>
+                                <input
+                                  type="text"
+                                  maxLength={15}
+                                  value={plan.name || ''}
+                                  onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value.slice(0, 15) })}
+                                  placeholder="모델명 직접입력 (예: RF85DB90F1AP · 최대 15자)"
+                                  className="calc-input-editable"
+                                  style={{
+                                    width: '100%',
+                                    height: '40px',
+                                    padding: '0 0.75rem',
+                                    fontSize: '0.88rem',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                />
                               </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center', width: '100%' }}>
-                              <select
-                                value={plan.productCategory || getCategoryFromCode(plan.serviceModelCode) || ''}
-                                onChange={(e) => handleSelectProductCategory(plan.id, e.target.value)}
-                                title="무상수리 서비스 품목 선택 (출고가 및 월 이용료 자동반영)"
-                                style={{
-                                  width: '185px',
-                                  maxWidth: '46%',
-                                  flexShrink: 0,
-                                  height: '40px',
-                                  borderRadius: '8px',
-                                  background: '#0f172a',
-                                  border: (plan.productCategory || plan.serviceModelCode) ? '1px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.18)',
-                                  color: (plan.productCategory || plan.serviceModelCode) ? '#93c5fd' : '#94a3b8',
-                                  fontSize: '0.78rem',
-                                  fontWeight: 700,
-                                  padding: '0 0.45rem',
-                                  cursor: 'pointer',
-                                  outline: 'none',
-                                  transition: 'all 0.15s ease'
-                                }}
-                              >
-                                <option value="">품목 선택 (TV, 냉장고 등)</option>
-                                {SIMPLIFIED_PRODUCT_LIST.map((prod) => (
-                                  <option key={prod.id} value={prod.id}>
-                                    {prod.name}
-                                  </option>
-                                ))}
-                              </select>
-
-                              <input
-                                type="text"
-                                maxLength={15}
-                                value={plan.name || ''}
-                                onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value.slice(0, 15) })}
-                                placeholder="모델명 직접입력 (예: RF85DB90F1AP · 최대 15자)"
-                                className="calc-input-editable"
-                                style={{
-                                  flex: 1,
-                                  minWidth: 0,
-                                  height: '40px',
-                                  padding: '0 0.75rem',
-                                  fontSize: '0.88rem',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              />
                             </div>
                             {(() => {
                               const matchedServiceItem = FREE_REPAIR_SERVICE_LIST.find((it) => it.code === plan.serviceModelCode);
@@ -15318,43 +15397,26 @@ export default function BenefitCalculator({ onBack }) {
                               gap: '0.65rem'
                             }}
                           >
-                            {/* 상단 라벨 & 보증기간(36,48,60,72) 선택 칩 & 모바일 체크박스 */}
+                            {/* 상단 라벨 & 약정기간 자동 연동 배지 & 모바일 체크박스 */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
                                 <ShieldCheck size={14} style={{ color: plan.isMobile ? '#38bdf8' : '#34d399' }} />
                                 <span style={{ fontSize: '0.8rem', fontWeight: 800, color: plan.isMobile ? '#7dd3fc' : '#a7f3d0' }}>
                                   {plan.isMobile ? '모바일 파손보험 + 무상수리' : '무상수리 연장 이용료'}
                                 </span>
-                                {/* 보증기간 36, 48, 60, 72 선택 버튼들 */}
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: 'rgba(0, 0, 0, 0.35)', padding: '2px 4px', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                                  <span style={{ fontSize: '0.62rem', color: '#94a3b8', marginRight: '2px', fontWeight: 600 }}>보증:</span>
-                                  {[36, 48, 60, 72].map((mVal) => {
-                                    const curM = Number(plan.freeRepairMonths) || Number(plan.months) || 60;
-                                    const isSelected = curM === mVal;
-                                    return (
-                                      <button
-                                        key={mVal}
-                                        type="button"
-                                        onClick={() => handleUpdateSubPlan(plan.id, { freeRepairMonths: mVal })}
-                                        title={`무상수리 보증기간을 ${mVal}개월로 설정합니다.`}
-                                        style={{
-                                          padding: '1px 5px',
-                                          fontSize: '0.64rem',
-                                          fontWeight: isSelected ? 800 : 600,
-                                          borderRadius: '4px',
-                                          border: isSelected ? '1px solid #3b82f6' : '1px solid transparent',
-                                          background: isSelected ? 'rgba(59, 130, 246, 0.35)' : 'transparent',
-                                          color: isSelected ? '#93c5fd' : '#94a3b8',
-                                          cursor: 'pointer',
-                                          transition: 'all 0.15s ease'
-                                        }}
-                                      >
-                                        {mVal}
-                                      </button>
-                                    );
-                                  })}
-                                  <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>개월</span>
-                                </div>
+                                <span
+                                  style={{
+                                    fontSize: '0.66rem',
+                                    fontWeight: 800,
+                                    color: '#93c5fd',
+                                    background: 'rgba(59, 130, 246, 0.16)',
+                                    border: '1px solid rgba(59, 130, 246, 0.35)',
+                                    padding: '2px 7px',
+                                    borderRadius: '5px'
+                                  }}
+                                >
+                                  약정 {freeRepairMonths}개월 자동일치
+                                </span>
                               </div>
 
                               {/* 모바일 체크박스 */}
@@ -15382,7 +15444,7 @@ export default function BenefitCalculator({ onBack }) {
                                     const isChecked = e.target.checked;
                                     handleUpdateSubPlan(plan.id, {
                                       isMobile: isChecked,
-                                      freeRepairMonths: isChecked ? (plan.months || 48) : (plan.freeRepairMonths || plan.months || 60)
+                                      freeRepairMonths: Number(plan.months) || 72
                                     });
                                   }}
                                   style={{ accentColor: '#38bdf8', cursor: 'pointer', width: '12px', height: '12px' }}
@@ -15428,9 +15490,11 @@ export default function BenefitCalculator({ onBack }) {
                                     handleUpdateSubPlan(plan.id, { freeRepairQty: raw === '' ? '' : parseInt(raw, 10) });
                                   }}
                                   placeholder="1"
+                                  className="calc-input-editable"
                                   style={{
-                                    width: '36px',
+                                    width: '38px',
                                     height: '24px',
+                                    padding: '0 0.2rem',
                                     textAlign: 'center',
                                     background: '#0f172a',
                                     border: '1px solid #3b82f6',
@@ -15470,26 +15534,6 @@ export default function BenefitCalculator({ onBack }) {
                                   <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#a7f3d0' }}>
                                     케어서비스 혜택
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplyFullCarePackage(plan.id)}
-                                    title="무상60 + 방문36 + 소모품36 풀패키지 케어 혜택을 원클릭으로 일괄 자동 설정합니다."
-                                    style={{
-                                      padding: '0.15rem 0.45rem',
-                                      borderRadius: '5px',
-                                      border: '1px solid #34d399',
-                                      background: 'rgba(16, 185, 129, 0.2)',
-                                      color: '#6ee7b7',
-                                      fontSize: '0.68rem',
-                                      fontWeight: 800,
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '3px'
-                                    }}
-                                  >
-                                    ✨ 무상60·방문36·소모품36 원클릭 적용
-                                  </button>
                                   <label
                                     title="이사·위치변경 시 무상 재설치 서비스 혜택 배지 및 케어서비스 항목을 적용합니다."
                                     style={{
@@ -15586,16 +15630,17 @@ export default function BenefitCalculator({ onBack }) {
                                           <select
                                             value={care.type || 'visit'}
                                             onChange={(e) => handleUpdatePlanCareItem(plan.id, care.id, { type: e.target.value })}
+                                            className="calc-select-clickable"
                                             style={{
                                               width: '100%',
-                                              height: '30px',
+                                              height: '32px',
                                               borderRadius: '6px',
                                               background: '#0f172a',
                                               border: '1px solid rgba(52, 211, 153, 0.45)',
                                               color: '#f8fafc',
-                                              fontSize: '0.72rem',
-                                              fontWeight: 600,
-                                              padding: '0 0.35rem',
+                                              fontSize: '0.74rem',
+                                              fontWeight: 700,
+                                              padding: '0 1.6rem 0 0.45rem',
                                               cursor: 'pointer'
                                             }}
                                           >
@@ -15615,18 +15660,18 @@ export default function BenefitCalculator({ onBack }) {
                                           <select
                                             value={care.cycle === 0 ? 0 : (care.cycle || (care.type === 'reinstall' ? 0 : 12))}
                                             onChange={(e) => handleUpdatePlanCareItem(plan.id, care.id, { cycle: Number(e.target.value) })}
+                                            className="calc-select-clickable"
                                             style={{
                                               width: '100%',
-                                              height: '30px',
+                                              height: '32px',
                                               borderRadius: '6px',
                                               background: '#0f172a',
                                               border: '1px solid rgba(52, 211, 153, 0.45)',
                                               color: '#a7f3d0',
-                                              fontSize: '0.72rem',
-                                              fontWeight: 600,
-                                              padding: '0 0.2rem',
-                                              cursor: 'pointer',
-                                              textAlign: 'center'
+                                              fontSize: '0.74rem',
+                                              fontWeight: 700,
+                                              padding: '0 1.4rem 0 0.35rem',
+                                              cursor: 'pointer'
                                             }}
                                           >
                                             <option value={0}>약정내 무상</option>
@@ -15680,6 +15725,7 @@ export default function BenefitCalculator({ onBack }) {
                                             value={care.customName || ''}
                                             onChange={(e) => handleUpdatePlanCareItem(plan.id, care.id, { customName: e.target.value })}
                                             placeholder="예: 필터 교체 서비스, 안심 점검 케어"
+                                            className="calc-input-editable"
                                             style={{
                                               ...textInputStyle,
                                               padding: '0.35rem 0.55rem',
@@ -15707,16 +15753,17 @@ export default function BenefitCalculator({ onBack }) {
                                               }}
                                               placeholder="1"
                                               title="이용 횟수"
+                                              className="calc-input-editable"
                                               style={{
                                                 width: '100%',
-                                                height: '34px',
+                                                height: '38px',
                                                 borderRadius: '6px',
                                                 background: '#0f172a',
                                                 border: '1px solid rgba(52, 211, 153, 0.45)',
                                                 color: '#ffffff',
                                                 fontSize: '0.86rem',
                                                 fontWeight: 800,
-                                                padding: '0 1.15rem 0 0.35rem',
+                                                padding: '0 1.25rem 0 0.35rem',
                                                 textAlign: 'right',
                                                 outline: 'none',
                                                 boxSizing: 'border-box'
@@ -15784,24 +15831,16 @@ export default function BenefitCalculator({ onBack }) {
                               <button
                                 type="button"
                                 onClick={() => handleAddPlanCareItem(plan.id)}
+                                className="calc-btn-hologram"
                                 style={{
                                   width: '100%',
-                                  padding: '0.4rem 0.65rem',
-                                  borderRadius: '7px',
-                                  border: '1px dashed rgba(52, 211, 153, 0.55)',
-                                  background: 'rgba(16, 185, 129, 0.08)',
-                                  color: '#6ee7b7',
-                                  fontSize: '0.77rem',
-                                  fontWeight: 700,
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '0.3rem',
-                                  transition: 'all 0.15s ease'
+                                  height: '34px',
+                                  fontSize: '0.8rem',
+                                  letterSpacing: '-0.01em'
                                 }}
                               >
-                                <Plus size={13} /> 케어서비스 추가
+                                <Plus size={14} strokeWidth={2.5} />
+                                <span>케어서비스 추가</span>
                               </button>
                             </div>
                           </div>
@@ -15813,25 +15852,17 @@ export default function BenefitCalculator({ onBack }) {
                   <button
                     type="button"
                     onClick={handleAddSubPlan}
+                    className="calc-btn-hologram"
                     style={{
-                      marginTop: '0.65rem',
+                      marginTop: '0.75rem',
                       width: '100%',
-                      padding: '0.55rem 0.85rem',
-                      borderRadius: '10px',
-                      border: '1px dashed rgba(96, 165, 250, 0.55)',
-                      background: 'rgba(59, 130, 246, 0.1)',
-                      color: '#93c5fd',
-                      fontSize: '0.84rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.35rem',
-                      transition: 'all 0.15s ease'
+                      height: '42px',
+                      fontSize: '0.9rem',
+                      letterSpacing: '-0.01em'
                     }}
                   >
-                    <Plus size={16} /> 구독 품목 추가 (2번, 3번...)
+                    <Plus size={16} strokeWidth={2.5} />
+                    <span>구독 품목 추가</span>
                   </button>
                 </div>
               </>
@@ -15872,21 +15903,16 @@ export default function BenefitCalculator({ onBack }) {
                     <button
                       type="button"
                       onClick={() => handleAddCard()}
+                      className="calc-btn-hologram"
                       style={{
                         padding: '0.35rem 0.85rem',
-                        borderRadius: '6px',
-                        background: 'rgba(59, 130, 246, 0.22)',
-                        border: '1px solid rgba(96, 165, 250, 0.55)',
-                        color: '#93c5fd',
+                        height: '32px',
                         fontSize: '0.8rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.35rem'
+                        letterSpacing: '-0.01em'
                       }}
                     >
-                      <Plus size={14} /> + 제휴카드 추가
+                      <Plus size={14} strokeWidth={2.5} />
+                      <span>제휴카드 추가</span>
                     </button>
                   </div>
                 ) : (
@@ -16002,8 +16028,10 @@ export default function BenefitCalculator({ onBack }) {
                                     handleUpdateCard(cardItem.id, { months: val });
                                   }}
                                   placeholder={String(cardModelMonths)}
+                                  className="calc-input-editable"
                                   style={{
-                                    width: '54px',
+                                    width: '56px',
+                                    height: '28px',
                                     padding: '0.2rem 0.35rem',
                                     borderRadius: '5px',
                                     background: '#0f172a',
@@ -16078,8 +16106,10 @@ export default function BenefitCalculator({ onBack }) {
                                     }}
                                     placeholder={String(cardModelMonths)}
                                     title="제휴카드 약정개월수 직접 입력 (비워두면 선택 모델 최장기간 연동)"
+                                    className="calc-input-editable"
                                     style={{
-                                      width: '50px',
+                                      width: '54px',
+                                      height: '28px',
                                       padding: '0.18rem 0.35rem',
                                       borderRadius: '5px',
                                       background: '#0f172a',
@@ -16703,24 +16733,17 @@ export default function BenefitCalculator({ onBack }) {
                 <button
                   type="button"
                   onClick={() => handleAddCard()}
+                  className="calc-btn-hologram"
                   style={{
                     marginTop: '0.65rem',
                     width: '100%',
-                    padding: '0.52rem 0.8rem',
-                    borderRadius: '9px',
-                    border: '1px dashed rgba(96, 165, 250, 0.55)',
-                    background: 'rgba(59, 130, 246, 0.12)',
-                    color: '#93c5fd',
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.35rem'
+                    height: '38px',
+                    fontSize: '0.84rem',
+                    letterSpacing: '-0.01em'
                   }}
                 >
-                  <Plus size={15} /> 제휴카드 추가 (품목별 제휴카드 중복할인 적용 시)
+                  <Plus size={15} strokeWidth={2.5} />
+                  <span>제휴카드 추가</span>
                 </button>
               )}
 
@@ -16741,6 +16764,7 @@ export default function BenefitCalculator({ onBack }) {
                   }}
                 >
                   <div
+                    className="calc-modal-dialog"
                     onClick={(e) => e.stopPropagation()}
                     style={{
                       background: '#0f172a',
@@ -17185,24 +17209,16 @@ export default function BenefitCalculator({ onBack }) {
                 <button
                   type="button"
                   onClick={handleAddMixedCashbackItem}
+                  className="calc-btn-hologram"
                   style={{
                     width: '100%',
-                    padding: '0.48rem 0.75rem',
-                    borderRadius: '8px',
-                    border: '1px dashed rgba(59, 130, 246, 0.5)',
-                    background: 'rgba(59, 130, 246, 0.08)',
-                    color: '#93c5fa',
+                    height: '36px',
                     fontSize: '0.82rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.35rem',
-                    transition: 'all 0.15s'
+                    letterSpacing: '-0.01em'
                   }}
                 >
-                  <Plus size={14} /> 캐시백 항목 추가
+                  <Plus size={14} strokeWidth={2.5} />
+                  <span>캐시백 항목 추가</span>
                 </button>
               </div>
 
@@ -17324,24 +17340,16 @@ export default function BenefitCalculator({ onBack }) {
                 <button
                   type="button"
                   onClick={handleAddMixedVoucherItem}
+                  className="calc-btn-hologram"
                   style={{
                     width: '100%',
-                    padding: '0.48rem 0.75rem',
-                    borderRadius: '8px',
-                    border: '1px dashed rgba(212, 175, 55, 0.5)',
-                    background: 'rgba(212, 175, 55, 0.08)',
-                    color: 'var(--accent-gold-light)',
+                    height: '36px',
                     fontSize: '0.82rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.35rem',
-                    transition: 'all 0.15s'
+                    letterSpacing: '-0.01em'
                   }}
                 >
-                  <Plus size={14} /> 상품권 항목 추가
+                  <Plus size={14} strokeWidth={2.5} />
+                  <span>상품권 항목 추가</span>
                 </button>
               </div>
             </div>
@@ -17662,8 +17670,41 @@ export default function BenefitCalculator({ onBack }) {
           </div>
         </div>
 
-        {/* 견적 저장 및 덮어쓰기 버튼 그룹 */}
+        {/* 견적 저장 · 덮어쓰기 · 테마 변경 버튼 그룹 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            title={themeMode === 'light' ? '어두운 다크 테마로 전환합니다.' : '밝은 라이트 테마로 전환합니다.'}
+            style={{
+              background: themeMode === 'light' ? '#ffffff' : 'rgba(255, 255, 255, 0.1)',
+              border: themeMode === 'light' ? '1.5px solid #2563eb' : '1px solid rgba(253, 224, 71, 0.5)',
+              color: themeMode === 'light' ? '#1e3a8a' : '#fde047',
+              padding: '0.52rem 0.9rem',
+              borderRadius: '50px',
+              fontSize: '0.82rem',
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.2s'
+            }}
+          >
+            {themeMode === 'light' ? (
+              <>
+                <Sun size={14} style={{ color: '#d97706' }} />
+                <span>☀️ 밝은 테마</span>
+              </>
+            ) : (
+              <>
+                <Moon size={14} style={{ color: '#38bdf8' }} />
+                <span>🌙 다크 테마</span>
+              </>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={handleSaveNewQuote}
@@ -17761,6 +17802,522 @@ export default function BenefitCalculator({ onBack }) {
       {renderPosCashierModal()}
       {/* 관리자 전용 접속자 계정 및 레벨(Lv.1/Lv.2) 권한 설정 모달 */}
       {renderAdminAccountModal()}
+      {/* 견적 보관함 전체 목록 보기 대형 팝업 모달 */}
+      {showQuoteListModal && (() => {
+        const searchTrimmed = quoteSearchQuery.trim().toLowerCase();
+        const modalQuotes = searchTrimmed
+          ? displayedQuotes.filter((q) => {
+              const titleText = (q.title || '').toLowerCase();
+              const creatorText = (q.creatorName || q.creatorId || '').toLowerCase();
+              const custText = (q.data?.customerName || '').toLowerCase();
+              const dateText = (q.savedAt || '').toLowerCase();
+              return (
+                titleText.includes(searchTrimmed) ||
+                creatorText.includes(searchTrimmed) ||
+                custText.includes(searchTrimmed) ||
+                dateText.includes(searchTrimmed)
+              );
+            })
+          : displayedQuotes;
+
+        return (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="no-print"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(2, 6, 23, 0.86)',
+              zIndex: 10040,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              backdropFilter: 'blur(8px)'
+            }}
+            onClick={() => setShowQuoteListModal(false)}
+          >
+            <div
+              className="calc-modal-dialog"
+              style={{
+                background: '#0f172a',
+                border: '2px solid #10b981',
+                borderRadius: '18px',
+                maxWidth: '1160px',
+                width: '96vw',
+                height: '88vh',
+                maxHeight: '92vh',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                boxShadow: '0 25px 70px rgba(0, 0, 0, 0.9)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 팝업 상단 헤더 */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '1rem 1.4rem',
+                  background: 'rgba(15, 23, 42, 0.95)',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  <FolderOpen size={22} style={{ color: '#10b981' }} />
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.18rem', fontWeight: 900, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span>📋 {isMixedMode ? '2번 스마트 견적 보관함' : '1번 구독비교 견적 보관함'} 전체 목록</span>
+                      <span
+                        style={{
+                          fontSize: '0.76rem',
+                          padding: '0.15rem 0.6rem',
+                          borderRadius: '999px',
+                          background: 'rgba(16, 185, 129, 0.2)',
+                          border: '1px solid rgba(16, 185, 129, 0.5)',
+                          color: '#6ee7b7',
+                          fontWeight: 800
+                        }}
+                      >
+                        총 {modalQuotes.length}건
+                      </span>
+                    </h3>
+                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
+                      원하시는 견적 카드를 클릭하시면 즉시 계산기에 불러와지며 팝업창이 닫힙니다.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => syncQuotesWithCloud(isMixedMode ? 'mixed' : 'compare', true)}
+                    disabled={isCloudSyncing}
+                    style={{
+                      height: '34px',
+                      padding: '0 0.8rem',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(16, 185, 129, 0.45)',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#6ee7b7',
+                      fontSize: '0.8rem',
+                      fontWeight: 800,
+                      cursor: isCloudSyncing ? 'wait' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <RefreshCw size={13} />
+                    <span>{isCloudSyncing ? '동기화 중...' : '클라우드 동기화'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuoteListModal(false)}
+                    style={{
+                      height: '34px',
+                      padding: '0 0.85rem',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      color: '#f8fafc',
+                      fontSize: '0.82rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem'
+                    }}
+                  >
+                    <X size={16} /> 닫기
+                  </button>
+                </div>
+              </div>
+
+              {/* 팝업 필터 & 검색 컨트롤 바 (개인/공용 전환 탭 + 매니저 필터 + 검색창) */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem 1.4rem',
+                  background: 'rgba(2, 6, 23, 0.6)',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                  flexWrap: 'wrap',
+                  gap: '0.65rem'
+                }}
+              >
+                <div style={{ display: 'inline-flex', gap: '0.45rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => setQuoteStorageTab('private')}
+                    style={{
+                      height: '36px',
+                      padding: '0 1rem',
+                      borderRadius: '8px',
+                      fontSize: '0.84rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      border: quoteStorageTab === 'private' ? '1.5px solid #10b981' : '1px solid rgba(255, 255, 255, 0.15)',
+                      background: quoteStorageTab === 'private' ? '#10b981' : 'rgba(255, 255, 255, 0.05)',
+                      color: quoteStorageTab === 'private' ? '#ffffff' : '#94a3b8'
+                    }}
+                  >
+                    <Lock size={14} />
+                    <span>내 개인 보관함 ({currentManagerPrivateQuotes.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setQuoteStorageTab('public')}
+                    style={{
+                      height: '36px',
+                      padding: '0 1rem',
+                      borderRadius: '8px',
+                      fontSize: '0.84rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      border: quoteStorageTab === 'public' ? '1.5px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.15)',
+                      background: quoteStorageTab === 'public' ? '#2563eb' : 'rgba(255, 255, 255, 0.05)',
+                      color: quoteStorageTab === 'public' ? '#ffffff' : '#94a3b8'
+                    }}
+                  >
+                    <Globe size={14} />
+                    <span>팀 공용 보관함 ({publicQuotes.length})</span>
+                  </button>
+
+                  {isAdminUser && quoteStorageTab === 'private' && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', marginLeft: '0.25rem' }}>
+                      <span style={{ fontSize: '0.78rem', color: '#cbd5e1', fontWeight: 700 }}>매니저 필터:</span>
+                      <select
+                        value={adminFilterManager}
+                        onChange={(e) => setAdminFilterManager(e.target.value)}
+                        className="calc-select-clickable"
+                        style={{
+                          height: '36px',
+                          width: 'auto',
+                          padding: '0 2rem 0 0.7rem',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        <option value="all">전체 매니저 ({allPrivateQuotes.length}건)</option>
+                        {Array.from(
+                          new Set(
+                            allPrivateQuotes
+                              .map((q) => q.creatorId || q.data?.creatorId)
+                              .filter(Boolean)
+                          )
+                        ).map((mId) => {
+                          const matchQuote = allPrivateQuotes.find(
+                            (q) => (q.creatorId || q.data?.creatorId) === mId
+                          );
+                          const mName = matchQuote?.creatorName || matchQuote?.data?.creatorName || mId;
+                          const count = allPrivateQuotes.filter(
+                            (q) => (q.creatorId || q.data?.creatorId) === mId
+                          ).length;
+                          return (
+                            <option key={mId} value={mId}>
+                              {mName} ({count}건)
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* 빠른 검색 입력창 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: '1 1 260px', maxWidth: '420px' }}>
+                  <input
+                    type="text"
+                    value={quoteSearchQuery}
+                    onChange={(e) => setQuoteSearchQuery(e.target.value)}
+                    placeholder="🔍 고객성함 · 견적 제목 · 품목명 · 매니저 검색..."
+                    className="calc-input-editable"
+                    style={{
+                      width: '100%',
+                      height: '38px',
+                      padding: '0 0.85rem',
+                      fontSize: '0.85rem'
+                    }}
+                  />
+                  {quoteSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setQuoteSearchQuery('')}
+                      style={{
+                        height: '38px',
+                        padding: '0 0.75rem',
+                        borderRadius: '8px',
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        color: '#fca5a5',
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      초기화
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 팝업 본문: 전체 페이지 그리드 목록 */}
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '1.2rem 1.4rem'
+                }}
+              >
+                {modalQuotes.length > 0 ? (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
+                      gap: '0.8rem'
+                    }}
+                  >
+                    {modalQuotes.map((q, idx) => {
+                      const isSelected = q.id === activeQuoteId;
+                      const isQuotePrivate = q.scope === 'private' || q.data?.scope === 'private';
+                      const authorLabel = q.creatorName || q.creatorId || '매니저';
+
+                      return (
+                        <div
+                          key={q.id}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            gap: '0.6rem',
+                            padding: '0.9rem 1rem',
+                            borderRadius: '12px',
+                            background: isSelected ? 'rgba(16, 185, 129, 0.16)' : 'rgba(15, 23, 42, 0.75)',
+                            border: isSelected
+                              ? '2px solid #10b981'
+                              : '1.5px solid rgba(148, 163, 184, 0.28)',
+                            boxShadow: isSelected ? '0 4px 14px rgba(16, 185, 129, 0.25)' : 'none',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          {/* 상단: 순번 + 구분 배지 + 견적 제목 */}
+                          <div
+                            onClick={() => {
+                              handleLoadQuote(q);
+                              setShowQuoteListModal(false);
+                            }}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.35rem',
+                              cursor: 'pointer'
+                            }}
+                            title="클릭하여 이 견적을 계산기에 즉시 불러오기"
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <span
+                                  style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 900,
+                                    padding: '0.12rem 0.45rem',
+                                    borderRadius: '4px',
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    color: '#cbd5e1'
+                                  }}
+                                >
+                                  #{idx + 1}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 800,
+                                    padding: '0.14rem 0.5rem',
+                                    borderRadius: '4px',
+                                    background: isQuotePrivate ? 'rgba(16, 185, 129, 0.22)' : 'rgba(59, 130, 246, 0.22)',
+                                    border: isQuotePrivate ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(59, 130, 246, 0.5)',
+                                    color: isQuotePrivate ? '#6ee7b7' : '#93c5fd',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.22rem'
+                                  }}
+                                >
+                                  {isQuotePrivate ? <Lock size={10} /> : <Globe size={10} />}
+                                  {isQuotePrivate ? authorLabel : '팀공용'}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>
+                                {q.savedAt}
+                              </span>
+                            </div>
+
+                            <div
+                              style={{
+                                fontSize: '0.96rem',
+                                fontWeight: 800,
+                                color: isSelected ? '#6ee7b7' : '#f8fafc',
+                                lineHeight: 1.35,
+                                wordBreak: 'break-all'
+                              }}
+                            >
+                              {isSelected ? '● [현재 적용중] ' : ''}
+                              {q.title}
+                            </div>
+                          </div>
+
+                          {/* 하단: 요약 금액 + 조작 버튼 3종 */}
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              paddingTop: '0.45rem',
+                              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                              flexWrap: 'wrap'
+                            }}
+                          >
+                            <div style={{ fontSize: '0.8rem', color: '#fde68a', fontWeight: 800 }}>
+                              {isMixedMode
+                                ? `실체감가 ${formatWon(q.summary?.mixedGrandFinal || 0)}`
+                                : `구독 체감 ${formatWon(q.summary?.subFinalPrice || 0)}`}
+                            </div>
+
+                            <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleLoadQuote(q);
+                                  setShowQuoteListModal(false);
+                                }}
+                                style={{
+                                  background: isSelected ? '#10b981' : 'linear-gradient(135deg, #1d4ed8, #2563eb)',
+                                  border: 'none',
+                                  color: '#ffffff',
+                                  borderRadius: '6px',
+                                  padding: '0.34rem 0.7rem',
+                                  fontSize: '0.76rem',
+                                  fontWeight: 800,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                {isSelected ? '✓ 적용중' : '불러오기'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleQuoteScope(q)}
+                                title={isQuotePrivate ? '팀 공용 보관함으로 전환' : '내 개인 보관함으로 전환'}
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.08)',
+                                  border: '1px solid rgba(255, 255, 255, 0.18)',
+                                  color: isQuotePrivate ? '#93c5fd' : '#6ee7b7',
+                                  borderRadius: '6px',
+                                  padding: '0.34rem 0.55rem',
+                                  fontSize: '0.74rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.2rem'
+                                }}
+                              >
+                                {isQuotePrivate ? <Globe size={11} /> : <Lock size={11} />}
+                                {isQuotePrivate ? '공용전환' : '개인전환'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteQuote(q.id, q.title)}
+                                title="삭제"
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.14)',
+                                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                                  color: '#fca5a5',
+                                  borderRadius: '6px',
+                                  padding: '0.34rem 0.48rem',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      padding: '3rem 1.5rem',
+                      textAlign: 'center',
+                      borderRadius: '12px',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1.5px dashed rgba(148, 163, 184, 0.3)',
+                      color: '#94a3b8',
+                      fontSize: '0.92rem'
+                    }}
+                  >
+                    {quoteSearchQuery.trim()
+                      ? `🔍 '${quoteSearchQuery}' 검색어와 일치하는 보관 견적이 없습니다.`
+                      : '현재 선택된 보관함에 저장된 견적이 없습니다.'}
+                  </div>
+                )}
+              </div>
+
+              {/* 팝업 하단 닫기 바 */}
+              <div
+                style={{
+                  padding: '0.85rem 1.4rem',
+                  background: 'rgba(2, 6, 23, 0.85)',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem'
+                }}
+              >
+                <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 600 }}>
+                  💡 견적 제목이나 <strong>[불러오기]</strong> 버튼을 클릭하면 즉시 계산기에 적용됩니다.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowQuoteListModal(false)}
+                  style={{
+                    padding: '0.55rem 1.4rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: '#ffffff',
+                    fontSize: '0.86rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </section>
   );
 }
