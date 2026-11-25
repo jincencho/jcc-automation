@@ -820,10 +820,10 @@ html {
   word-break: keep-all;
 }
 
-/* 3. 좌우 1:1 비교 그리드 (4단 수평 줄맞춤 Subgrid) */
+/* 3. 좌우 1:1 비교 그리드 (일반구매 4 : 구독조건 6 비율) */
 .a4-compare-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
   grid-template-rows: auto auto 1fr auto;
   column-gap: 0.9rem;
   row-gap: 0;
@@ -1570,7 +1570,7 @@ html {
   }
 
   .a4-compare-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    grid-template-columns: minmax(0, 4fr) minmax(0, 6fr) !important;
     grid-template-rows: auto auto 1fr auto !important;
     column-gap: 0.65rem !important;
     row-gap: 0 !important;

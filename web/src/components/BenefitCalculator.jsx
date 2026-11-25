@@ -10107,8 +10107,8 @@ export default function BenefitCalculator({ onBack }) {
               </div>
             </div>
 
-            {/* 3. 일반구매 vs 구독 좌우 1:1 비교 카드 영역 (4단 수평 정렬 구조) */}
-            <div className="a4-compare-grid">
+            {/* 3. 일반구매 vs 구독 좌우 4:6 비교 카드 영역 (일반구매 4 : 구독조건 6 비율) */}
+            <div className="a4-compare-grid" style={{ gridTemplateColumns: 'minmax(0, 4fr) minmax(0, 6fr)' }}>
               {/* 좌측: 일반구매 조건 */}
               <div className={`a4-plan-card ${winner === 'lump' ? 'a4-plan-recommended' : ''}`}>
                 <div className="a4-plan-header plan-lump">
