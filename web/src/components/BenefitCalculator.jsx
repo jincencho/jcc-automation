@@ -1935,16 +1935,14 @@ export default function BenefitCalculator({ onBack }) {
             serviceModelCode: ''
           };
         }
-        const effectivePrice =
-          (Number(p.totalAmount) || 0) > 0
-            ? Number(p.totalAmount)
-            : (Number(p.baseMonthlyFee) || 0) > 0
-              ? (Number(p.baseMonthlyFee) * (Number(p.months) || 60)) + (Number(p.prepay) || 0)
-              : 0;
+        const m = Number(p.months) || 60;
+        const prepay = Number(p.prepay) || 0;
+        const baseFee = Number(p.baseMonthlyFee) || Number(p.monthlyFee) || 0;
+        const computedTotal = (baseFee * m) + prepay;
 
-        const item = getFreeRepairItemByProductAndPrice(category, effectivePrice);
+        const item = getFreeRepairItemByProductAndPrice(category, computedTotal);
         if (!item) {
-          return { ...p, productCategory: category };
+          return { ...p, productCategory: category, totalAmount: computedTotal };
         }
 
         const isMobileItem = Boolean(item.isMobile || p.isMobile || category.includes('노트북') || category.includes('태블릿'));
@@ -1958,43 +1956,14 @@ export default function BenefitCalculator({ onBack }) {
           freeRepairFee: item.fee,
           freeRepairMonths: targetMonths,
           freeRepairQty: p.freeRepairQty !== undefined && p.freeRepairQty !== '' ? p.freeRepairQty : (p.quantity || 1),
-          isMobile: isMobileItem
+          isMobile: isMobileItem,
+          totalAmount: computedTotal
         };
 
         if (!p.name || p.name.trim() === '' || SIMPLIFIED_PRODUCT_LIST.some((sp) => sp.name === p.name.trim())) {
           patch.name = category.slice(0, 15);
         }
 
-        return { ...p, ...patch };
-      })
-    );
-  };
-
-  const handleUpdatePlanTotal = (planId, totalVal) => {
-    const numTotal = Math.max(0, Number(totalVal) || 0);
-    setSubPlans((prev) =>
-      prev.map((p) => {
-        if (p.id !== planId) return p;
-        const m = Number(p.months) || 60;
-        const prepay = Number(p.prepay) || 0;
-        const patch = {
-          totalAmount: numTotal
-        };
-        // 기본구독료가 0인 경우 총구독료를 바탕으로 기본구독료 자동 보조산출
-        if ((!p.baseMonthlyFee || p.baseMonthlyFee === 0) && numTotal > 0 && m > 0) {
-          patch.baseMonthlyFee = Math.round(Math.max(0, numTotal - prepay) / m);
-        }
-        // 선택된 품목이 있으면 총구독료 기준 금액구간 자동 인식 및 무상수리비용 즉시 반영
-        const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
-        if (cat) {
-          const item = getFreeRepairItemByProductAndPrice(cat, numTotal);
-          if (item) {
-            patch.serviceModelCode = item.code;
-            patch.freeRepairFee = item.fee;
-            patch.freeRepairMonths = (item.isMobile || p.isMobile) ? (p.months || item.months || 48) : (item.months || 60);
-            if (item.isMobile !== undefined) patch.isMobile = item.isMobile;
-          }
-        }
         return { ...p, ...patch };
       })
     );
@@ -2007,17 +1976,14 @@ export default function BenefitCalculator({ onBack }) {
         if (p.id !== planId) return p;
         const m = Number(p.months) || 60;
         const prepay = Number(p.prepay) || 0;
-        const patch = {
-          baseMonthlyFee: numBase
-        };
         const computedTotal = (numBase * m) + prepay;
-        if (!p.totalAmount || p.totalAmount === 0) {
-          patch.totalAmount = computedTotal;
-        }
-        const effectivePrice = (p.totalAmount && p.totalAmount > 0) ? p.totalAmount : computedTotal;
+        const patch = {
+          baseMonthlyFee: numBase,
+          totalAmount: computedTotal
+        };
         const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
-        if (cat && effectivePrice > 0) {
-          const item = getFreeRepairItemByProductAndPrice(cat, effectivePrice);
+        if (cat) {
+          const item = getFreeRepairItemByProductAndPrice(cat, computedTotal);
           if (item) {
             patch.serviceModelCode = item.code;
             patch.freeRepairFee = item.fee;
@@ -2030,21 +1996,50 @@ export default function BenefitCalculator({ onBack }) {
     );
   };
 
+  const handleUpdatePlanPrepay = (planId, prepayVal) => {
+    const numPrepay = Math.max(0, Number(prepayVal) || 0);
+    setSubPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const m = Number(p.months) || 60;
+        const baseFee = Number(p.baseMonthlyFee) || Number(p.monthlyFee) || 0;
+        const computedTotal = (baseFee * m) + numPrepay;
+        const patch = {
+          prepay: numPrepay,
+          totalAmount: computedTotal
+        };
+        const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
+        if (cat) {
+          const item = getFreeRepairItemByProductAndPrice(cat, computedTotal);
+          if (item) {
+            patch.serviceModelCode = item.code;
+            patch.freeRepairFee = item.fee;
+          }
+        }
+        return { ...p, ...patch };
+      })
+    );
+  };
+
   const handleUpdatePlanMonths = (planId, newMonths) => {
     setSubPlans((prev) =>
       prev.map((p) => {
         if (p.id !== planId) return p;
-        const patch = { months: newMonths };
+        const m = Number(newMonths) || 60;
+        const prepay = Number(p.prepay) || 0;
+        const baseFee = Number(p.baseMonthlyFee) || Number(p.monthlyFee) || 0;
+        const computedTotal = (baseFee * m) + prepay;
+        const patch = {
+          months: m,
+          totalAmount: computedTotal
+        };
         const isMobile = Boolean(p.isMobile || (p.productCategory && (p.productCategory.includes('노트북') || p.productCategory.includes('태블릿'))));
         if (isMobile) {
-          patch.freeRepairMonths = newMonths;
+          patch.freeRepairMonths = m;
         }
         const cat = p.productCategory || getCategoryFromCode(p.serviceModelCode);
-        const effectivePrice = (p.totalAmount && p.totalAmount > 0)
-          ? p.totalAmount
-          : ((p.baseMonthlyFee || 0) * newMonths) + (p.prepay || 0);
-        if (cat && effectivePrice > 0) {
-          const item = getFreeRepairItemByProductAndPrice(cat, effectivePrice);
+        if (cat) {
+          const item = getFreeRepairItemByProductAndPrice(cat, computedTotal);
           if (item) {
             patch.serviceModelCode = item.code;
             patch.freeRepairFee = item.fee;
@@ -15109,10 +15104,15 @@ export default function BenefitCalculator({ onBack }) {
                             {(() => {
                               const matchedServiceItem = FREE_REPAIR_SERVICE_LIST.find((it) => it.code === plan.serviceModelCode);
                               if (!matchedServiceItem) return null;
+                              const m = Number(plan.months) || 60;
+                              const baseFee = Number(plan.baseMonthlyFee) || Number(plan.monthlyFee) || 0;
+                              const prepay = Number(plan.prepay) || 0;
+                              const calcTotal = (baseFee * m) + prepay;
                               return (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.35rem', fontSize: '0.73rem', color: '#93c5fd', flexWrap: 'wrap' }}>
                                   <span style={{ background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.35)', borderRadius: '4px', padding: '1.5px 6px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                     🏷️ 인식구간: <strong style={{ color: '#60a5fa' }}>{matchedServiceItem.product} ({matchedServiceItem.priceRange !== '전체' ? matchedServiceItem.priceRange : '표준'})</strong>
+                                    {calcTotal > 0 && <span style={{ color: '#cbd5e1', fontWeight: 600 }}>({formatWon(calcTotal)})</span>}
                                     <span style={{ color: '#64748b' }}>|</span>
                                     무상수리 <strong style={{ color: '#38bdf8' }}>월 {formatWon(matchedServiceItem.fee)}</strong> 자동반영
                                   </span>
@@ -15121,23 +15121,8 @@ export default function BenefitCalculator({ onBack }) {
                             })()}
                           </div>
 
-                          {/* 2) 총구독료(출고가) + 기본 구독료 + 할인 구독료 + 선납금 + 약정기간 (PC 5열 반응형 그리드) */}
-                          <div className="calc-responsive-grid-5col" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: '0.55rem', alignItems: 'flex-start' }}>
-                            {/* 총구독료(출고가) */}
-                            <div>
-                              <div className="calc-label-guide" style={{ marginBottom: '0.25rem' }}>
-                                <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 800 }}>총구독료(출고가)</span>
-                                <span className="calc-tag-type input">✏️ 직접입력</span>
-                              </div>
-                              <MoneyInput
-                                value={plan.totalAmount || 0}
-                                onChange={(val) => handleUpdatePlanTotal(plan.id, val)}
-                                placeholder={idx === 0 ? '예: 5,500,000' : '0'}
-                                accentColor="#38bdf8"
-                                compact
-                              />
-                            </div>
-
+                          {/* 2) 기본 구독료 + 할인 구독료 + 선납금 + 약정기간 (PC 4열, 모바일 2x2 반응형 그리드) */}
+                          <div className="calc-responsive-grid-4col" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.55rem', alignItems: 'flex-start' }}>
                             {/* 기본 구독료 (기준 정가) */}
                             <div>
                               <div className="calc-label-guide" style={{ marginBottom: '0.25rem' }}>
