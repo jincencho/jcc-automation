@@ -329,9 +329,9 @@ const FREE_REPAIR_SERVICE_LIST = [
   // 에어컨 벽걸이 (60개월)
   { product: '에어컨 벽걸이', months: 60, priceRange: '~300만원 이하', code: 'P-RAC-4NHXS29H', name: '에어컨 벽걸이 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
 
-  // 에어컨 천장형 (60개월)
-  { product: '에어컨 천장형', months: 60, priceRange: '~300만원 이하', code: 'P-SAC-4NSXS29H', name: '에어컨 천장형 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
-  { product: '에어컨 천장형', months: 60, priceRange: '300~400만원', code: 'P-SAC-4NSXS39H', name: '에어컨 천장형 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
+  // 시스템에어컨 (60개월)
+  { product: '시스템에어컨', months: 60, priceRange: '~300만원 이하', code: 'P-SAC-4NSXS29H', name: '시스템에어컨 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
+  { product: '시스템에어컨', months: 60, priceRange: '300~400만원', code: 'P-SAC-4NSXS39H', name: '시스템에어컨 (출고가:300~400만원) 5년형 무상수리 서비스', fee: 3900 },
 
   // 오븐 (60개월)
   { product: '오븐', months: 60, priceRange: '~300만원 이하', code: 'P-EOV-4NSX29H', name: '오븐 (출고가:~300만원 이하) 5년형 무상수리 서비스', fee: 2900 },
@@ -374,7 +374,7 @@ const SIMPLIFIED_PRODUCT_LIST = [
   { id: '건조기', name: '건조기' },
   { id: '에어컨 스탠드', name: '에어컨 스탠드' },
   { id: '에어컨 벽걸이', name: '에어컨 벽걸이' },
-  { id: '에어컨 천장형', name: '에어컨 천장형' },
+  { id: '시스템에어컨', name: '시스템에어컨' },
   { id: '식기세척기', name: '식기세척기' },
   { id: '에어드레서', name: '에어드레서' },
   { id: '슈드레서', name: '슈드레서' },
@@ -401,6 +401,7 @@ const getCategoryFromCode = (code) => {
   if (item.product === '노트북') {
     return item.priceRange === '프로급' ? '노트북 (프로급)' : '노트북 (엔트리급)';
   }
+  if (item.product === '에어컨 천장형') return '시스템에어컨';
   return item.product;
 };
 
@@ -419,7 +420,11 @@ const getFreeRepairItemByProductAndPrice = (productCategory, rawPrice) => {
     return FREE_REPAIR_SERVICE_LIST.find((it) => it.code === 'P-TAB-5600') || null;
   }
 
-  const items = FREE_REPAIR_SERVICE_LIST.filter((it) => it.product === productCategory);
+  // 에어컨 천장형 -> 시스템에어컨 정규화 매핑
+  const targetCategory = (productCategory === '에어컨 천장형' || productCategory === '천장형 에어컨') ? '시스템에어컨' : productCategory;
+  const items = FREE_REPAIR_SERVICE_LIST.filter(
+    (it) => it.product === targetCategory || (targetCategory === '시스템에어컨' && (it.product === '시스템에어컨' || it.product === '에어컨 천장형'))
+  );
   if (!items || items.length === 0) return null;
   if (items.length === 1) return items[0];
 
