@@ -18544,13 +18544,18 @@ export default function BenefitCalculator({ onBack }) {
                       </div>
                     </div>
 
-                    <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: '1.1rem', wordBreak: 'break-all' }}>
-                      연결 주소: <a href={activeCareVideoModal.shortUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>{activeCareVideoModal.shortUrl}</a>
+                    <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: '0.35rem', wordBreak: 'break-all' }}>
+                      QR 연결 주소: <a href={activeCareVideoModal.shortUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#6ee7b7', textDecoration: 'underline' }}>{activeCareVideoModal.shortUrl}</a>
                     </div>
+                    {activeCareVideoModal.fullUrl && (
+                      <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: '1.1rem', wordBreak: 'break-all' }}>
+                        YouTube 영상: <a href={activeCareVideoModal.fullUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>{activeCareVideoModal.fullUrl}</a>
+                      </div>
+                    )}
 
                     <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
                       <a
-                        href={activeCareVideoModal.shortUrl}
+                        href={activeCareVideoModal.fullUrl || activeCareVideoModal.shortUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
@@ -18567,7 +18572,7 @@ export default function BenefitCalculator({ onBack }) {
                           textDecoration: 'none'
                         }}
                       >
-                        영상 바로보기 ↗
+                        YouTube 영상 열기 ↗
                       </a>
                       <button
                         type="button"
@@ -18681,7 +18686,7 @@ export default function BenefitCalculator({ onBack }) {
                             />
                           </div>
                           <a
-                            href={v.shortUrl}
+                            href={v.fullUrl || v.shortUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{
@@ -18692,7 +18697,7 @@ export default function BenefitCalculator({ onBack }) {
                               marginTop: '2px'
                             }}
                           >
-                            영상 보기 ↗
+                            YouTube 보기 ↗
                           </a>
                         </div>
                       ))}

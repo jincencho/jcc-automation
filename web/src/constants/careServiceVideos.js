@@ -115,10 +115,14 @@ export const CARE_SERVICE_VIDEOS = [
     "shortUrl": "https://m.site.naver.com/2k9KJ",
     "fullUrl": "https://www.youtube.com/watch?v=jcif-HrIK3Q",
     "keywords": [
-      "에어컨",
+      "스탠드 에어컨",
+      "벽걸이 에어컨",
+      "스탠드에어컨",
+      "벽걸이에어컨",
       "에어컨 스탠드",
       "에어컨 벽걸이",
-      "무풍",
+      "무풍에어컨",
+      "에어컨",
       "제습기",
       "AF",
       "AR",
@@ -134,8 +138,17 @@ export const CARE_SERVICE_VIDEOS = [
     "keywords": [
       "시스템에어컨",
       "시스템 에어컨",
+      "시스템",
       "천장형",
       "에어컨 천장형",
+      "에어컨천장형",
+      "천장형 에어컨",
+      "천장형에어컨",
+      "천정형",
+      "천정형 에어컨",
+      "천정형에어컨",
+      "에어컨 천정형",
+      "에어컨천정형",
       "DVM"
     ],
     "qrB64": "data:image/png;base64,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"
@@ -191,19 +204,51 @@ export const CARE_SERVICE_VIDEOS = [
  */
 export function matchCareServiceVideo(query) {
   if (!query || typeof query !== 'string') return null;
-  const clean = query.trim().toUpperCase();
-  if (!clean) return null;
+  const raw = query.trim();
+  if (!raw) return null;
+  const clean = raw.toUpperCase();
+  const cleanNoSpace = clean.replace(/\s+/g, '');
 
-  // 1. 직접 품목명 일치
-  const direct = CARE_SERVICE_VIDEOS.find((v) => v.name.toUpperCase() === clean);
+  // 1. 시스템에어컨 / 천장형 에어컨 최우선 특수 매칭 (일반 에어컨 키워드보다 반드시 앞서야 함)
+  if (
+    clean.includes('시스템') ||
+    clean.includes('천장형') ||
+    clean.includes('천정형') ||
+    cleanNoSpace.includes('시스템에어컨') ||
+    cleanNoSpace.includes('에어컨천장형') ||
+    cleanNoSpace.includes('천장형에어컨') ||
+    cleanNoSpace.includes('에어컨천정형') ||
+    cleanNoSpace.includes('천정형에어컨') ||
+    clean.includes('DVM')
+  ) {
+    const sys = CARE_SERVICE_VIDEOS.find((v) => v.id === 'system_air_conditioner');
+    if (sys) return sys;
+  }
+
+  // 2. 직접 품목명 완전 일치 (공백 무시 포함)
+  const direct = CARE_SERVICE_VIDEOS.find((v) => {
+    const vNameClean = v.name.toUpperCase();
+    return vNameClean === clean || vNameClean.replace(/\s+/g, '') === cleanNoSpace;
+  });
   if (direct) return direct;
 
-  // 2. 키워드 일치 (긴 키워드 우선)
+  // 3. 모든 키워드를 길이 역순(가장 구체적이고 긴 키워드 우선)으로 정렬하여 매칭
+  const allKeywords = [];
   for (const v of CARE_SERVICE_VIDEOS) {
     for (const kw of v.keywords) {
-      if (clean.includes(kw.toUpperCase())) {
-        return v;
-      }
+      allKeywords.push({
+        kw: kw.toUpperCase(),
+        kwNoSpace: kw.toUpperCase().replace(/\s+/g, ''),
+        video: v,
+        len: kw.length
+      });
+    }
+  }
+  allKeywords.sort((a, b) => b.len - a.len);
+
+  for (const item of allKeywords) {
+    if (clean.includes(item.kw) || cleanNoSpace.includes(item.kwNoSpace)) {
+      return item.video;
     }
   }
 
