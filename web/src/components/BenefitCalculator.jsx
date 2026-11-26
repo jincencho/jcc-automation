@@ -1630,6 +1630,34 @@ export default function BenefitCalculator({ onBack }) {
     }
   };
 
+  // 구매일자(consultDate) 기준 58일차 장기 미배송 재심사 예정일 계산
+  const getSubReReviewInfo = (baseDateStr) => {
+    if (!baseDateStr) return { dateStr: '', shortDate: '', dayCount: 58 };
+    const parts = String(baseDateStr).split('-');
+    if (parts.length < 3) return { dateStr: '', shortDate: '', dayCount: 58 };
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    const base = new Date(y, m, d);
+    if (isNaN(base.getTime())) return { dateStr: '', shortDate: '', dayCount: 58 };
+
+    // 구매/계약일자를 1일차로 기산 시 58일차 (D+57일)
+    const target = new Date(base.getTime());
+    target.setDate(target.getDate() + 57);
+
+    const tYear = target.getFullYear();
+    const tMonth = target.getMonth() + 1;
+    const tDay = target.getDate();
+    const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+    const dayOfWeek = weekDays[target.getDay()];
+
+    return {
+      dateStr: `${tYear}년 ${tMonth}월 ${tDay}일(${dayOfWeek})`,
+      shortDate: `${tYear}.${String(tMonth).padStart(2, '0')}.${String(tDay).padStart(2, '0')}`,
+      dayCount: 58
+    };
+  };
+
   // 매니저 명함 정보 & 카드 최저금리 설정 (localStorage 저장)
   const [managerPhone, setManagerPhone] = useState(() => localStorage.getItem('jcc_calc_manager_phone') || '');
   const [storeInfo, setStoreInfo] = useState(
@@ -1718,6 +1746,28 @@ export default function BenefitCalculator({ onBack }) {
   const [subSegmentCardOverrides, setSubSegmentCardOverrides] = useState({}); // 구간별 청구할인 수동 조정값
   const [subSegmentSpendOverrides, setSubSegmentSpendOverrides] = useState({}); // 구간별 필요실적 수동 조정값
   const [subPurchaseBenefit, setSubPurchaseBenefit] = useState(0); // 통합 구독 구매 혜택 금액
+
+  // ✨ 제휴 연계 추가 혜택 (상조 제휴 / 통신사 IPTV)
+  const [showExtraAffiliateSection, setShowExtraAffiliateSection] = useState(false);
+  const [extraSangjo, setExtraSangjo] = useState({
+    enabled: false,
+    provider: 'boram', // 'boram' (보람상조) | 'sono' (소노아임레디) | 'custom' (직접입력)
+    customName: '',
+    count: 1, // 구좌수
+    amountPerCount: 1000000, // 1구좌당 지원금 (기본 100만)
+    totalAmount: 1000000,
+    note: '만기 납입 완료 시 100% 환급 조건'
+  });
+  const [extraTelecom, setExtraTelecom] = useState({
+    enabled: false,
+    carrier: 'kt', // 'kt' | 'skb' | 'lgu' | 'custom'
+    customCarrier: '',
+    planType: '인터넷+IPTV',
+    customPlan: '',
+    amount: 450000, // 통신 지원금 (기본 45만)
+    note: '인터넷+IPTV 신규 결합 약정 개통 혜택'
+  });
+  const [applyExtraToFinal, setApplyExtraToFinal] = useState(true); // 실체감가 차감 반영 여부
   // 무상 A/S 연장 이용료 (복수 품목 지원: 1번 금액 x 대수 x 개월수, 2번 ...)
   const [subFreeServiceItems, setSubFreeServiceItems] = useState([
     { id: 1, monthlyFee: 0, quantity: 1, months: 72, isMobile: false }
@@ -3622,14 +3672,27 @@ export default function BenefitCalculator({ onBack }) {
   );
   const hasCareService = subCareServiceAmount > 0 || hasAnyPlanReinstall;
   const subServiceTotal = (Number(subFreeServiceAmount) || 0) + (Number(subCareServiceAmount) || 0);
-  const subCashBenefitTotal = (subFeeDiscountTotal || 0) + subCardTotalDiscount + (Number(subPurchaseBenefit) || 0);
-  // 총 혜택 합계: 구독료 즉시할인 + 제휴카드 청구할인 + 캐시백
+  // 제휴 연계 추가 혜택 (상조 / 통신사 IPTV) 계산
+  const extraSangjoTotalDiscount = extraSangjo.enabled ? Math.max(0, Number(extraSangjo.totalAmount) || 0) : 0;
+  const extraTelecomTotalDiscount = extraTelecom.enabled ? Math.max(0, Number(extraTelecom.amount) || 0) : 0;
+  const totalExtraAffiliateDiscount = extraSangjoTotalDiscount + extraTelecomTotalDiscount;
+
+  const subCashBenefitTotal =
+    (subFeeDiscountTotal || 0) +
+    subCardTotalDiscount +
+    (Number(subPurchaseBenefit) || 0) +
+    (applyExtraToFinal ? totalExtraAffiliateDiscount : 0);
+  // 총 혜택 합계: 구독료 즉시할인 + 제휴카드 청구할인 + 캐시백 + 제휴연계혜택
   const subTotalBenefitSum = subCashBenefitTotal;
 
-  // 삼성AI구독 최종 체감가: (선납금 + 월할인구독료 총액) - 제휴카드할인 - 캐시백 - (서비스 혜택 가치)
+  // 삼성AI구독 최종 체감가: (선납금 + 월할인구독료 총액) - 제휴카드할인 - 캐시백 - (서비스 혜택 가치) - 제휴연계혜택
   const subFinalPrice = Math.max(
     0,
-    subNetGrossTotal - subCardTotalDiscount - (Number(subPurchaseBenefit) || 0) - (includeServiceInFinal ? subServiceTotal : 0)
+    subNetGrossTotal -
+      subCardTotalDiscount -
+      (Number(subPurchaseBenefit) || 0) -
+      (includeServiceInFinal ? subServiceTotal : 0) -
+      (applyExtraToFinal ? totalExtraAffiliateDiscount : 0)
   );
 
   // 최종 차이가격: 일반구매 일시불 조건(lumpFinalPrice) 대비 비교
@@ -4732,12 +4795,20 @@ export default function BenefitCalculator({ onBack }) {
 
   // 전체 기준 총액 (일반 기준총액 + 구독 기준총액만 합산: 선납금 제외 순수 기본구독료의 합)
   const mixedGrandGross = mixedLumpGross + mixedSubGrossTotal;
-  // 전체 총 혜택 = 구독 전용 직접할인 + 일반 특정조건 할인 + 통합 캐시백 + 상품권 지급 (무상/케어서비스 제외)
-  const mixedGrandBenefit = mixedSubOnlyDiscount + mixedLumpDiscountTotal + mixedTotalCashback + mixedTotalVoucher;
-  // 고객 최종 실체감가: 일반구매 혜택가 소계 + 구독 혜택가 소계 - 통합 캐시백/상품권
+  // 전체 총 혜택 = 구독 전용 직접할인 + 일반 특정조건 할인 + 통합 캐시백 + 상품권 지급 + 제휴연계혜택 (무상/케어서비스 제외)
+  const mixedGrandBenefit =
+    mixedSubOnlyDiscount +
+    mixedLumpDiscountTotal +
+    mixedTotalCashback +
+    mixedTotalVoucher +
+    (applyExtraToFinal ? totalExtraAffiliateDiscount : 0);
+  // 고객 최종 실체감가: 일반구매 혜택가 소계 + 구독 혜택가 소계 - 통합 캐시백/상품권 - 제휴연계혜택
   const mixedGrandFinal = Math.max(
     0,
-    mixedLumpBenefitSub + mixedSubFinalPrice - section3TotalBenefit
+    mixedLumpBenefitSub +
+      mixedSubFinalPrice -
+      section3TotalBenefit -
+      (applyExtraToFinal ? totalExtraAffiliateDiscount : 0)
   );
   const totalGrandSavings = Math.max(0, mixedGrandGross - mixedGrandFinal);
   const mixedGrandBenefitRate = mixedGrandGross > 0 ? ((totalGrandSavings / mixedGrandGross) * 100).toFixed(1) : '0.0';
@@ -5034,6 +5105,10 @@ export default function BenefitCalculator({ onBack }) {
         subCareServiceItems,
         subCareServiceAmount,
         includeServiceInFinal,
+        extraSangjo,
+        extraTelecom,
+        applyExtraToFinal,
+        showExtraAffiliateSection,
         recommendMode,
         checkpoints,
         calculatorMode,
@@ -5120,6 +5195,35 @@ export default function BenefitCalculator({ onBack }) {
             }
           ]
     );
+    if (d.extraSangjo) {
+      setExtraSangjo({
+        enabled: Boolean(d.extraSangjo.enabled),
+        provider: d.extraSangjo.provider || 'boram',
+        customName: d.extraSangjo.customName || '',
+        count: Number(d.extraSangjo.count) || 1,
+        amountPerCount: Number(d.extraSangjo.amountPerCount) || 1000000,
+        totalAmount: Number(d.extraSangjo.totalAmount) || (Number(d.extraSangjo.count) || 1) * (Number(d.extraSangjo.amountPerCount) || 1000000),
+        note: d.extraSangjo.note || '만기 납입 완료 시 100% 환급 조건'
+      });
+    }
+    if (d.extraTelecom) {
+      setExtraTelecom({
+        enabled: Boolean(d.extraTelecom.enabled),
+        carrier: d.extraTelecom.carrier || 'kt',
+        customCarrier: d.extraTelecom.customCarrier || '',
+        planType: d.extraTelecom.planType || '인터넷+IPTV',
+        customPlan: d.extraTelecom.customPlan || '',
+        amount: Number(d.extraTelecom.amount) || 450000,
+        note: d.extraTelecom.note || '인터넷+IPTV 신규 결합 약정 개통 혜택'
+      });
+    }
+    if (d.applyExtraToFinal !== undefined) {
+      setApplyExtraToFinal(Boolean(d.applyExtraToFinal));
+    }
+    if (d.showExtraAffiliateSection !== undefined) {
+      setShowExtraAffiliateSection(Boolean(d.showExtraAffiliateSection));
+    }
+
     setSubCardName(d.subCardName ?? '');
     setSubCardMinSpend(d.subCardMinSpend ?? '');
     setSubCardMonthly(Number(d.subCardMonthly) || 0);
@@ -10329,6 +10433,54 @@ export default function BenefitCalculator({ onBack }) {
             </div>
           );
 
+          // 구독 주문 시 필수 안내문 (장기 미배송 58일차 재심사 안내)
+          const renderSubReReviewNotice = (customStyle = {}) => {
+            const info = getSubReReviewInfo(consultDate);
+            if (!info.dateStr) return null;
+
+            return (
+              <div
+                className="a4-sub-rereview-notice"
+                style={{
+                  marginTop: '0.4rem',
+                  padding: '0.42rem 0.75rem',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                  border: '1.2px solid #f59e0b',
+                  fontSize: '0.70rem',
+                  color: '#92400e',
+                  lineHeight: 1.45,
+                  textAlign: 'left',
+                  ...customStyle
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.2rem', flexWrap: 'wrap', gap: '0.3rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span style={{ fontSize: '0.8rem' }}>📌</span>
+                    <strong style={{ color: '#b45309', fontWeight: 900, fontSize: '0.73rem' }}>
+                      [삼성AI구독 주문 시 필수 안내사항: 장기 미배송 58일차 재심사]
+                    </strong>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 800,
+                      padding: '0.1rem 0.45rem',
+                      borderRadius: '9999px',
+                      background: '#d97706',
+                      color: '#ffffff'
+                    }}
+                  >
+                    재심사 예정일: {info.dateStr} (58일차)
+                  </span>
+                </div>
+                <div>
+                  구매(계약)일자<strong>({consultDate})</strong> 기준 장기 미배송 시, <strong style={{ color: '#b45309', textDecoration: 'underline' }}>58일차인 {info.dateStr}</strong>에 금융사 자동 재심사가 진행됩니다. 재심사 시점의 신용도 및 카드 이용한도 등 심사 기준 미달 시 부득이하게 <strong>구독 계약이 취소 또는 자동 해지</strong>될 수 있사오니, 입주 및 이사 등으로 인한 희망 배송일 지정 시 58일 이내 배송 완료될 수 있도록 유의해 주시기 바랍니다.
+                </div>
+              </div>
+            );
+          };
+
           const renderPage2ExtraInfo = () => {
             const uniquePolicies = subCardTotalDiscount > 0
               ? [...new Set(cardDetails.map((d) => d.policy).filter(Boolean))]
@@ -10374,8 +10526,40 @@ export default function BenefitCalculator({ onBack }) {
                   </div>
                 )}
 
+                {(extraSangjo.enabled || extraTelecom.enabled) && (
+                  <div
+                    style={{
+                      marginTop: hasCardPolicies ? '0.45rem' : '0',
+                      padding: '0.45rem 0.75rem',
+                      borderRadius: '8px',
+                      background: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)',
+                      border: '1px solid #d8b4fe',
+                      fontSize: '0.72rem',
+                      color: '#581c87'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 800, marginBottom: '0.2rem' }}>
+                      <span style={{ fontSize: '0.82rem' }}>✨</span>
+                      <strong style={{ color: '#6b21a8' }}>제휴 연계 추가 혜택 특별 안내</strong>
+                      <span style={{ fontSize: '0.66rem', color: '#7e22ce', fontWeight: 700 }}>(상담 시 특별 반영 혜택)</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', lineHeight: 1.35 }}>
+                      {extraSangjo.enabled && extraSangjoTotalDiscount > 0 && (
+                        <div>
+                          • <strong>{extraSangjo.provider === 'boram' ? '보람상조' : extraSangjo.provider === 'sono' ? '소노아임레디' : (extraSangjo.customName || '상조 제휴')}</strong>: 가전 지원금 <strong>{formatWon(extraSangjoTotalDiscount)}</strong> ({extraSangjo.count}구좌 지원, {extraSangjo.note || '만기 납입 완료 시 100% 환급'})
+                        </div>
+                      )}
+                      {extraTelecom.enabled && extraTelecomTotalDiscount > 0 && (
+                        <div>
+                          • <strong>통신 제휴 ({(extraTelecom.carrier === 'custom' ? extraTelecom.customCarrier : extraTelecom.carrier.toUpperCase()) || 'KT'} {extraTelecom.planType || '인터넷+IPTV'})</strong>: 개통 지원금 <strong>{formatWon(extraTelecomTotalDiscount)}</strong> ({extraTelecom.note || '신규 결합 약정 개통 조건'})
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {hasMemo && (
-                  <div className="a4-memo-box" style={{ marginTop: hasCardPolicies ? '0.45rem' : '0' }}>
+                  <div className="a4-memo-box" style={{ marginTop: (hasCardPolicies || extraSangjo.enabled || extraTelecom.enabled) ? '0.45rem' : '0' }}>
                     <div className="a4-memo-title">맞춤 상담 메모 및 안내사항</div>
                     <div className="a4-memo-content">{memo.trim()}</div>
                   </div>
@@ -10406,6 +10590,9 @@ export default function BenefitCalculator({ onBack }) {
                     </div>
                   </div>
                 )}
+
+                {/* 58일차 장기 미배송 재심사 필수 안내문 */}
+                {renderSubReReviewNotice()}
               </div>
             );
           };
@@ -10441,6 +10628,8 @@ export default function BenefitCalculator({ onBack }) {
                       계약 기간 무상수리 보증 및 정기 케어
                     </div>
                   </div>
+                  {/* 58일차 장기 미배송 재심사 필수 안내문 */}
+                  {renderSubReReviewNotice({ marginTop: '0.35rem' })}
                 </div>
               );
             }
@@ -10487,15 +10676,50 @@ export default function BenefitCalculator({ onBack }) {
           // 2번 스마트 견적서 2페이지 전용: 상담 메모 정보 박스
           const renderPage2MemoInfo = () => {
             const hasMemo = Boolean(memo.trim());
-            if (hasMemo) {
-              return (
-                <div className="a4-memo-box" style={{ marginTop: '0.35rem' }}>
-                  <div className="a4-memo-title">맞춤 상담 메모 및 안내사항</div>
-                  <div className="a4-memo-content">{memo.trim()}</div>
-                </div>
-              );
-            }
-            return null;
+            const hasAffiliate = Boolean(extraSangjo.enabled || extraTelecom.enabled);
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.35rem' }}>
+                {/* 58일차 장기 미배송 재심사 필수 안내문 */}
+                {renderSubReReviewNotice()}
+                {hasAffiliate && (
+                  <div
+                    style={{
+                      padding: '0.45rem 0.75rem',
+                      borderRadius: '8px',
+                      background: 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)',
+                      border: '1px solid #d8b4fe',
+                      fontSize: '0.72rem',
+                      color: '#581c87'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 800, marginBottom: '0.2rem' }}>
+                      <span style={{ fontSize: '0.82rem' }}>✨</span>
+                      <strong style={{ color: '#6b21a8' }}>제휴 연계 추가 혜택 특별 안내</strong>
+                      <span style={{ fontSize: '0.66rem', color: '#7e22ce', fontWeight: 700 }}>(상담 시 특별 반영 혜택)</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', lineHeight: 1.35 }}>
+                      {extraSangjo.enabled && extraSangjoTotalDiscount > 0 && (
+                        <div>
+                          • <strong>{extraSangjo.provider === 'boram' ? '보람상조' : extraSangjo.provider === 'sono' ? '소노아임레디' : (extraSangjo.customName || '상조 제휴')}</strong>: 가전 지원금 <strong>{formatWon(extraSangjoTotalDiscount)}</strong> ({extraSangjo.count}구좌 지원, {extraSangjo.note || '만기 납입 완료 시 100% 환급'})
+                        </div>
+                      )}
+                      {extraTelecom.enabled && extraTelecomTotalDiscount > 0 && (
+                        <div>
+                          • <strong>통신 제휴 ({(extraTelecom.carrier === 'custom' ? extraTelecom.customCarrier : extraTelecom.carrier.toUpperCase()) || 'KT'} {extraTelecom.planType || '인터넷+IPTV'})</strong>: 개통 지원금 <strong>{formatWon(extraTelecomTotalDiscount)}</strong> ({extraTelecom.note || '신규 결합 약정 개통 조건'})
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {hasMemo && (
+                  <div className="a4-memo-box">
+                    <div className="a4-memo-title">맞춤 상담 메모 및 안내사항</div>
+                    <div className="a4-memo-content">{memo.trim()}</div>
+                  </div>
+                )}
+              </div>
+            );
           };
 
           // 2번 스마트 견적서 2페이지 전용: 전국 유일 스마트 견적서 차별화 어필 배너
@@ -11358,6 +11582,51 @@ export default function BenefitCalculator({ onBack }) {
                           </div>
                         ))}
 
+                        {/* 제휴 연계 추가 혜택: 상조 제휴 지원금 */}
+                        {extraSangjo.enabled && extraSangjoTotalDiscount > 0 && (
+                          <div className="a4-benefit-row" style={{ fontSize: '0.77rem', alignItems: 'center' }}>
+                            <span>
+                              <span style={{ color: '#7e22ce', marginRight: '4px', fontWeight: 800 }}>•</span>
+                              <span style={{ color: '#7e22ce', fontWeight: 700 }}>
+                                {extraSangjo.provider === 'boram'
+                                  ? '보람상조'
+                                  : extraSangjo.provider === 'sono'
+                                    ? '소노아임레디'
+                                    : (extraSangjo.customName || '상조 제휴')}{' '}
+                                가전 지원금 ({extraSangjo.count}구좌)
+                              </span>
+                              <span style={{ fontSize: '0.68rem', color: '#6b21a8', fontWeight: 600, marginLeft: '6px' }}>
+                                ({extraSangjo.note || '만기 납입 완료 시 전액 환급 조건'})
+                              </span>
+                            </span>
+                            <span className="a4-minus-blue" style={{ fontSize: '0.82rem', fontWeight: 800, color: '#7e22ce' }}>
+                              - {formatWon(extraSangjoTotalDiscount)}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 제휴 연계 추가 혜택: 통신사 IPTV 지원금 */}
+                        {extraTelecom.enabled && extraTelecomTotalDiscount > 0 && (
+                          <div className="a4-benefit-row" style={{ fontSize: '0.77rem', alignItems: 'center' }}>
+                            <span>
+                              <span style={{ color: '#0891b2', marginRight: '4px', fontWeight: 800 }}>•</span>
+                              <span style={{ color: '#0e7490', fontWeight: 700 }}>
+                                통신 제휴 지원금 (
+                                {(extraTelecom.carrier === 'custom'
+                                  ? extraTelecom.customCarrier
+                                  : extraTelecom.carrier.toUpperCase()) || 'KT'}{' '}
+                                {extraTelecom.planType || '인터넷+IPTV'})
+                              </span>
+                              <span style={{ fontSize: '0.68rem', color: '#0891b2', fontWeight: 600, marginLeft: '6px' }}>
+                                ({extraTelecom.note || '신규 결합 개통 혜택'})
+                              </span>
+                            </span>
+                            <span className="a4-minus-blue" style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0891b2' }}>
+                              - {formatWon(extraTelecomTotalDiscount)}
+                            </span>
+                          </div>
+                        )}
+
                         {/* 구독케어 혜택 (하단으로 이동) */}
                         {(mixedSubServiceBenefit > 0 || hasAnyMixedReinstall) && (
                           <div className="a4-benefit-row" style={{ fontSize: '0.77rem', alignItems: 'center' }}>
@@ -11388,6 +11657,11 @@ export default function BenefitCalculator({ onBack }) {
                           {mixedSubServiceBenefit > 0 && (
                             <span style={{ fontSize: '0.69rem', color: '#0284c7', fontWeight: 700 }}>
                               (구독케어 비용 포함)
+                            </span>
+                          )}
+                          {applyExtraToFinal && totalExtraAffiliateDiscount > 0 && (
+                            <span style={{ fontSize: '0.69rem', color: '#7e22ce', fontWeight: 700 }}>
+                              (제휴 연계 추가 혜택 -{formatWon(totalExtraAffiliateDiscount)} 반영)
                             </span>
                           )}
                         </div>
@@ -12030,6 +12304,64 @@ export default function BenefitCalculator({ onBack }) {
                         </strong>
                       </div>
                     )}
+
+                    {/* ===== [여섯번째 혜택: 상조 제휴 지원금 (보람상조 / 소노아임레디)] ===== */}
+                    {extraSangjo.enabled && extraSangjoTotalDiscount > 0 && (
+                      <div className="a4-benefit-row" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: '6px' }}>
+                          <span style={{ fontSize: '0.78rem' }}>
+                            <span style={{ color: '#7e22ce', marginRight: '4px', fontWeight: 800 }}>•</span>
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>
+                              {extraSangjo.provider === 'boram'
+                                ? '보람상조'
+                                : extraSangjo.provider === 'sono'
+                                  ? '소노아임레디'
+                                  : (extraSangjo.customName || '상조 제휴')}{' '}
+                              가전 지원금
+                            </strong>
+                            <span style={{ fontSize: '0.68rem', color: '#7e22ce', fontWeight: 700, marginLeft: '5px' }}>
+                              ({extraSangjo.count}구좌 지원)
+                            </span>
+                          </span>
+                          <div style={{ fontSize: '0.63rem', color: '#6b21a8', fontWeight: 600, marginLeft: '9px', marginTop: '1px' }}>
+                            ※ {extraSangjo.note || '만기 납입 완료 시 전액 환급 조건'}
+                          </div>
+                        </div>
+                        <strong
+                          className="a4-minus-blue"
+                          style={{ fontSize: '0.84rem', fontWeight: 900, color: '#7e22ce', flexShrink: 0, whiteSpace: 'nowrap' }}
+                        >
+                          - {formatWon(extraSangjoTotalDiscount)}
+                        </strong>
+                      </div>
+                    )}
+
+                    {/* ===== [일곱번째 혜택: 통신사 IPTV/인터넷 제휴 지원금] ===== */}
+                    {extraTelecom.enabled && extraTelecomTotalDiscount > 0 && (
+                      <div className="a4-benefit-row" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: '6px' }}>
+                          <span style={{ fontSize: '0.78rem' }}>
+                            <span style={{ color: '#0891b2', marginRight: '4px', fontWeight: 800 }}>•</span>
+                            <strong style={{ fontWeight: 900, color: '#0f172a' }}>
+                              통신 제휴 지원금 (
+                              {(extraTelecom.carrier === 'custom'
+                                ? extraTelecom.customCarrier
+                                : extraTelecom.carrier.toUpperCase()) || 'KT'}{' '}
+                              {extraTelecom.planType || '인터넷+IPTV'})
+                            </strong>
+                          </span>
+                          <div style={{ fontSize: '0.63rem', color: '#0e7490', fontWeight: 600, marginLeft: '9px', marginTop: '1px' }}>
+                            ※ {extraTelecom.note || '인터넷+IPTV 신규 결합 약정 개통 혜택'}
+                          </div>
+                        </div>
+                        <strong
+                          className="a4-minus-blue"
+                          style={{ fontSize: '0.84rem', fontWeight: 900, color: '#0891b2', flexShrink: 0, whiteSpace: 'nowrap' }}
+                        >
+                          - {formatWon(extraTelecomTotalDiscount)}
+                        </strong>
+                      </div>
+                    )}
                   </div>
 
                   <div className="a4-row a4-benefit-total-row">
@@ -12052,6 +12384,11 @@ export default function BenefitCalculator({ onBack }) {
                         {includeServiceInFinal && subServiceTotal > 0 && (
                           <span style={{ fontSize: '0.65rem', color: '#0284c7', fontWeight: 600, letterSpacing: '-0.2px' }}>
                             (서비스혜택 {formatWon(subServiceTotal)} 반영)
+                          </span>
+                        )}
+                        {applyExtraToFinal && totalExtraAffiliateDiscount > 0 && (
+                          <span style={{ fontSize: '0.65rem', color: '#7e22ce', fontWeight: 700, letterSpacing: '-0.2px' }}>
+                            (제휴지원금 -{formatWon(totalExtraAffiliateDiscount)} 반영)
                           </span>
                         )}
                       </div>
@@ -13579,6 +13916,15 @@ export default function BenefitCalculator({ onBack }) {
                 width: '100%'
               }}
             />
+            {(() => {
+              const rInfo = getSubReReviewInfo(consultDate);
+              return rInfo.dateStr ? (
+                <div style={{ fontSize: '0.70rem', color: '#f59e0b', marginTop: '4px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>⚠️ 58일차 재심사 예정일:</span>
+                  <strong style={{ color: '#fbbf24', textDecoration: 'underline' }}>{rInfo.dateStr}</strong>
+                </div>
+              ) : null;
+            })()}
           </div>
           <div>
             <label className="calc-label-guide">
@@ -17840,6 +18186,553 @@ export default function BenefitCalculator({ onBack }) {
                         초기화
                       </button>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ✨ 제휴 연계 추가 혜택 (상조 제휴 / 통신사 IPTV) 매니저 설정 영역 */}
+          <div
+            style={{
+              marginTop: '1rem',
+              marginBottom: '1rem',
+              borderRadius: '14px',
+              border: (extraSangjo.enabled || extraTelecom.enabled)
+                ? '2px solid #a855f7'
+                : '1.5px dashed rgba(168, 85, 247, 0.45)',
+              background: (extraSangjo.enabled || extraTelecom.enabled)
+                ? 'linear-gradient(135deg, rgba(88, 28, 135, 0.32) 0%, rgba(126, 34, 206, 0.18) 100%)'
+                : 'rgba(168, 85, 247, 0.06)',
+              overflow: 'hidden',
+              boxShadow: (extraSangjo.enabled || extraTelecom.enabled) ? '0 0 20px rgba(168, 85, 247, 0.22)' : 'none',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {/* 상단 클릭 토글 헤더 바 */}
+            <div
+              onClick={() => setShowExtraAffiliateSection(!showExtraAffiliateSection)}
+              style={{
+                padding: '0.85rem 1.15rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                userSelect: 'none',
+                background: showExtraAffiliateSection ? 'rgba(168, 85, 247, 0.15)' : 'transparent'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '1.2rem' }}>✨</span>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                    <strong style={{ fontSize: '0.94rem', color: '#f3e8ff', fontWeight: 900 }}>
+                      제휴 연계 추가 혜택 (상조 제휴 · 통신사 IPTV)
+                    </strong>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        padding: '0.12rem 0.5rem',
+                        borderRadius: '9999px',
+                        background: (extraSangjo.enabled || extraTelecom.enabled)
+                          ? 'linear-gradient(135deg, #9333ea, #a855f7)'
+                          : 'rgba(255, 255, 255, 0.12)',
+                        color: '#ffffff',
+                        fontWeight: 800
+                      }}
+                    >
+                      {(extraSangjo.enabled || extraTelecom.enabled) ? '혜택 적용중' : '매니저 전용 옵션'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: '#d8b4fe', marginTop: '2px' }}>
+                    보람상조 / 소노아임레디 가전 지원금 및 KT/SKB/LGU+ 인터넷+IPTV 개통 추가 혜택
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                {(extraSangjo.enabled || extraTelecom.enabled) && (
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.68rem', color: '#c084fc', fontWeight: 700 }}>적용 할인 총액</div>
+                    <strong style={{ fontSize: '1rem', fontWeight: 900, color: '#f5d0fe' }}>
+                      -{formatWon(totalExtraAffiliateDiscount)}
+                    </strong>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  style={{
+                    padding: '0.38rem 0.85rem',
+                    borderRadius: '8px',
+                    border: '1px solid #c084fc',
+                    background: showExtraAffiliateSection ? '#9333ea' : 'rgba(168, 85, 247, 0.25)',
+                    color: '#ffffff',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
+                  }}
+                >
+                  {showExtraAffiliateSection ? '▲ 접기' : (extraSangjo.enabled || extraTelecom.enabled ? '⚙️ 설정 변경' : '➕ 추가혜택 입력')}
+                </button>
+              </div>
+            </div>
+
+            {/* 펼쳐졌을 때 나타나는 매니저 입력 패널 */}
+            {showExtraAffiliateSection && (
+              <div
+                style={{
+                  padding: '1.1rem',
+                  borderTop: '1px solid rgba(168, 85, 247, 0.3)',
+                  background: 'rgba(15, 23, 42, 0.65)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem'
+                }}
+              >
+                {/* 1. 상조 제휴 (보람상조 / 소노아임레디) 카드 */}
+                <div
+                  style={{
+                    padding: '0.9rem 1rem',
+                    borderRadius: '10px',
+                    border: extraSangjo.enabled ? '1.5px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.1)',
+                    background: extraSangjo.enabled ? 'rgba(88, 28, 135, 0.22)' : 'rgba(255, 255, 255, 0.03)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={extraSangjo.enabled}
+                        onChange={(e) => setExtraSangjo((prev) => ({ ...prev, enabled: e.target.checked }))}
+                        style={{ width: '18px', height: '18px', accentColor: '#a855f7', cursor: 'pointer' }}
+                      />
+                      <strong style={{ fontSize: '0.9rem', color: extraSangjo.enabled ? '#f3e8ff' : '#cbd5e1', fontWeight: 800 }}>
+                        🏢 상조 제휴 혜택 (보람상조 / 소노아임레디)
+                      </strong>
+                    </label>
+
+                    {extraSangjo.enabled && (
+                      <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#f5d0fe' }}>
+                        상조 지원금: <strong>-{formatWon(extraSangjoTotalDiscount)}</strong>
+                      </span>
+                    )}
+                  </div>
+
+                  {extraSangjo.enabled && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '0.5rem', paddingLeft: '1.6rem' }}>
+                      {/* 제휴사 선택 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.78rem', color: '#d8b4fe', fontWeight: 700, minWidth: '70px' }}>제휴사:</span>
+                        {[
+                          { key: 'boram', label: '보람상조' },
+                          { key: 'sono', label: '소노아임레디' },
+                          { key: 'custom', label: '직접입력' }
+                        ].map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => setExtraSangjo((prev) => ({ ...prev, provider: item.key }))}
+                            style={{
+                              padding: '0.24rem 0.65rem',
+                              borderRadius: '6px',
+                              border: extraSangjo.provider === item.key ? '1.5px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.18)',
+                              background: extraSangjo.provider === item.key ? '#9333ea' : 'rgba(255, 255, 255, 0.06)',
+                              color: extraSangjo.provider === item.key ? '#ffffff' : '#cbd5e1',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                        {extraSangjo.provider === 'custom' && (
+                          <input
+                            type="text"
+                            value={extraSangjo.customName}
+                            onChange={(e) => setExtraSangjo((prev) => ({ ...prev, customName: e.target.value }))}
+                            placeholder="상조사명 입력"
+                            style={{
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '5px',
+                              background: '#0f172a',
+                              border: '1px solid #c084fc',
+                              color: '#f3e8ff',
+                              fontSize: '0.76rem',
+                              width: '120px'
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      {/* 구좌수 & 1구좌당 지원금 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#d8b4fe', fontWeight: 700, minWidth: '70px' }}>가입 구좌수:</span>
+                          {[1, 2, 3].map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() =>
+                                setExtraSangjo((prev) => ({
+                                  ...prev,
+                                  count: c,
+                                  totalAmount: c * prev.amountPerCount
+                                }))
+                              }
+                              style={{
+                                padding: '0.24rem 0.55rem',
+                                borderRadius: '5px',
+                                border: extraSangjo.count === c ? '1.5px solid #c084fc' : '1px solid rgba(255, 255, 255, 0.15)',
+                                background: extraSangjo.count === c ? 'rgba(168, 85, 247, 0.35)' : 'rgba(255, 255, 255, 0.05)',
+                                color: extraSangjo.count === c ? '#f5d0fe' : '#cbd5e1',
+                                fontSize: '0.76rem',
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {c}구좌
+                            </button>
+                          ))}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#d8b4fe', fontWeight: 700 }}>구좌당 지원금:</span>
+                          <input
+                            type="number"
+                            step="100000"
+                            value={extraSangjo.amountPerCount}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                              setExtraSangjo((prev) => ({
+                                ...prev,
+                                amountPerCount: val,
+                                totalAmount: prev.count * val
+                              }));
+                            }}
+                            style={{
+                              width: '100px',
+                              padding: '0.24rem 0.45rem',
+                              borderRadius: '5px',
+                              background: '#0f172a',
+                              border: '1px solid rgba(255, 255, 255, 0.25)',
+                              color: '#f5d0fe',
+                              fontSize: '0.78rem',
+                              fontWeight: 700,
+                              textAlign: 'right'
+                            }}
+                          />
+                          <span style={{ fontSize: '0.74rem', color: '#cbd5e1' }}>원</span>
+                          {[1000000, 1500000, 2000000].map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              onClick={() =>
+                                setExtraSangjo((prev) => ({
+                                  ...prev,
+                                  amountPerCount: amt,
+                                  totalAmount: prev.count * amt
+                                }))
+                              }
+                              style={{
+                                padding: '0.18rem 0.45rem',
+                                borderRadius: '4px',
+                                border: '1px solid rgba(168, 85, 247, 0.4)',
+                                background: extraSangjo.amountPerCount === amt ? 'rgba(168, 85, 247, 0.4)' : 'rgba(255, 255, 255, 0.05)',
+                                color: extraSangjo.amountPerCount === amt ? '#f5d0fe' : '#cbd5e1',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {amt / 10000}만
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 총 지원금 직접 수정 및 안내 메모 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.78rem', color: '#d8b4fe', fontWeight: 700, minWidth: '70px' }}>총 지원금:</span>
+                        <input
+                          type="number"
+                          step="100000"
+                          value={extraSangjo.totalAmount}
+                          onChange={(e) => {
+                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            setExtraSangjo((prev) => ({ ...prev, totalAmount: val }));
+                          }}
+                          style={{
+                            width: '120px',
+                            padding: '0.24rem 0.5rem',
+                            borderRadius: '5px',
+                            background: '#0f172a',
+                            border: '1.5px solid #a855f7',
+                            color: '#f5d0fe',
+                            fontSize: '0.84rem',
+                            fontWeight: 800,
+                            textAlign: 'right'
+                          }}
+                        />
+                        <span style={{ fontSize: '0.76rem', color: '#cbd5e1' }}>원 ({formatWon(extraSangjo.totalAmount)})</span>
+
+                        <input
+                          type="text"
+                          value={extraSangjo.note}
+                          onChange={(e) => setExtraSangjo((prev) => ({ ...prev, note: e.target.value }))}
+                          placeholder="견적서 표기 조건 (예: 만기 납입 완료 시 100% 환급 조건)"
+                          style={{
+                            flex: 1,
+                            minWidth: '200px',
+                            padding: '0.24rem 0.5rem',
+                            borderRadius: '5px',
+                            background: '#0f172a',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            color: '#cbd5e1',
+                            fontSize: '0.74rem'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. 통신사 제휴 (KT / SKB / LG U+ IPTV) 카드 */}
+                <div
+                  style={{
+                    padding: '0.9rem 1rem',
+                    borderRadius: '10px',
+                    border: extraTelecom.enabled ? '1.5px solid #06b6d4' : '1px solid rgba(255, 255, 255, 0.1)',
+                    background: extraTelecom.enabled ? 'rgba(8, 145, 178, 0.22)' : 'rgba(255, 255, 255, 0.03)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={extraTelecom.enabled}
+                        onChange={(e) => setExtraTelecom((prev) => ({ ...prev, enabled: e.target.checked }))}
+                        style={{ width: '18px', height: '18px', accentColor: '#06b6d4', cursor: 'pointer' }}
+                      />
+                      <strong style={{ fontSize: '0.9rem', color: extraTelecom.enabled ? '#cffafe' : '#cbd5e1', fontWeight: 800 }}>
+                        📡 통신사 IPTV / 인터넷 제휴 혜택 (KT · SKB · LG U+)
+                      </strong>
+                    </label>
+
+                    {extraTelecom.enabled && (
+                      <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#a5f3fc' }}>
+                        통신 지원금: <strong>-{formatWon(extraTelecomTotalDiscount)}</strong>
+                      </span>
+                    )}
+                  </div>
+
+                  {extraTelecom.enabled && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '0.5rem', paddingLeft: '1.6rem' }}>
+                      {/* 통신사 선택 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.78rem', color: '#a5f3fc', fontWeight: 700, minWidth: '70px' }}>통신사:</span>
+                        {[
+                          { key: 'kt', label: 'KT' },
+                          { key: 'skb', label: 'SK브로드밴드' },
+                          { key: 'lgu', label: 'LG유플러스' },
+                          { key: 'custom', label: '직접입력' }
+                        ].map((item) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => setExtraTelecom((prev) => ({ ...prev, carrier: item.key }))}
+                            style={{
+                              padding: '0.24rem 0.65rem',
+                              borderRadius: '6px',
+                              border: extraTelecom.carrier === item.key ? '1.5px solid #22d3ee' : '1px solid rgba(255, 255, 255, 0.18)',
+                              background: extraTelecom.carrier === item.key ? '#0891b2' : 'rgba(255, 255, 255, 0.06)',
+                              color: extraTelecom.carrier === item.key ? '#ffffff' : '#cbd5e1',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                        {extraTelecom.carrier === 'custom' && (
+                          <input
+                            type="text"
+                            value={extraTelecom.customCarrier}
+                            onChange={(e) => setExtraTelecom((prev) => ({ ...prev, customCarrier: e.target.value }))}
+                            placeholder="통신사명 입력"
+                            style={{
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '5px',
+                              background: '#0f172a',
+                              border: '1px solid #22d3ee',
+                              color: '#cffafe',
+                              fontSize: '0.76rem',
+                              width: '120px'
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      {/* 상품 구분 & 지원금액 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#a5f3fc', fontWeight: 700, minWidth: '70px' }}>상품 구분:</span>
+                          {['인터넷+IPTV', '인터넷 단독', 'IPTV 단독'].map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setExtraTelecom((prev) => ({ ...prev, planType: p }))}
+                              style={{
+                                padding: '0.24rem 0.55rem',
+                                borderRadius: '5px',
+                                border: extraTelecom.planType === p ? '1.5px solid #22d3ee' : '1px solid rgba(255, 255, 255, 0.15)',
+                                background: extraTelecom.planType === p ? 'rgba(6, 182, 212, 0.35)' : 'rgba(255, 255, 255, 0.05)',
+                                color: extraTelecom.planType === p ? '#cffafe' : '#cbd5e1',
+                                fontSize: '0.76rem',
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#a5f3fc', fontWeight: 700 }}>지원금액:</span>
+                          <input
+                            type="number"
+                            step="50000"
+                            value={extraTelecom.amount}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                              setExtraTelecom((prev) => ({ ...prev, amount: val }));
+                            }}
+                            style={{
+                              width: '110px',
+                              padding: '0.24rem 0.45rem',
+                              borderRadius: '5px',
+                              background: '#0f172a',
+                              border: '1.5px solid #06b6d4',
+                              color: '#cffafe',
+                              fontSize: '0.82rem',
+                              fontWeight: 800,
+                              textAlign: 'right'
+                            }}
+                          />
+                          <span style={{ fontSize: '0.74rem', color: '#cbd5e1' }}>원</span>
+                          {[400000, 450000, 500000].map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              onClick={() => setExtraTelecom((prev) => ({ ...prev, amount: amt }))}
+                              style={{
+                                padding: '0.18rem 0.45rem',
+                                borderRadius: '4px',
+                                border: '1px solid rgba(6, 182, 212, 0.4)',
+                                background: extraTelecom.amount === amt ? 'rgba(6, 182, 212, 0.4)' : 'rgba(255, 255, 255, 0.05)',
+                                color: extraTelecom.amount === amt ? '#cffafe' : '#cbd5e1',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {amt / 10000}만
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 안내 메모 */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.78rem', color: '#a5f3fc', fontWeight: 700, minWidth: '70px' }}>안내 메모:</span>
+                        <input
+                          type="text"
+                          value={extraTelecom.note}
+                          onChange={(e) => setExtraTelecom((prev) => ({ ...prev, note: e.target.value }))}
+                          placeholder="견적서 표기 조건 (예: 인터넷+IPTV 신규 결합 약정 개통 혜택)"
+                          style={{
+                            flex: 1,
+                            minWidth: '240px',
+                            padding: '0.24rem 0.5rem',
+                            borderRadius: '5px',
+                            background: '#0f172a',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            color: '#cbd5e1',
+                            fontSize: '0.74rem'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. 하단 실체감가 차감 옵션 및 요약 */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '0.6rem',
+                    paddingTop: '0.6rem',
+                    borderTop: '1px dashed rgba(255, 255, 255, 0.15)'
+                  }}
+                >
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={applyExtraToFinal}
+                      onChange={(e) => setApplyExtraToFinal(e.target.checked)}
+                      style={{ width: '16px', height: '16px', accentColor: '#a855f7', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '0.8rem', color: applyExtraToFinal ? '#e9d5ff' : '#94a3b8', fontWeight: 700 }}>
+                      고객 최종 실체감가에 즉시 차감 반영 (체감가에서 -{formatWon(totalExtraAffiliateDiscount)} 차감)
+                    </span>
+                  </label>
+
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    {(extraSangjo.enabled || extraTelecom.enabled) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExtraSangjo((prev) => ({ ...prev, enabled: false }));
+                          setExtraTelecom((prev) => ({ ...prev, enabled: false }));
+                        }}
+                        style={{
+                          padding: '0.22rem 0.6rem',
+                          borderRadius: '5px',
+                          border: '1px solid rgba(248, 113, 113, 0.4)',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#fca5a5',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        제휴혜택 초기화
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowExtraAffiliateSection(false)}
+                      style={{
+                        padding: '0.22rem 0.75rem',
+                        borderRadius: '5px',
+                        border: '1px solid #c084fc',
+                        background: '#9333ea',
+                        color: '#ffffff',
+                        fontSize: '0.74rem',
+                        fontWeight: 800,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      완료 (닫기)
+                    </button>
                   </div>
                 </div>
               </div>
