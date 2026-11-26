@@ -1,7 +1,46 @@
 import { supabase, isSupabaseConfigured } from '../supabase.js';
 
 /**
+ * 자동화 테스트(Playwright, Puppeteer 등) 또는 개발 테스트 환경 감지
+ */
+export function isTestEnvironment() {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (window.navigator?.webdriver) return true;
+    if (window.__JCC_TEST_MODE__ || window.__PLAYWRIGHT__) return true;
+    const authRaw = window.sessionStorage?.getItem('jcc_calc_auth_user');
+    if (authRaw) {
+      const u = JSON.parse(authRaw);
+      if (u.isTest || u.id === 'test' || u.id === 'playwright') return true;
+    }
+    const search = window.location?.search || '';
+    if (search.includes('test=true') || search.includes('mock=true') || search.includes('no-sync=true')) return true;
+  } catch {}
+  return false;
+}
+
+/**
+ * 테스트용 견적 데이터 여부 검사 (테스트, test, 홍길동, 더미 등)
+ * 테스트 견적은 클라우드 데이터베이스에 동기화/업로드되지 않도록 원천 차단
+ */
+export function isQuoteTestContent(quoteSnapshot) {
+  if (!quoteSnapshot) return false;
+  if (quoteSnapshot.isTest === true || quoteSnapshot.data?.isTest === true) return true;
+  const title = String(quoteSnapshot.title || '').trim();
+  const customerName = String(quoteSnapshot.customerName || quoteSnapshot.customer_name || '').trim();
+  const creatorId = String(quoteSnapshot.creatorId || quoteSnapshot.data?.creatorId || '').trim();
+
+  const testRegex = /(테스트|test|홍길동|더미|dummy)/i;
+  if (testRegex.test(title)) return true;
+  if (testRegex.test(customerName)) return true;
+  if (creatorId === 'test' || creatorId === 'playwright') return true;
+  return false;
+}
+
+/**
  * 클라우드(Supabase)에서 견적 목록 불러오기
+ * - 견적 작성일자(saved_at) 최신순 정렬
+ * - 테스트 데이터 및 시스템 청크 제외
  * @param {'mixed' | 'compare'} mode
  */
 export async function fetchCloudQuotes(mode) {
@@ -13,22 +52,25 @@ export async function fetchCloudQuotes(mode) {
       .from('saved_quotes')
       .select('*')
       .eq('mode', mode)
-      .order('updated_at', { ascending: false });
+      .order('saved_at', { ascending: false });
 
     if (error) {
       console.error('[CloudQuotes] Fetch error:', error);
       return { success: false, data: [], error: error.message };
     }
 
-    const formatted = (data || []).map((row) => ({
-      id: row.id,
-      mode: row.mode,
-      title: row.title,
-      customerName: row.customer_name || '',
-      savedAt: row.saved_at || '',
-      data: row.data || {},
-      updatedAt: row.updated_at
-    }));
+    const formatted = (data || [])
+      .filter((row) => !row.id.startsWith('__jcc_'))
+      .filter((row) => !isQuoteTestContent(row))
+      .map((row) => ({
+        id: row.id,
+        mode: row.mode,
+        title: row.title,
+        customerName: row.customer_name || '',
+        savedAt: row.saved_at || '',
+        data: row.data || {},
+        updatedAt: row.updated_at
+      }));
 
     return { success: true, data: formatted };
   } catch (err) {
@@ -39,19 +81,73 @@ export async function fetchCloudQuotes(mode) {
 
 /**
  * 클라우드(Supabase)에 견적 저장 또는 덮어쓰기 (upsert)
+ * - 자동 테스트 및 테스트 데이터 필터링
+ * - 날짜 지난 구형 파일이 최신 클라우드 데이터를 덮어쓰는 것 원천 방지 (Stale Overwrite Guard)
  * @param {object} quoteSnapshot
  */
 export async function saveCloudQuote(quoteSnapshot) {
+  if (isTestEnvironment()) {
+    console.log('[CloudQuotes] Test environment detected. Skipping cloud save.');
+    return { success: true, isTest: true };
+  }
+
+  if (isQuoteTestContent(quoteSnapshot)) {
+    console.log('[CloudQuotes] Test content detected (' + quoteSnapshot.title + '). Skipping cloud save.');
+    return { success: true, isTest: true };
+  }
+
   if (!isSupabaseConfigured || !supabase) {
     return { success: false, error: 'Supabase 미설정' };
   }
+
   try {
+    const quoteId = quoteSnapshot.id;
+    const incomingSavedAt = quoteSnapshot.savedAt || '';
+    const incomingUpdatedAt = quoteSnapshot.updatedAt || new Date().toISOString();
+
+    // 1. 구형 저장파일 만료 검사: 작성일이 45일 이상 지난 오래된 구형 파일은 신규 클라우드 업로드 차단
+    if (incomingSavedAt) {
+      const savedDate = new Date(incomingSavedAt.replace(' ', 'T'));
+      const now = new Date();
+      const diffDays = (now.getTime() - savedDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays > 45) {
+        console.warn(`[CloudQuotes] Outdated quote (${diffDays.toFixed(1)} days old). Skipping cloud upload:`, quoteSnapshot.title);
+        return {
+          success: false,
+          stale: true,
+          error: '작성일이 45일 이상 지난 구형 견적은 클라우드에 자동 등록되지 않습니다.'
+        };
+      }
+    }
+
+    // 2. 이미 클라우드에 존재하는 견적일 경우: 최신 수정일 비교 (Last-Write-Wins with Timestamp Guard)
+    const { data: existing, error: checkErr } = await supabase
+      .from('saved_quotes')
+      .select('id, saved_at, updated_at')
+      .eq('id', quoteId)
+      .maybeSingle();
+
+    if (!checkErr && existing) {
+      const existingTime = new Date(existing.updated_at || existing.saved_at || 0).getTime();
+      const incomingTime = new Date(incomingUpdatedAt).getTime();
+
+      // 클라우드에 더 최신 수정본이 이미 존재하면 과거 버전으로 덮어쓰지 못하도록 차단
+      if (existingTime > 0 && incomingTime > 0 && incomingTime < existingTime - 2000) {
+        console.warn(`[CloudQuotes] Stale quote overwrite rejected for ${quoteId}. Cloud is newer (${existing.updated_at} vs ${incomingUpdatedAt})`);
+        return {
+          success: false,
+          stale: true,
+          error: '클라우드에 더 최신 수정본이 존재하여 구형 저장본 덮어쓰기가 방지되었습니다.'
+        };
+      }
+    }
+
     const payload = {
       id: quoteSnapshot.id,
       mode: quoteSnapshot.mode || 'mixed',
       title: quoteSnapshot.title || '견적서',
       customer_name: quoteSnapshot.customerName || '',
-      saved_at: quoteSnapshot.savedAt || '',
+      saved_at: incomingSavedAt || new Date().toISOString().slice(0, 16).replace('T', ' '),
       data: quoteSnapshot.data || {},
       updated_at: new Date().toISOString()
     };
@@ -205,6 +301,10 @@ export async function fetchCloudUserAccounts() {
  * @param {Array} accounts
  */
 export async function saveCloudUserAccounts(accounts) {
+  if (isTestEnvironment()) {
+    console.log('[CloudAuth] Test environment detected. Skipping cloud save.');
+    return { success: true, isTest: true, updatedAt: new Date().toISOString() };
+  }
   if (!isSupabaseConfigured || !supabase) {
     return { success: false, error: 'Supabase 미설정' };
   }

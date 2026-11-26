@@ -58,7 +58,9 @@ import {
   saveCloudQuote,
   deleteCloudQuote,
   fetchCloudUserAccounts,
-  saveCloudUserAccounts
+  saveCloudUserAccounts,
+  isTestEnvironment,
+  isQuoteTestContent
 } from '../utils/cloudQuoteService.js';
 
 // 로컬 시스템 날짜(KST 등 브라우저 현지 시간 기준 YYYY-MM-DD 반환 - UTC 오차 방지)
@@ -4905,23 +4907,35 @@ export default function BenefitCalculator({ onBack }) {
     try {
       const specificKey = mode === 'mixed' ? 'jcc_calc_saved_quotes_mixed' : 'jcc_calc_saved_quotes_compare';
       const raw = localStorage.getItem(specificKey);
+      let list = [];
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      // 과거 통합 저장소('jcc_calc_saved_quotes') 데이터 최초 1회 마이그레이션
-      const legacyRaw = localStorage.getItem('jcc_calc_saved_quotes');
-      if (legacyRaw) {
-        const parsed = JSON.parse(legacyRaw);
-        if (Array.isArray(parsed)) {
-          if (mode === 'mixed') {
-            return parsed.filter((q) => q.mode === 'mixed' || q.data?.calculatorMode === 'mixed');
-          } else {
-            return parsed.filter((q) => q.mode !== 'mixed' && q.data?.calculatorMode !== 'mixed');
+        if (Array.isArray(parsed)) list = parsed;
+      } else {
+        // 과거 통합 저장소('jcc_calc_saved_quotes') 데이터 최초 1회 마이그레이션
+        const legacyRaw = localStorage.getItem('jcc_calc_saved_quotes');
+        if (legacyRaw) {
+          const parsed = JSON.parse(legacyRaw);
+          if (Array.isArray(parsed)) {
+            if (mode === 'mixed') {
+              list = parsed.filter((q) => q.mode === 'mixed' || q.data?.calculatorMode === 'mixed');
+            } else {
+              list = parsed.filter((q) => q.mode !== 'mixed' && q.data?.calculatorMode !== 'mixed');
+            }
           }
         }
       }
-      return [];
+
+      // 로컬에 기록된 삭제 ID 및 테스트 데이터 필터링
+      let deletedIds = new Set();
+      try {
+        const delRaw = localStorage.getItem('jcc_calc_deleted_quote_ids');
+        if (delRaw) deletedIds = new Set(JSON.parse(delRaw));
+      } catch {}
+
+      return list
+        .filter((q) => q && q.id && !deletedIds.has(q.id))
+        .filter((q) => !isQuoteTestContent(q));
     } catch {
       return [];
     }
@@ -4990,6 +5004,12 @@ export default function BenefitCalculator({ onBack }) {
   const [cloudSyncStatus, setCloudSyncStatus] = useState('idle'); // 'idle' | 'syncing' | 'synced' | 'error'
 
   const syncQuotesWithCloud = async (targetMode = isMixedMode ? 'mixed' : 'compare', showToast = true) => {
+    // 자동화 테스트 환경에서는 클라우드 동기화 스킵 (테스트 격리)
+    if (isTestEnvironment()) {
+      setCloudSyncStatus('synced');
+      return;
+    }
+
     setIsCloudSyncing(true);
     setCloudSyncStatus('syncing');
     try {
@@ -4998,20 +5018,44 @@ export default function BenefitCalculator({ onBack }) {
         const cloudList = res.data;
         const currentLocal = targetMode === 'mixed' ? savedQuotesMixed : savedQuotesCompare;
 
-        // 1. 로컬에만 있고 클라우드에 아직 없는 항목은 클라우드로 자동 백업 업로드
-        const cloudIdSet = new Set(cloudList.map((q) => q.id));
-        const missingInCloud = currentLocal.filter((l) => !cloudIdSet.has(l.id));
-        if (missingInCloud.length > 0) {
-          await Promise.all(missingInCloud.map((item) => saveCloudQuote(item)));
-        }
+        // [중요 수정] 시작 시 로컬의 오래된 구형 파일(missingInCloud)을 클라우드로 무조건 자동 업로드하던 코드 전면 제거!
+        // 과거 삭제된 파일이나 구형 HTML의 잔여물이 클라우드로 역동기화되어 되살아나던 문제 완벽 차단.
+        let deletedIds = new Set();
+        try {
+          const delRaw = localStorage.getItem('jcc_calc_deleted_quote_ids');
+          if (delRaw) deletedIds = new Set(JSON.parse(delRaw));
+        } catch {}
 
-        // 2. 클라우드와 로컬 병합 (클라우드 우선 및 중복 제거)
+        // 로컬 보관함에서 삭제된 항목 및 테스트 항목 필터링
+        const validLocal = currentLocal.filter((q) => q && q.id && !deletedIds.has(q.id) && !isQuoteTestContent(q));
+
+        // 클라우드 데이터를 우선 소스로 병합 (중복 제거)
         const mergedMap = new Map();
-        cloudList.forEach((q) => mergedMap.set(q.id, q));
-        currentLocal.forEach((q) => {
-          if (!mergedMap.has(q.id)) mergedMap.set(q.id, q);
+        cloudList.forEach((q) => {
+          if (!deletedIds.has(q.id) && !isQuoteTestContent(q)) {
+            mergedMap.set(q.id, q);
+          }
         });
-        const finalMerged = Array.from(mergedMap.values());
+
+        // 로컬에만 있는 미동기화 신규 작성본(최근 7일 이내 작성본)이 있다면 병합 유지하되,
+        // 7일 이상 경과한 구형 로컬 잔여물은 클라우드 우선 원칙에 따라 제거
+        const nowMs = Date.now();
+        validLocal.forEach((l) => {
+          if (!mergedMap.has(l.id)) {
+            const savedMs = new Date(String(l.savedAt || l.updatedAt || '').replace(' ', 'T')).getTime();
+            const isRecent = savedMs > 0 && (nowMs - savedMs) < 7 * 24 * 60 * 60 * 1000;
+            if (isRecent) {
+              mergedMap.set(l.id, l);
+            }
+          }
+        });
+
+        // 작성일자(savedAt) 기준 최신순 정렬
+        const finalMerged = Array.from(mergedMap.values()).sort((a, b) => {
+          const timeA = new Date(String(a.savedAt || a.updatedAt || '').replace(' ', 'T')).getTime();
+          const timeB = new Date(String(b.savedAt || b.updatedAt || '').replace(' ', 'T')).getTime();
+          return timeB - timeA;
+        });
 
         if (targetMode === 'mixed') {
           setSavedQuotesMixed(finalMerged);
@@ -5377,11 +5421,20 @@ export default function BenefitCalculator({ onBack }) {
     setQuoteTitleInput(snapshot.title);
     setQuoteStorageTab(targetScope);
     const scopeLabel = targetScope === 'public' ? '팀 공용' : '내 개인';
+
+    // 테스트 환경 또는 테스트 데이터는 클라우드 저장 제외 (로컬 보관 전용)
+    if (isQuoteTestContent(snapshot) || isTestEnvironment()) {
+      showTempNotice(`✓ '${snapshot.title}' 견적이 [${scopeLabel} 보관함(로컬)]에 저장되었습니다.\n(※ 테스트 견적은 클라우드에 업로드되지 않습니다)`);
+      return;
+    }
+
     showTempNotice(`✓ '${snapshot.title}' 견적이 [${scopeLabel} 보관함]에 저장되었습니다.`);
     saveCloudQuote(snapshot).then((res) => {
-      if (res.success) {
+      if (res.success && !res.isTest) {
         setCloudSyncStatus('synced');
         showTempNotice(`✓ '${snapshot.title}' 견적이 클라우드(${scopeLabel})에 실시간 동기화되었습니다.`);
+      } else if (res.stale) {
+        alert(res.error || '클라우드에 더 최신 수정본이 존재하여 구형 저장본 덮어쓰기가 방지되었습니다.');
       }
     });
   };
@@ -5425,11 +5478,20 @@ export default function BenefitCalculator({ onBack }) {
     );
     setQuoteTitleInput(snapshot.title);
     const scopeLabel = existingScope === 'public' ? '팀 공용' : '내 개인';
+
+    // 테스트 환경 또는 테스트 데이터는 클라우드 저장 제외 (로컬 보관 전용)
+    if (isQuoteTestContent(updatedSnapshot) || isTestEnvironment()) {
+      showTempNotice(`✓ '${snapshot.title}' 견적이 [${scopeLabel} 보관함(로컬)]에 수정 저장되었습니다.\n(※ 테스트 견적은 클라우드에 업로드되지 않습니다)`);
+      return;
+    }
+
     showTempNotice(`✓ '${snapshot.title}' 견적이 [${scopeLabel} 보관함]에 수정 저장되었습니다.`);
     saveCloudQuote(updatedSnapshot).then((res) => {
-      if (res.success) {
+      if (res.success && !res.isTest) {
         setCloudSyncStatus('synced');
         showTempNotice(`✓ '${snapshot.title}' 견적이 클라우드에 수정 반영되었습니다.`);
+      } else if (res.stale) {
+        alert(res.error || '클라우드에 더 최신 수정본이 존재하여 구형 저장본 덮어쓰기가 방지되었습니다.');
       }
     });
   };
@@ -5458,7 +5520,9 @@ export default function BenefitCalculator({ onBack }) {
     setSavedQuotes((prev) => prev.map((q) => (q.id === quote.id ? updatedSnapshot : q)));
     setQuoteStorageTab(nextScope);
     showTempNotice(`✓ '${quote.title}' 견적이 [${nextLabel} 보관함]으로 전환되었습니다.`);
-    saveCloudQuote(updatedSnapshot).catch((e) => console.error(e));
+    if (!isQuoteTestContent(updatedSnapshot) && !isTestEnvironment()) {
+      saveCloudQuote(updatedSnapshot).catch((e) => console.error(e));
+    }
   };
 
   const handleLoadQuote = (quote) => {
@@ -5473,6 +5537,17 @@ export default function BenefitCalculator({ onBack }) {
     if (activeQuoteId === id) {
       setActiveQuoteId(null);
     }
+    // 삭제된 ID를 로컬에 기록하여 다른 HTML이나 세션에서 재등장 방지
+    try {
+      const delRaw = localStorage.getItem('jcc_calc_deleted_quote_ids');
+      const delList = delRaw ? JSON.parse(delRaw) : [];
+      if (!delList.includes(id)) {
+        delList.push(id);
+        if (delList.length > 200) delList.shift();
+        localStorage.setItem('jcc_calc_deleted_quote_ids', JSON.stringify(delList));
+      }
+    } catch {}
+
     showTempNotice(`'${title}' 견적이 삭제되었습니다.`);
     deleteCloudQuote(id).catch((e) => console.error(e));
   };
@@ -5551,12 +5626,20 @@ export default function BenefitCalculator({ onBack }) {
           const targetQuote = parsed.currentQuote || rawIncomingList[0];
           const incomingScope = parsed.scope || quoteStorageTab;
 
-          const incomingList = rawIncomingList.map((q) => ({
-            ...q,
-            scope: q.scope || q.data?.scope || incomingScope,
-            creatorId: q.creatorId || q.data?.creatorId || currentUser?.id || 'admin',
-            creatorName: q.creatorName || q.data?.creatorName || currentUser?.name || '관리자'
-          }));
+          let deletedIds = new Set();
+          try {
+            const delRaw = localStorage.getItem('jcc_calc_deleted_quote_ids');
+            if (delRaw) deletedIds = new Set(JSON.parse(delRaw));
+          } catch {}
+
+          const incomingList = rawIncomingList
+            .filter((q) => q && q.id && !deletedIds.has(q.id) && !isQuoteTestContent(q))
+            .map((q) => ({
+              ...q,
+              scope: q.scope || q.data?.scope || incomingScope,
+              creatorId: q.creatorId || q.data?.creatorId || currentUser?.id || 'admin',
+              creatorName: q.creatorName || q.data?.creatorName || currentUser?.name || '관리자'
+            }));
 
           if (incomingList.length > 0) {
             setSavedQuotes((prev) => {
