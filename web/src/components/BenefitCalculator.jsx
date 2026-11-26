@@ -3,7 +3,7 @@ import * as htmlToImage from 'html-to-image';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { DEPT_POS_BARCODES } from '../constants/deptBarcodes';
-import { BRAND_LOGO_B64, MANAGER_PROFILE_B64 } from '../constants/brandAssets';
+import { BRAND_LOGO_B64, MANAGER_PROFILE_B64, JCC_HOMEPAGE_QR_B64 } from '../constants/brandAssets';
 import {
   User,
   Globe,
@@ -10379,10 +10379,29 @@ export default function BenefitCalculator({ onBack }) {
                           href="https://jcc-band.vercel.app"
                           target="_blank"
                           rel="noopener noreferrer"
-                          title="JCC 진센조 공식 홈페이지 바로가기"
+                          title="JCC 진센조 공식 홈페이지 바로가기 (클릭 또는 스마트폰 QR 스캔)"
+                          style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
                         >
-                          <CardEventQrSvg url="https://jcc-band.vercel.app" size={38} label="JCC 진센조 공식 홈페이지 QR코드" />
-                          <span className="a4-manager-qr-label">
+                          <img
+                            src={JCC_HOMEPAGE_QR_B64}
+                            alt="JCC 진센조 공식 홈페이지 QR코드"
+                            width={46}
+                            height={46}
+                            style={{
+                              display: 'block',
+                              width: '46px',
+                              height: '46px',
+                              background: '#ffffff',
+                              borderRadius: '4px',
+                              padding: '2px',
+                              boxSizing: 'border-box',
+                              border: '1px solid rgba(255, 255, 255, 0.4)',
+                              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.35)',
+                              imageRendering: 'pixelated',
+                              flexShrink: 0
+                            }}
+                          />
+                          <span className="a4-manager-qr-label" style={{ marginTop: '3px', letterSpacing: '-0.2px' }}>
                             홈페이지 QR
                           </span>
                         </a>
@@ -10429,6 +10448,39 @@ export default function BenefitCalculator({ onBack }) {
                         <MessageCircle size={12} />
                         <span>삼성스토어 진주 백화점·로드샵 통합매장</span>
                       </div>
+                    </div>
+
+                    <div className="a4-manager-qr">
+                      <a
+                        href="https://jcc-band.vercel.app"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="삼성스토어 통합진주 공식 홈페이지 바로가기 (클릭 또는 스마트폰 QR 스캔)"
+                        style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+                      >
+                        <img
+                          src={JCC_HOMEPAGE_QR_B64}
+                          alt="삼성스토어 통합진주 공식 홈페이지 QR코드"
+                          width={46}
+                          height={46}
+                          style={{
+                            display: 'block',
+                            width: '46px',
+                            height: '46px',
+                            background: '#ffffff',
+                            borderRadius: '4px',
+                            padding: '2px',
+                            boxSizing: 'border-box',
+                            border: '1px solid rgba(255, 255, 255, 0.4)',
+                            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.35)',
+                            imageRendering: 'pixelated',
+                            flexShrink: 0
+                          }}
+                        />
+                        <span className="a4-manager-qr-label" style={{ marginTop: '3px', letterSpacing: '-0.2px' }}>
+                          홈페이지 QR
+                        </span>
+                      </a>
                     </div>
                   </footer>
                 );

@@ -2634,6 +2634,14 @@ body.theme-light :is(.glass-panel, .calc-modal-dialog, .no-print, .theme-light) 
     flex-shrink: 0 !important;
   }
 
+  .a4-manager-qr img {
+    width: 44px !important;
+    height: 44px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    image-rendering: pixelated !important;
+  }
+
   .a4-manager-qr-label {
     font-size: 0.48rem !important;
     margin-top: 2px !important;
