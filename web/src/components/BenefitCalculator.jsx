@@ -10581,7 +10581,7 @@ export default function BenefitCalculator({ onBack }) {
                       </div>
                       <div style={{ background: '#ffffff', padding: '0.45rem', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
                         <strong style={{ color: '#0f172a', display: 'block', marginBottom: '2px' }}>[2] 캐시백 / 상품권 지급</strong>
-                        행사 기준 증빙 완료 후 익월(삼성AI구독 캐시백은 차차월 5~7일) 지정 계좌 및 모바일 지급
+                        행사 기준 증빙 완료 후 익월(삼성AI구독 캐시백은 설치후 차차월 5~7일) 지정 계좌 및 모바일 지급
                       </div>
                       <div style={{ background: '#ffffff', padding: '0.45rem', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
                         <strong style={{ color: '#0f172a', display: 'block', marginBottom: '2px' }}>[3] 구독 전용 케어 보장</strong>
@@ -10621,7 +10621,7 @@ export default function BenefitCalculator({ onBack }) {
                     </div>
                     <div style={{ background: '#ffffff', padding: '0.35rem', borderRadius: '5px', border: '1px solid #f1f5f9' }}>
                       <strong style={{ color: '#0f172a', display: 'block', marginBottom: '1px' }}>[2] 캐시백 / 상품권 지급</strong>
-                      행사 기준 증빙 완료 후 익월/차차월 지정 계좌 및 모바일 지급
+                      행사 기준 증빙 완료 후 익월(설치후 차차월 5~7일) 지정 계좌 및 모바일 지급
                     </div>
                     <div style={{ background: '#ffffff', padding: '0.35rem', borderRadius: '5px', border: '1px solid #f1f5f9' }}>
                       <strong style={{ color: '#0f172a', display: 'block', marginBottom: '1px' }}>[3] 구독 전용 케어 보장</strong>
@@ -12296,7 +12296,7 @@ export default function BenefitCalculator({ onBack }) {
                           <span style={{ color: '#2563eb', marginRight: '4px', fontWeight: 800 }}>•</span>
                           <strong style={{ fontWeight: 900, color: '#0f172a' }}>삼성AI구독 캐시백</strong>
                           <span style={{ fontSize: '0.66rem', color: '#64748b', fontWeight: 500, marginLeft: '4px' }}>
-                            (차차월 5~7일 지급)
+                            (설치후 차차월 5~7일 지급)
                           </span>
                         </span>
                         <strong className="a4-minus-blue" style={{ fontSize: '0.84rem', fontWeight: 900 }}>
@@ -18121,7 +18121,7 @@ export default function BenefitCalculator({ onBack }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
                     <Sparkles size={18} color="#fde68a" />
                     <label style={{ ...labelStyle, fontSize: '0.96rem', fontWeight: 900, color: '#f0f9ff', marginBottom: 0 }}>
-                      🎁 삼성AI구독 혜택 (캐시백,차차월 5~7일)
+                      🎁 삼성AI구독 혜택 (캐시백, 설치후 차차월 5~7일)
                     </label>
                     <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 8px', borderRadius: '5px', background: 'rgba(56, 189, 248, 0.3)', color: '#38bdf8', border: '1px solid #38bdf8' }}>
                       ★ 고객 체감가 직접 차감 혜택
@@ -18138,7 +18138,7 @@ export default function BenefitCalculator({ onBack }) {
                   <MoneyInput
                     value={subPurchaseBenefit}
                     onChange={setSubPurchaseBenefit}
-                    placeholder="삼성AI구독 캐시백 금액 입력 (차차월 5~7일 지급, 예: 200,000)"
+                    placeholder="삼성AI구독 캐시백 금액 입력 (설치후 차차월 5~7일 지급, 예: 200,000)"
                     compact
                     accentColor="#38bdf8"
                   />
@@ -18146,7 +18146,7 @@ export default function BenefitCalculator({ onBack }) {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
                   <span style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>
-                    ※ 구독 가입 시 지급되는 현금성 캐시백(차차월 5~7일 지급) 혜택을 입력하시면 고객 체감가에서 즉시 차감됩니다.
+                    ※ 구독 가입 시 지급되는 현금성 캐시백(설치후 차차월 5~7일 지급) 혜택을 입력하시면 고객 체감가에서 즉시 차감됩니다.
                   </span>
                   <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
                     {[100000, 200000, 300000, 500000].map((amt) => (
