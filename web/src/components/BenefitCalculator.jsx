@@ -10673,6 +10673,8 @@ export default function BenefitCalculator({ onBack }) {
                     </div>
                   ))}
                 </div>
+                {/* 58일차 장기 미배송 재심사 필수 안내문 */}
+                {renderSubReReviewNotice({ marginTop: '0.35rem' })}
               </div>
             );
           };
