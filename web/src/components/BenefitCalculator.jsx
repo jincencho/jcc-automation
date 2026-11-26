@@ -51,7 +51,8 @@ import {
   Package,
   Store,
   Sun,
-  Moon
+  Moon,
+  Video
 } from 'lucide-react';
 import {
   fetchCloudQuotes,
@@ -62,6 +63,7 @@ import {
   isTestEnvironment,
   isQuoteTestContent
 } from '../utils/cloudQuoteService.js';
+import { CARE_SERVICE_VIDEOS, matchCareServiceVideo } from '../constants/careServiceVideos.js';
 
 // 로컬 시스템 날짜(KST 등 브라우저 현지 시간 기준 YYYY-MM-DD 반환 - UTC 오차 방지)
 function getLocalTodayString() {
@@ -1745,6 +1747,8 @@ export default function BenefitCalculator({ onBack }) {
   const [subCardMinSpend, setSubCardMinSpend] = useState(''); // 제휴카드 필요 전월실적 (직접 입력)
   const [subCardMonthly, setSubCardMonthly] = useState(0); // 제휴카드 월 청구할인 금액
   const [activeQrModalItem, setActiveQrModalItem] = useState(null); // 확대 모달에 표시할 카드 QR 아이템
+  const [activeCareVideoModal, setActiveCareVideoModal] = useState(null); // 특정 품목 케어영상 QR 모달 (매니저 전용)
+  const [showAllCareVideosModal, setShowAllCareVideosModal] = useState(false); // 전체 12종 품목 케어영상 QR 허브 모달 (매니저 전용)
   const [subCardAuto70k, setSubCardAuto70k] = useState(true); // 구독료 7만원 이상 시 2.6만 / 미만 시 1.6만 자동 전환
   const [subSegmentCardOverrides, setSubSegmentCardOverrides] = useState({}); // 구간별 청구할인 수동 조정값
   const [subSegmentSpendOverrides, setSubSegmentSpendOverrides] = useState({}); // 구간별 필요실적 수동 조정값
@@ -16015,17 +16019,40 @@ export default function BenefitCalculator({ onBack }) {
                   <label style={{ ...labelStyle, marginBottom: 0, color: '#93c5fd', fontSize: '0.88rem', fontWeight: 800 }}>
                     📦 개별 구독 모델 및 전용 서비스 상세 설정 (총 {mixedSubItems.length}개 모델)
                   </label>
-                  <label
-                    className={`calc-service-reflect-toggle ${includeServiceInFinal ? 'active' : ''}`}
-                    title="체크 시 무상수리·방문케어·소모품 등 서비스 혜택 금액을 최종 체감가에서 차감하여 반영합니다."
-                  >
-                    <input
-                      type="checkbox"
-                      checked={includeServiceInFinal}
-                      onChange={(e) => setIncludeServiceInFinal(e.target.checked)}
-                    />
-                    <span>서비스 혜택 최종 체감가에 차감 반영</span>
-                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowAllCareVideosModal(true)}
+                      title="AI구독 전 품목(12종) 케어서비스 공식 영상 링크 및 QR코드 허브 (매니저 전용)"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '0.24rem 0.65rem',
+                        borderRadius: '6px',
+                        background: 'rgba(16, 185, 129, 0.18)',
+                        border: '1px solid #10b981',
+                        color: '#6ee7b7',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Video size={12} />
+                      <span>🎬 케어영상 QR 허브 (12종)</span>
+                    </button>
+                    <label
+                      className={`calc-service-reflect-toggle ${includeServiceInFinal ? 'active' : ''}`}
+                      title="체크 시 무상수리·방문케어·소모품 등 서비스 혜택 금액을 최종 체감가에서 차감하여 반영합니다."
+                    >
+                      <input
+                        type="checkbox"
+                        checked={includeServiceInFinal}
+                        onChange={(e) => setIncludeServiceInFinal(e.target.checked)}
+                      />
+                      <span>서비스 혜택 최종 체감가에 차감 반영</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -16119,6 +16146,37 @@ export default function BenefitCalculator({ onBack }) {
                             className="calc-input-editable"
                             style={{ height: '38px', padding: '0 0.75rem', fontSize: '0.86rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           />
+                          {(() => {
+                            const matchedVideo = matchCareServiceVideo(item.name);
+                            if (!matchedVideo) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => setActiveCareVideoModal(matchedVideo)}
+                                title={`[매니저 전용] ${matchedVideo.name} 케어서비스 영상 QR코드 확인 및 테스트`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '0 0.55rem',
+                                  height: '38px',
+                                  borderRadius: '8px',
+                                  background: 'rgba(16, 185, 129, 0.2)',
+                                  border: '1px solid #10b981',
+                                  color: '#6ee7b7',
+                                  fontSize: '0.74rem',
+                                  fontWeight: 800,
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                  flexShrink: 0,
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                <Video size={13} />
+                                <span>{matchedVideo.name} QR</span>
+                              </button>
+                            );
+                          })()}
                           <div style={{ width: '80px', flexShrink: 0, position: 'relative' }}>
                             <input
                               type="text"
@@ -16408,17 +16466,40 @@ export default function BenefitCalculator({ onBack }) {
                         </span>
                       )}
                     </div>
-                    <label
-                      className={`calc-service-reflect-toggle ${includeServiceInFinal ? 'active' : ''}`}
-                      title="체크 시 무상수리·방문케어·소모품 등 서비스 혜택 금액을 최종 체감가에서 차감하여 반영합니다."
-                    >
-                      <input
-                        type="checkbox"
-                        checked={includeServiceInFinal}
-                        onChange={(e) => setIncludeServiceInFinal(e.target.checked)}
-                      />
-                      <span>서비스 혜택 최종 체감가에 차감 반영</span>
-                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowAllCareVideosModal(true)}
+                        title="AI구독 전 품목(12종) 케어서비스 공식 영상 링크 및 QR코드 허브 (매니저 전용)"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '0.24rem 0.65rem',
+                          borderRadius: '6px',
+                          background: 'rgba(16, 185, 129, 0.18)',
+                          border: '1px solid #10b981',
+                          color: '#6ee7b7',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Video size={12} />
+                        <span>🎬 케어영상 QR 허브 (12종)</span>
+                      </button>
+                      <label
+                        className={`calc-service-reflect-toggle ${includeServiceInFinal ? 'active' : ''}`}
+                        title="체크 시 무상수리·방문케어·소모품 등 서비스 혜택 금액을 최종 체감가에서 차감하여 반영합니다."
+                      >
+                        <input
+                          type="checkbox"
+                          checked={includeServiceInFinal}
+                          onChange={(e) => setIncludeServiceInFinal(e.target.checked)}
+                        />
+                        <span>서비스 혜택 최종 체감가에 차감 반영</span>
+                      </label>
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -16695,23 +16776,57 @@ export default function BenefitCalculator({ onBack }) {
                                     <span className="calc-tag-type input">✏️ 직접입력</span>
                                   </div>
                                 </div>
-                                <input
-                                  type="text"
-                                  maxLength={15}
-                                  value={plan.name || ''}
-                                  onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value.slice(0, 15) })}
-                                  placeholder="모델명 직접입력 (예: RF85DB90F1AP · 최대 15자)"
-                                  className="calc-input-editable"
-                                  style={{
-                                    width: '100%',
-                                    height: '40px',
-                                    padding: '0 0.75rem',
-                                    fontSize: '0.88rem',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap'
-                                  }}
-                                />
+                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                  <input
+                                    type="text"
+                                    maxLength={15}
+                                    value={plan.name || ''}
+                                    onChange={(e) => handleUpdateSubPlan(plan.id, { name: e.target.value.slice(0, 15) })}
+                                    placeholder="모델명 직접입력 (예: RF85DB90F1AP · 최대 15자)"
+                                    className="calc-input-editable"
+                                    style={{
+                                      flex: 1,
+                                      minWidth: 0,
+                                      height: '40px',
+                                      padding: '0 0.75rem',
+                                      fontSize: '0.88rem',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  />
+                                  {(() => {
+                                    const matchedVideo = matchCareServiceVideo(plan.productCategory || plan.name);
+                                    if (!matchedVideo) return null;
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveCareVideoModal(matchedVideo)}
+                                        title={`[매니저 전용] ${matchedVideo.name} 케어서비스 영상 QR코드 확인 및 테스트`}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '4px',
+                                          padding: '0 0.55rem',
+                                          height: '40px',
+                                          borderRadius: '8px',
+                                          background: 'rgba(16, 185, 129, 0.22)',
+                                          border: '1px solid #10b981',
+                                          color: '#6ee7b7',
+                                          fontSize: '0.74rem',
+                                          fontWeight: 800,
+                                          cursor: 'pointer',
+                                          whiteSpace: 'nowrap',
+                                          flexShrink: 0,
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        <Video size={13} />
+                                        <span>{matchedVideo.name} QR</span>
+                                      </button>
+                                    );
+                                  })()}
+                                </div>
                               </div>
                             </div>
                             {(() => {
@@ -18363,6 +18478,237 @@ export default function BenefitCalculator({ onBack }) {
                         }}
                       >
                         닫기
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* AI구독 특정 품목 케어서비스 영상 QR 모달 (매니저 전용) */}
+              {activeCareVideoModal && (
+                <div
+                  onClick={() => setActiveCareVideoModal(null)}
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 10000,
+                    background: 'rgba(2, 6, 23, 0.85)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1.2rem'
+                  }}
+                >
+                  <div
+                    className="calc-modal-dialog"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      background: '#0f172a',
+                      border: '2px solid #10b981',
+                      borderRadius: '18px',
+                      padding: '1.6rem 1.8rem',
+                      maxWidth: '380px',
+                      width: '100%',
+                      textAlign: 'center',
+                      boxShadow: '0 20px 50px rgba(0,0,0,0.7)',
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', borderRadius: '6px', padding: '0.25rem 0.65rem', color: '#6ee7b7', fontSize: '0.76rem', fontWeight: 800, marginBottom: '0.5rem' }}>
+                      <span>🎬 AI구독 케어서비스 공식 영상</span>
+                      <span style={{ fontSize: '0.68rem', color: '#fde68a' }}>[매니저 전용]</span>
+                    </div>
+                    <h4 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', marginBottom: '0.35rem' }}>
+                      [{activeCareVideoModal.name}] 케어서비스 안내
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '1.1rem', lineHeight: 1.45 }}>
+                      스마트폰 카메라로 아래 QR을 스캔하시면<br />
+                      <strong style={{ color: '#6ee7b7' }}>{activeCareVideoModal.name} 공식 케어 영상</strong>으로 즉시 연결됩니다.
+                    </p>
+
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.1rem' }}>
+                      <div style={{ background: '#ffffff', padding: '10px', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', display: 'inline-block' }}>
+                        <img
+                          src={activeCareVideoModal.qrB64}
+                          alt={`${activeCareVideoModal.name} 케어서비스 영상 QR코드`}
+                          width={190}
+                          height={190}
+                          style={{ display: 'block', width: '190px', height: '190px', imageRendering: 'pixelated' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: '0.74rem', color: '#94a3b8', marginBottom: '1.1rem', wordBreak: 'break-all' }}>
+                      연결 주소: <a href={activeCareVideoModal.shortUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>{activeCareVideoModal.shortUrl}</a>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                      <a
+                        href={activeCareVideoModal.shortUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '0.6rem 1.1rem',
+                          borderRadius: '8px',
+                          background: 'rgba(16, 185, 129, 0.25)',
+                          border: '1px solid #10b981',
+                          color: '#6ee7b7',
+                          fontSize: '0.84rem',
+                          fontWeight: 800,
+                          textDecoration: 'none'
+                        }}
+                      >
+                        영상 바로보기 ↗
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setActiveCareVideoModal(null)}
+                        style={{
+                          padding: '0.6rem 1.2rem',
+                          borderRadius: '8px',
+                          background: '#334155',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          color: '#ffffff',
+                          fontSize: '0.84rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        닫기
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 전체 12종 품목 케어서비스 영상 QR 허브 모달 (매니저 전용) */}
+              {showAllCareVideosModal && (
+                <div
+                  onClick={() => setShowAllCareVideosModal(false)}
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 10000,
+                    background: 'rgba(2, 6, 23, 0.88)',
+                    backdropFilter: 'blur(5px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '1rem'
+                  }}
+                >
+                  <div
+                    className="calc-modal-dialog"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      background: '#0f172a',
+                      border: '2px solid #10b981',
+                      borderRadius: '20px',
+                      padding: '1.5rem',
+                      maxWidth: '860px',
+                      width: '100%',
+                      maxHeight: '92vh',
+                      overflowY: 'auto',
+                      boxShadow: '0 25px 60px rgba(0,0,0,0.8)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem', borderBottom: '1px solid rgba(255,255,255,0.12)', paddingBottom: '0.8rem' }}>
+                      <div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#10b981', fontSize: '0.88rem', fontWeight: 800 }}>
+                          <Video size={16} /> AI구독 제품별 케어서비스 영상 & QR 허브 (총 12종)
+                          <span style={{ fontSize: '0.72rem', color: '#fde68a', background: 'rgba(245, 158, 11, 0.2)', padding: '2px 6px', borderRadius: '4px' }}>매니저 전용</span>
+                        </div>
+                        <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: '2px' }}>
+                          품목을 선택하시면 해당 케어영상 QR코드를 직원입력칸에서 즉시 확인하거나 직접 열어보실 수 있습니다.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAllCareVideosModal(false)}
+                        style={{
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          color: '#cbd5e1',
+                          borderRadius: '6px',
+                          width: '32px',
+                          height: '32px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    {/* 12종 그리드 */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.85rem', marginBottom: '1.2rem' }}>
+                      {CARE_SERVICE_VIDEOS.map((v) => (
+                        <div
+                          key={v.id}
+                          style={{
+                            background: 'rgba(30, 41, 59, 0.75)',
+                            border: '1px solid rgba(16, 185, 129, 0.35)',
+                            borderRadius: '12px',
+                            padding: '0.75rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            textAlign: 'center',
+                            gap: '0.45rem'
+                          }}
+                        >
+                          <span style={{ background: 'rgba(16, 185, 129, 0.25)', color: '#6ee7b7', border: '1px solid #10b981', padding: '0.2rem 0.5rem', borderRadius: '5px', fontSize: '0.78rem', fontWeight: 800 }}>
+                            [{v.name}]
+                          </span>
+                          <div style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+                            <img
+                              src={v.qrB64}
+                              alt={`${v.name} QR`}
+                              width={120}
+                              height={120}
+                              style={{ display: 'block', width: '120px', height: '120px', imageRendering: 'pixelated' }}
+                            />
+                          </div>
+                          <a
+                            href={v.shortUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              fontSize: '0.74rem',
+                              color: '#60a5fa',
+                              textDecoration: 'underline',
+                              fontWeight: 600,
+                              marginTop: '2px'
+                            }}
+                          >
+                            영상 보기 ↗
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowAllCareVideosModal(false)}
+                        style={{
+                          padding: '0.6rem 2rem',
+                          borderRadius: '8px',
+                          background: '#10b981',
+                          border: 'none',
+                          color: '#064e3b',
+                          fontSize: '0.88rem',
+                          fontWeight: 800,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        확인 완료 (닫기)
                       </button>
                     </div>
                   </div>
