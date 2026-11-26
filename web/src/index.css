@@ -2153,11 +2153,12 @@ body.theme-light :is(.glass-panel, .calc-modal-dialog, .no-print, .theme-light) 
 }
 
 .a4-manager-photo {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   object-fit: cover;
   border: 2px solid #d4af37;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.35);
   flex-shrink: 0;
 }
 
