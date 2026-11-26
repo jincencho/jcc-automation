@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>[26.11월] AI 구독_제휴카드(기본)</title>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      background: #ffffff;
+      color: #1e293b;
+      padding: 40px;
+      width: 1700px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+    }
+    
+    .title {
+      font-size: 38px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+    }
+    
+    .confidential-badge {
+      border: 2px dashed #991b1b;
+      color: #991b1b;
+      font-size: 24px;
+      font-weight: 800;
+      padding: 6px 20px;
+      border-radius: 6px;
+      letter-spacing: 0.1em;
+      background: #fef2f2;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 2px solid #334155;
+      font-size: 15px;
+      background: #ffffff;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+    
+    th, td {
+      border: 1px solid #cbd5e1;
+      text-align: center;
+      vertical-align: middle;
+      padding: 10px 8px;
+      line-height: 1.4;
+    }
+    
+    /* Table Header */
+    .row-card-name th {
+      background: #f8fafc;
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+      padding: 16px 8px;
+      border-bottom: 2px solid #334155;
+    }
+    
+    .col-header {
+      width: 110px;
+      background: #f1f5f9;
+      font-weight: 700;
+      color: #334155;
+    }
+    
+    .col-card {
+      width: 318px;
+    }
+    
+    .card-lotte { color: #be123c !important; }
+    .card-samsung { color: #1d4ed8 !important; }
+    .card-kb { color: #b45309 !important; }
+    .card-woori { color: #0284c7 !important; }
+    .card-hana { color: #047857 !important; }
+    
+    .sub-header-row th {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #475569;
+      font-size: 14px;
+      padding: 8px 4px;
+    }
+    
+    .sub-promo {
+      color: #b45309;
+      font-weight: 800;
+    }
+    
+    /* Tier rows */
+    .tier-row td {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+      padding: 14px 6px;
+    }
+    
+    .spend-col {
+      background: #fafaf9;
+      color: #44403c;
+      font-weight: 700;
+    }
+    
+    .won-base {
+      color: #0f172a;
+      font-weight: 700;
+    }
+    
+    .won-promo {
+      color: #b91c1c;
+      font-weight: 800;
+    }
+    
+    .sub-condition {
+      display: block;
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    
+    /* Period row */
+    .row-period {
+      background: #fdfefe;
+    }
+    .period-label {
+      background: #f1f5f9;
+      font-weight: 700;
+      color: #334155;
+    }
+    
+    /* Comparison row */
+    .row-comparison td {
+      background: #eff6ff;
+      padding: 14px 6px;
+    }
+    .comp-val {
+      font-size: 18px;
+      font-weight: 900;
+      color: #1d4ed8;
+      display: block;
+    }
+    .comp-detail {
+      font-size: 12px;
+      color: #475569;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    
+    /* Fee row */
+    .row-fee {
+      background: #fafaf9;
+    }
+    .fee-val {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    
+    /* Notice row */
+    .row-notice td {
+      text-align: left;
+      vertical-align: top;
+      padding: 14px 12px;
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.55;
+      background: #ffffff;
+    }
+    
+    .highlight-yellow {
+      background: #fef08a;
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-weight: 800;
+      color: #854d0e;
+      display: inline-block;
+      margin-bottom: 4px;
+    }
+    
+    .notice-bullet {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    .notice-bullet:last-child {
+      margin-bottom: 0;
+    }
+    
+    /* QR row */
+    .row-qr td {
+      padding: 16px 8px;
+      background: #f8fafc;
+    }
+    .qr-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .qr-img {
+      width: 90px;
+      height: 90px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+      padding: 4px;
+    }
+    .qr-tag {
+      font-size: 11px;
+      font-weight: 700;
+      color: #475569;
+    }
+    
+    /* Footer branding */
+    .footer {
+      margin-top: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #64748b;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title">[26.11월] AI 구독_제휴카드(기본)</div>
+    <div class="confidential-badge">대외비</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr class="row-card-name">
+        <th class="col-header" rowspan="2">카드명</th>
+        <th class="col-card card-lotte" colspan="2">구독엔로카 AMEX 롯데카드</th>
+        <th class="col-card card-samsung" colspan="2">삼성전자 AI구독 삼성카드</th>
+        <th class="col-card card-kb" colspan="2">삼성전자 AI구독 KB카드</th>
+        <th class="col-card card-woori" colspan="2">삼성전자 AI구독 우리카드</th>
+        <th class="col-card card-hana" colspan="2">삼성전자 AI구독 하나카드</th>
+      </tr>
+      <tr class="sub-header-row">
+        <!-- 롯데 -->
+        <th style="width: 130px;">이용금</th>
+        <th style="width: 188px;">할인 혜택<br><span style="font-size: 12px; font-weight: 600;">기본 / <span class="sub-promo">+ 프로모션 (신규고객한)</span></span></th>
+        <!-- 삼성 -->
+        <th style="width: 130px;">이용금</th>
+        <th style="width: 188px;">할인 혜택<br><span style="font-size: 12px; font-weight: 600;">기본 / <span class="sub-promo">+ 프로모션 (결제금차감)</span></span></th>
+        <!-- KB -->
+        <th style="width: 130px;">이용금</th>
+        <th style="width: 188px;">할인 혜택<br><span style="font-size: 12px; font-weight: 600;">기본 / <span class="sub-promo">+ 프로모션 (신규고객한)</span></span></th>
+        <!-- 우리 -->
+        <th style="width: 130px;">이용금</th>
+        <th style="width: 188px;">할인 혜택<br><span style="font-size: 12px; font-weight: 600;">기본 / <span class="sub-promo">+ 프로모션 (신규고객한)</span></span></th>
+        <!-- 하나 -->
+        <th style="width: 130px;">이용금</th>
+        <th style="width: 188px;">할인 혜택<br><span style="font-size: 12px; font-weight: 600;">기본 / <span class="sub-promo">+ 프로모션 (신규고객한)</span></span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Tier 1 -->
+      <tr class="tier-row">
+        <td class="col-header" rowspan="3" style="font-size: 16px;">이용금 &amp;<br>할인혜택</td>
+        <!-- 롯데 1구간 -->
+        <td class="spend-col">50만↑</td>
+        <td><span class="won-base">15,000원</span> &nbsp;|&nbsp; <span class="won-promo">+7,000원</span></td>
+        <!-- 삼성 1구간 -->
+        <td class="spend-col">30만↑</td>
+        <td><span class="won-base">13,000원</span> &nbsp;|&nbsp; <span class="won-promo">+3,000원</span></td>
+        <!-- KB 1구간 -->
+        <td class="spend-col">30만↑</td>
+        <td><span class="won-base">10,000원</span> &nbsp;|&nbsp; <span class="won-promo">+8,000원</span></td>
+        <!-- 우리 1구간 -->
+        <td class="spend-col">30만↑</td>
+        <td><span class="won-base">10,000원</span> &nbsp;|&nbsp; <span class="won-promo">+7,000원</span></td>
+        <!-- 하나 1구간 -->
+        <td class="spend-col">30만↑</td>
+        <td><span class="won-base">13,000원</span> &nbsp;|&nbsp; <span style="color:#94a3b8;">-</span></td>
+      </tr>
+
+      <!-- Tier 2 -->
+      <tr class="tier-row">
+        <!-- 롯데 2구간 -->
+        <td class="spend-col">100만↑</td>
+        <td><span class="won-base">20,000원</span> &nbsp;|&nbsp; <span class="won-promo">+6,000원</span></td>
+        <!-- 삼성 2구간 -->
+        <td class="spend-col">70만↑</td>
+        <td>
+          <span class="won-base">17,000원</span> &nbsp;|&nbsp; <span class="won-promo">+9,000원</span>
+          <span class="sub-condition">(月구독료 7만↑)</span>
+        </td>
+        <!-- KB 2구간 -->
+        <td class="spend-col">70만↑</td>
+        <td><span class="won-base">12,000원</span> &nbsp;|&nbsp; <span class="won-promo">+10,000원</span></td>
+        <!-- 우리 2구간 -->
+        <td class="spend-col">70만↑</td>
+        <td><span class="won-base">15,000원</span> &nbsp;|&nbsp; <span class="won-promo">+5,000원</span></td>
+        <!-- 하나 2구간 -->
+        <td class="spend-col">80만↑</td>
+        <td>
+          <span class="won-base">18,000원</span>
+          <span class="sub-condition won-promo" style="font-weight:700;">연회비 2.5만 캐시백<br>(차차월말)</span>
+        </td>
+      </tr>
+
+      <!-- Tier 3 -->
+      <tr class="tier-row">
+        <!-- 롯데 3구간 -->
+        <td class="spend-col">200만↑</td>
+        <td><span class="won-base">27,000원</span> &nbsp;|&nbsp; <span class="won-promo">+3,000원</span></td>
+        <!-- 삼성 3구간 -->
+        <td class="spend-col">120만↑</td>
+        <td>
+          <span class="won-base">23,000원</span> &nbsp;|&nbsp; <span class="won-promo">+7,000원</span>
+          <span class="sub-condition">(月구독료 7만↑)</span>
+        </td>
+        <!-- KB 3구간 -->
+        <td class="spend-col">100만↑</td>
+        <td><span class="won-base">14,000원</span> &nbsp;|&nbsp; <span class="won-promo">+13,000원</span></td>
+        <!-- 우리 3구간 -->
+        <td class="spend-col">150만↑</td>
+        <td><span class="won-base">25,000원</span> &nbsp;|&nbsp; <span class="won-promo">+1,000원</span></td>
+        <!-- 하나 3구간 -->
+        <td class="spend-col">150만↑</td>
+        <td><span class="won-base">25,000원</span> &nbsp;|&nbsp; <span style="color:#94a3b8;">-</span></td>
+      </tr>
+
+      <!-- 할인기간 -->
+      <tr class="row-period">
+        <td class="col-header" style="font-size: 15px;">할인기간</td>
+        <td colspan="2" style="font-size: 14px; font-weight: 700;">
+          기본: <span style="color:#0f172a;">카드유효기간</span><br>
+          <span style="color:#b91c1c;">프로모션: 발급월 + 71개월</span>
+        </td>
+        <td colspan="2" style="font-size: 15px; font-weight: 800; color: #1d4ed8;">
+          72개월
+        </td>
+        <td colspan="2" style="font-size: 14px; font-weight: 700;">
+          기본: <span style="color:#0f172a;">72개월</span><br>
+          <span style="color:#b91c1c;">프로모션: 36개월</span>
+        </td>
+        <td colspan="2" style="font-size: 14px; font-weight: 700;">
+          기본: <span style="color:#0f172a;">72개월</span><br>
+          <span style="color:#b91c1c;">프로모션: 60개월</span>
+        </td>
+        <td colspan="2" style="font-size: 14px; font-weight: 700;">
+          기본: <span style="color:#0f172a;">72개월</span><br>
+          <span style="color:#b91c1c;">프로모션: 1회 (캐시백)</span>
+        </td>
+      </tr>
+
+      <!-- 할인비교 (50만↑ 6년) -->
+      <tr class="row-comparison">
+        <td class="col-header" style="font-size: 13px; font-weight:800; color: #1e3a8a; background: #e0e7ff;">할인비교<br><span style="font-size: 11px; font-weight:600; color:#475569;">(50만↑ 6년)</span></td>
+        <!-- 롯데 -->
+        <td colspan="2">
+          <span class="comp-val">158.4만</span>
+          <span class="comp-detail">(2.2만 × 72개월)</span>
+        </td>
+        <!-- 삼성 -->
+        <td colspan="2">
+          <span class="comp-val">115.2만</span>
+          <span class="comp-detail">(1.6만 × 72개월)</span>
+        </td>
+        <!-- KB -->
+        <td colspan="2">
+          <span class="comp-val">100.8만</span>
+          <span class="comp-detail">(1만 × 72개월 + 0.8만 × 36개월)</span>
+        </td>
+        <!-- 우리 -->
+        <td colspan="2">
+          <span class="comp-val">114만</span>
+          <span class="comp-detail">(1만 × 72개월 + 0.7만 × 60개월)</span>
+        </td>
+        <!-- 하나 -->
+        <td colspan="2">
+          <span class="comp-val">93.6만</span>
+          <span class="comp-detail">(1.3만 × 72개월)</span>
+        </td>
+      </tr>
+
+      <!-- 연회비 -->
+      <tr class="row-fee">
+        <td class="col-header" style="font-size: 14px;">연회비</td>
+        <td colspan="2"><span class="fee-val">2만</span></td>
+        <td colspan="2"><span class="fee-val">2만</span></td>
+        <td colspan="2"><span class="fee-val">2만</span></td>
+        <td colspan="2"><span class="fee-val">2만</span></td>
+        <td colspan="2"><span class="fee-val">2.5만</span></td>
+      </tr>
+
+      <!-- 프로모션 유의사항 -->
+      <tr class="row-notice">
+        <td class="col-header" style="font-size: 14px; text-align: center; vertical-align: middle;">프로모션<br>유의사항</td>
+        <!-- 롯데 -->
+        <td colspan="2">
+          <span class="highlight-yellow">*대상: 비 회원(카드보유X) 또는 직전 6개월 동안 결제이력 없는 고객</span>
+          <span class="notice-bullet">*가족카드 등록 시 혜택 제공 불가</span>
+          <span class="notice-bullet">*AMEX 브랜드 프로모션 혜택 가능</span>
+        </td>
+        <!-- 삼성 -->
+        <td colspan="2">
+          <span class="notice-bullet" style="font-weight:700; color:#1d4ed8;">*신규/기존 회원 혜택 적용</span>
+          <span class="notice-bullet">*프로모션은 차월 5일 대금할인</span>
+          <span class="notice-bullet">*70만↑ 구간은 월 구독료 7만↑ 조건 충족 시 혜택 적용</span>
+        </td>
+        <!-- KB -->
+        <td colspan="2">
+          <span class="highlight-yellow">*대상: 비 회원(카드보유X) 또는 직전 6개월 동안 결제이력 없는 고객</span>
+          <span class="notice-bullet">*가족카드 등록 시 혜택 제공 불가</span>
+        </td>
+        <!-- 우리 -->
+        <td colspan="2">
+          <span class="highlight-yellow">*대상: 비 회원(카드보유X) 또는 직전 6개월 동안 결제이력 없는 고객</span>
+          <span class="notice-bullet">*가족카드 등록 시 혜택 제공 불가</span>
+        </td>
+        <!-- 하나 -->
+        <td colspan="2">
+          <span class="highlight-yellow">*대상: 구독 요금 납부 최초 고객 대상</span>
+          <span class="notice-bullet" style="font-weight:700; color:#047857;">*기존 하나카드 보유자 혜택 가능</span>
+        </td>
+      </tr>
+
+      <!-- 신규회원 확인 (QR) -->
+      <tr class="row-qr">
+        <td class="col-header" style="font-size: 14px; text-align: center; vertical-align: middle;">신규회원<br>확인</td>
+        <!-- 롯데 -->
+        <td colspan="2">
+          <div class="qr-box">
+            <img src="qr_lotte.png" class="qr-img" alt="롯데카드 신규확인 QR">
+            <span class="qr-tag">신규 여부 조회</span>
+          </div>
+        </td>
+        <!-- 삼성 -->
+        <td colspan="2" style="color: #94a3b8; font-size: 13px; font-weight: 600;">
+          신규/기존 회원<br>모두 혜택 적용
+        </td>
+        <!-- KB -->
+        <td colspan="2">
+          <div class="qr-box">
+            <img src="qr_kb.png" class="qr-img" alt="KB카드 신규확인 QR">
+            <span class="qr-tag">신규 여부 조회</span>
+          </div>
+        </td>
+        <!-- 우리 -->
+        <td colspan="2">
+          <div class="qr-box">
+            <img src="qr_woori.png" class="qr-img" alt="우리카드 신규확인 QR">
+            <span class="qr-tag">신규 여부 조회</span>
+          </div>
+        </td>
+        <!-- 하나 -->
+        <td colspan="2" style="color: #94a3b8; font-size: 13px; font-weight: 600;">
+          구독료 납부<br>최초 고객 대상
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <div>* 본 자료는 2026년 11월 기준 삼성전자 AI 구독 제휴카드 공식 프로모션 정책 안내 자료입니다.</div>
+    <div>JCC 진센조 AI 프리미엄 견적 시스템</div>
+  </div>
+
+</body>
+</html>
